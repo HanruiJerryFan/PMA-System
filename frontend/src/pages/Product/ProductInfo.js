@@ -3,7 +3,7 @@ import { Button, Descriptions, Input, Modal, Select, Space, Switch, Table, messa
 import { DownloadOutlined, UploadOutlined } from "@ant-design/icons";
 import CRUDTable from "../../components/Common/CRUDTable";
 import { productAPI } from "../../api/modules";
-import { downloadExcel } from "../../utils/exporters";
+import { downloadApiFile, downloadExcel, resolveBlobErrorMessage } from "../../utils/exporters";
 
 const { Option } = Select;
 
@@ -114,13 +114,16 @@ export default function ProductInfo() {
     );
   };
 
-  const handleDownloadTemplate = () => {
-    downloadExcel(
-      "materials-template.xls",
-      "物料导入模板",
-      ["名称", "大类编码", "分项编码", "品牌编码", "频段编码", "单位", "型号", "规格参数", "厂家", "其他说明", "是否启用"],
-      [["示例物料", "SB", "01", "01", "400", "台", "Model-X", "规格参数", "示例厂家", "", "TRUE"]]
-    );
+  const handleDownloadTemplate = async () => {
+    try {
+      await downloadApiFile(
+        productAPI.downloadImportTemplate(),
+        "materials-import-template.xlsx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+    } catch (error) {
+      message.error(await resolveBlobErrorMessage(error, "下载模板失败"));
+    }
   };
 
   const handleImportClick = () => importInputRef.current?.click();

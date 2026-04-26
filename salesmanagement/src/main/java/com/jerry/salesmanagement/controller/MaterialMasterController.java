@@ -1,10 +1,14 @@
 package com.jerry.salesmanagement.controller;
 
 import com.jerry.salesmanagement.common.ApiResponse;
+import com.jerry.salesmanagement.common.DownloadResponseBuilder;
 import com.jerry.salesmanagement.pojo.MaterialMaster;
 import com.jerry.salesmanagement.pojo.dto.ExcelImportResult;
+import com.jerry.salesmanagement.service.ExcelImportTemplateService;
 import com.jerry.salesmanagement.service.MaterialMasterService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,8 +28,13 @@ import java.util.List;
 @CrossOrigin
 public class MaterialMasterController {
 
+    private static final MediaType XLSX_MEDIA_TYPE = MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+
     @Autowired
     private MaterialMasterService materialMasterService;
+
+    @Autowired
+    private ExcelImportTemplateService excelImportTemplateService;
 
     @GetMapping
     public ApiResponse<List<MaterialMaster>> getAll() {
@@ -96,5 +105,14 @@ public class MaterialMasterController {
         } catch (Exception e) {
             return ApiResponse.error("Failed to import materials: " + e.getMessage());
         }
+    }
+
+    @GetMapping("/import-template")
+    public ResponseEntity<byte[]> downloadImportTemplate() {
+        return DownloadResponseBuilder.build(
+                "materials-import-template.xlsx",
+                XLSX_MEDIA_TYPE,
+                excelImportTemplateService.buildMaterialMasterTemplate()
+        );
     }
 }

@@ -49,6 +49,30 @@ public class MaterialMasterServiceImpl implements MaterialMasterService {
     private static final int DEFAULT_SEQUENCE_LENGTH = 3;
     private static final String DEFAULT_SEQUENCE_SCOPE = "CATEGORY_SUBCATEGORY_BRAND";
     private static final Pattern TOKEN_PATTERN = Pattern.compile("\\{(category|subcategory|brand|sequence|band)\\}");
+    private static final Map<String, String> HEADER_ALIASES = Map.ofEntries(
+            Map.entry("名称", "name"),
+            Map.entry("物料名称", "name"),
+            Map.entry("商品名称", "name"),
+            Map.entry("大类编码", "categorycode"),
+            Map.entry("类别编码", "categorycode"),
+            Map.entry("分类编码", "categorycode"),
+            Map.entry("分项编码", "subcategorycode"),
+            Map.entry("子类编码", "subcategorycode"),
+            Map.entry("子分类编码", "subcategorycode"),
+            Map.entry("品牌编码", "brandcode"),
+            Map.entry("频段编码", "bandcode"),
+            Map.entry("频率编码", "bandcode"),
+            Map.entry("单位", "unit"),
+            Map.entry("型号", "model"),
+            Map.entry("规格参数", "specification"),
+            Map.entry("规格", "specification"),
+            Map.entry("厂家", "manufacturer"),
+            Map.entry("生产厂家", "manufacturer"),
+            Map.entry("其他说明", "othernote"),
+            Map.entry("备注", "othernote"),
+            Map.entry("是否启用", "isactive"),
+            Map.entry("启用", "isactive")
+    );
 
     @Autowired
     private MaterialMasterMapper materialMasterMapper;
@@ -334,10 +358,12 @@ public class MaterialMasterServiceImpl implements MaterialMasterService {
         if (!StringUtils.hasText(value)) {
             return "";
         }
-        return value.trim().toLowerCase(Locale.ROOT)
+        String normalized = value.trim().toLowerCase(Locale.ROOT)
                 .replace("_", "")
                 .replace("-", "")
-                .replace(" ", "");
+                .replace(" ", "")
+                .replace("　", "");
+        return HEADER_ALIASES.getOrDefault(normalized, normalized);
     }
 
     private boolean isEmptyDataRow(Row row, Map<String, Integer> headerIndexMap) {
@@ -373,10 +399,10 @@ public class MaterialMasterServiceImpl implements MaterialMasterService {
     private MaterialMaster mapRowToMaterial(Row row, Map<String, Integer> headerIndexMap, int excelRowNumber) {
         MaterialMaster materialMaster = new MaterialMaster();
         materialMaster.setProductName(requiredCell(row, headerIndexMap, "name", "Name", excelRowNumber));
-        materialMaster.setCategoryId(findCategoryId(requiredCell(row, headerIndexMap, "categorycode", "Category Code", excelRowNumber), excelRowNumber));
-        materialMaster.setSubcategoryId(findSubcategoryId(requiredCell(row, headerIndexMap, "subcategorycode", "Subcategory Code", excelRowNumber), excelRowNumber));
-        materialMaster.setBrandId(findBrandId(requiredCell(row, headerIndexMap, "brandcode", "Brand Code", excelRowNumber), excelRowNumber));
-        materialMaster.setFrequency(requiredCell(row, headerIndexMap, "bandcode", "Band Code", excelRowNumber).toUpperCase(Locale.ROOT));
+        materialMaster.setCategoryId(findCategoryId(extractLeadingToken(requiredCell(row, headerIndexMap, "categorycode", "Category Code", excelRowNumber)), excelRowNumber));
+        materialMaster.setSubcategoryId(findSubcategoryId(extractLeadingToken(requiredCell(row, headerIndexMap, "subcategorycode", "Subcategory Code", excelRowNumber)), excelRowNumber));
+        materialMaster.setBrandId(findBrandId(extractLeadingToken(requiredCell(row, headerIndexMap, "brandcode", "Brand Code", excelRowNumber)), excelRowNumber));
+        materialMaster.setFrequency(extractLeadingToken(requiredCell(row, headerIndexMap, "bandcode", "Band Code", excelRowNumber)).toUpperCase(Locale.ROOT));
         materialMaster.setUnit(requiredCell(row, headerIndexMap, "unit", "Unit", excelRowNumber));
         materialMaster.setProductModel(optionalCell(row, headerIndexMap, "model"));
         materialMaster.setSpecification(optionalCell(row, headerIndexMap, "specification"));
@@ -410,14 +436,31 @@ public class MaterialMasterServiceImpl implements MaterialMasterService {
     }
 
     private boolean parseBoolean(String value, int excelRowNumber) {
-        String normalized = value.trim().toLowerCase(Locale.ROOT);
-        if ("true".equals(normalized) || "yes".equals(normalized) || "1".equals(normalized) || "y".equals(normalized)) {
+        String normalized = extractLeadingToken(value).toLowerCase(Locale.ROOT);
+        if ("true".equals(normalized) || "yes".equals(normalized) || "1".equals(normalized) || "y".equals(normalized)
+                || "启用".equals(normalized) || "是".equals(normalized)) {
             return true;
         }
-        if ("false".equals(normalized) || "no".equals(normalized) || "0".equals(normalized) || "n".equals(normalized)) {
+        if ("false".equals(normalized) || "no".equals(normalized) || "0".equals(normalized) || "n".equals(normalized)
+                || "停用".equals(normalized) || "否".equals(normalized)) {
             return false;
         }
         throw new IllegalArgumentException("Row " + excelRowNumber + ": invalid Is Active value");
+    }
+
+    private String extractLeadingToken(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        String trimmed = value.trim();
+        int firstSpace = -1;
+        for (int index = 0; index < trimmed.length(); index++) {
+            if (Character.isWhitespace(trimmed.charAt(index)) || trimmed.charAt(index) == '　') {
+                firstSpace = index;
+                break;
+            }
+        }
+        return firstSpace >= 0 ? trimmed.substring(0, firstSpace) : trimmed;
     }
 
     private Long findCategoryId(String code, int excelRowNumber) {

@@ -53,8 +53,6 @@ const IMPORT_MODE_OPTIONS = [
   { value: "FAIL_FAST", label: "遇错即停" },
 ];
 
-const PROJECT_LIST_IMPORT_TEMPLATE_HEADERS = ["物料编码", "物料名称", "型号", "品牌", "单位", "数量", "销售价格", "备注"];
-
 function normalizeResponseData(response) {
   return response?.data ?? response ?? [];
 }
@@ -405,8 +403,16 @@ export default function ProjectLists() {
     message.success("删除成功");
   };
 
-  const downloadTemplate = () => {
-    downloadExcel("project-list-items-template.xls", "项目清单明细导入模板", PROJECT_LIST_IMPORT_TEMPLATE_HEADERS, []);
+  const downloadTemplate = async () => {
+    try {
+      await downloadApiFile(
+        projectAPI.downloadProjectListItemsImportTemplate(),
+        "project-list-items-import-template.xlsx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+    } catch (error) {
+      message.error(await resolveBlobErrorMessage(error, "下载模板失败"));
+    }
   };
 
   const startImport = async () => {

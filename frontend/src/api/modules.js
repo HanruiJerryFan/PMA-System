@@ -76,6 +76,10 @@ export const projectAPI = {
   createProjectListItem: (data) => api.post("/project-list-items", data),
   updateProjectListItem: (uuid, data) => api.put(`/project-list-items/${uuid}`, data),
   deleteProjectListItem: (uuid) => api.delete(`/project-list-items/${uuid}`),
+  downloadProjectListItemsImportTemplate: () =>
+    api.get("/project-list-items/import-template", {
+      responseType: "blob",
+    }),
   importProjectListItems: (projectListId, formData, replaceExisting = false, importMode = "PARTIAL_SUCCESS") =>
     api.post(`/project-list-items/import/${projectListId}`, formData, {
       params: { replaceExisting, importMode },
@@ -123,6 +127,10 @@ export const productAPI = {
   createProduct: (data) => api.post("/materials", data),
   updateProduct: (uuid, data) => api.put(`/materials/${uuid}`, data),
   deleteProduct: (uuid) => api.delete(`/materials/${uuid}`),
+  downloadImportTemplate: () =>
+    api.get("/materials/import-template", {
+      responseType: "blob",
+    }),
   importProducts: (formData, importMode = "PARTIAL_SUCCESS") =>
     api.post("/materials/import", formData, {
       params: { importMode },

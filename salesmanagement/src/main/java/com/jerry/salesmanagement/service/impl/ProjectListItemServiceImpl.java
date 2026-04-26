@@ -244,7 +244,7 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
         if (item.getUnitPrice() != null && item.getUnitPrice().compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("Unit price cannot be negative");
         }
-        if (StringUtils.hasText(item.getMaterialCode()) && item.getMaterialCode().trim().length() != 12) {
+        if (StringUtils.hasText(item.getMaterialCode()) && extractLeadingToken(item.getMaterialCode()).length() != 12) {
             throw new IllegalArgumentException("Material code must be 12 characters");
         }
         if (StringUtils.hasText(item.getSourceType()) && !SOURCE_TYPES.contains(item.getSourceType())) {
@@ -255,6 +255,21 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
             throw new IllegalArgumentException("Material does not exist");
         }
         return projectList;
+    }
+
+    private String extractLeadingToken(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        String trimmed = value.trim();
+        int firstSpace = -1;
+        for (int index = 0; index < trimmed.length(); index++) {
+            if (Character.isWhitespace(trimmed.charAt(index)) || trimmed.charAt(index) == '　') {
+                firstSpace = index;
+                break;
+            }
+        }
+        return firstSpace >= 0 ? trimmed.substring(0, firstSpace) : trimmed;
     }
 
     private void touchProjectListCustomer(ProjectList projectList) {
@@ -269,7 +284,7 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
 
     private void hydrateMaterialFields(ProjectListItem item) {
         if (StringUtils.hasText(item.getMaterialCode())) {
-            String normalizedMaterialCode = item.getMaterialCode().trim().toUpperCase(Locale.ROOT);
+            String normalizedMaterialCode = extractLeadingToken(item.getMaterialCode()).toUpperCase(Locale.ROOT);
             item.setMaterialCode(normalizedMaterialCode);
             if (normalizedMaterialCode.length() != 12) {
                 throw new IllegalArgumentException("Material code must be 12 characters");
