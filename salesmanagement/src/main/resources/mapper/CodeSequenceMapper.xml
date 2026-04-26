@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "classpath://org/mybatis/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jerry.salesmanagement.mapper.CodeSequenceMapper">
+
+    <insert id="insertIfAbsent">
+        INSERT IGNORE INTO code_sequence (
+            sequence_key,
+            current_value,
+            description,
+            create_time,
+            update_time
+        ) VALUES (
+            #{sequenceKey},
+            #{currentValue},
+            #{description},
+            NOW(),
+            NOW()
+        )
+    </insert>
+
+    <select id="selectCurrentValueForUpdate" resultType="java.lang.Integer">
+        SELECT current_value
+        FROM code_sequence
+        WHERE sequence_key = #{sequenceKey}
+        FOR UPDATE
+    </select>
+
+    <update id="updateCurrentValue">
+        UPDATE code_sequence
+        SET
+            current_value = #{currentValue},
+            update_time = NOW()
+        WHERE sequence_key = #{sequenceKey}
+    </update>
+</mapper>

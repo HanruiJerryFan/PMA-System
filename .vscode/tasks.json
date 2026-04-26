@@ -1,0 +1,93 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "前端: 安装依赖(npm install)",
+      "type": "shell",
+      "command": "npm",
+      "args": [
+        "install"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}\\frontend"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "启动React前端",
+      "type": "shell",
+      "command": "npm",
+      "args": [
+        "start"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}\\frontend"
+      },
+      "dependsOn": [
+        "前端: 安装依赖(npm install)"
+      ],
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "构建React前端(build)",
+      "type": "shell",
+      "command": "npm",
+      "args": [
+        "run",
+        "build"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}\\frontend"
+      },
+      "dependsOn": [
+        "前端: 安装依赖(npm install)"
+      ],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "启动Spring Boot后端",
+      "type": "shell",
+      "command": "${workspaceFolder}\\salesmanagement\\gradlew.bat",
+      "args": [
+        "bootRun"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}\\salesmanagement",
+        "env": {
+          "JAVA_HOME": "C:\\Program Files\\Java\\jdk-17.0.11",
+          "PATH": "C:\\Program Files\\Java\\jdk-17.0.11\\bin;${env:PATH}"
+        }
+      },
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "构建Spring Boot后端(bootJar)",
+      "type": "shell",
+      "command": "${workspaceFolder}\\salesmanagement\\gradlew.bat",
+      "args": [
+        "bootJar"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}\\salesmanagement",
+        "env": {
+          "JAVA_HOME": "C:\\Program Files\\Java\\jdk-17.0.11",
+          "PATH": "C:\\Program Files\\Java\\jdk-17.0.11\\bin;${env:PATH}"
+        }
+      },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "启动前后端(并行)",
+      "dependsOrder": "parallel",
+      "dependsOn": [
+        "启动Spring Boot后端",
+        "启动React前端"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}

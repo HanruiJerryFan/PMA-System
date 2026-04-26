@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "classpath://org/mybatis/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jerry.salesmanagement.mapper.InventoryTransactionMapper">
+
+    <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.InventoryTransaction">
+        SELECT
+            id,
+            uuid,
+            material_id AS materialId,
+            material_code AS materialCode,
+            material_name AS materialName,
+            model,
+            brand,
+            category,
+            project_id AS projectId,
+            warehouse_id AS warehouseId,
+            txn_type AS txnType,
+            txn_time AS txnTime,
+            quantity,
+            unit_price AS unitPrice,
+            amount,
+            source_ref_type AS sourceRefType,
+            source_ref_id AS sourceRefId,
+            create_time AS createdAt,
+            create_user AS createdBy,
+            update_time AS updatedAt,
+            update_user AS updatedBy
+        FROM goods_transaction_dynamic_info
+        ORDER BY COALESCE(txn_time, create_time) DESC, id DESC
+    </select>
+
+    <select id="selectByUuid" parameterType="string"
+            resultType="com.jerry.salesmanagement.pojo.InventoryTransaction">
+        SELECT
+            id,
+            uuid,
+            material_id AS materialId,
+            material_code AS materialCode,
+            material_name AS materialName,
+            model,
+            brand,
+            category,
+            project_id AS projectId,
+            warehouse_id AS warehouseId,
+            txn_type AS txnType,
+            txn_time AS txnTime,
+            quantity,
+            unit_price AS unitPrice,
+            amount,
+            source_ref_type AS sourceRefType,
+            source_ref_id AS sourceRefId,
+            create_time AS createdAt,
+            create_user AS createdBy,
+            update_time AS updatedAt,
+            update_user AS updatedBy
+        FROM goods_transaction_dynamic_info
+        WHERE uuid = #{uuid}
+    </select>
+
+    <select id="selectBySourceRef" resultType="com.jerry.salesmanagement.pojo.InventoryTransaction">
+        SELECT
+            id,
+            uuid,
+            material_id AS materialId,
+            material_code AS materialCode,
+            material_name AS materialName,
+            model,
+            brand,
+            category,
+            project_id AS projectId,
+            warehouse_id AS warehouseId,
+            txn_type AS txnType,
+            txn_time AS txnTime,
+            quantity,
+            unit_price AS unitPrice,
+            amount,
+            source_ref_type AS sourceRefType,
+            source_ref_id AS sourceRefId,
+            create_time AS createdAt,
+            create_user AS createdBy,
+            update_time AS updatedAt,
+            update_user AS updatedBy
+        FROM goods_transaction_dynamic_info
+        WHERE source_ref_type = #{sourceRefType}
+          AND source_ref_id = #{sourceRefId}
+        ORDER BY COALESCE(txn_time, create_time) DESC, id DESC
+    </select>
+
+    <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.InventoryTransaction"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO goods_transaction_dynamic_info (
+            uuid,
+            material_id,
+            material_code,
+            material_name,
+            model,
+            brand,
+            category,
+            project_id,
+            warehouse_id,
+            txn_type,
+            txn_time,
+            quantity,
+            unit_price,
+            amount,
+            source_ref_type,
+            source_ref_id,
+            create_time,
+            create_user
+        ) VALUES (
+            #{uuid},
+            #{materialId},
+            #{materialCode},
+            #{materialName},
+            #{model},
+            #{brand},
+            #{category},
+            #{projectId},
+            #{warehouseId},
+            #{txnType},
+            #{txnTime},
+            #{quantity},
+            #{unitPrice},
+            #{amount},
+            #{sourceRefType},
+            #{sourceRefId},
+            NOW(),
+            #{createdBy}
+        )
+    </insert>
+
+    <update id="updateByUuid" parameterType="com.jerry.salesmanagement.pojo.InventoryTransaction">
+        UPDATE goods_transaction_dynamic_info
+        <set>
+            <if test="materialId != null">material_id = #{materialId},</if>
+            <if test="materialCode != null">material_code = #{materialCode},</if>
+            <if test="materialName != null">material_name = #{materialName},</if>
+            <if test="model != null">model = #{model},</if>
+            <if test="brand != null">brand = #{brand},</if>
+            <if test="category != null">category = #{category},</if>
+            <if test="projectId != null">project_id = #{projectId},</if>
+            <if test="warehouseId != null">warehouse_id = #{warehouseId},</if>
+            <if test="txnType != null">txn_type = #{txnType},</if>
+            <if test="txnTime != null">txn_time = #{txnTime},</if>
+            <if test="quantity != null">quantity = #{quantity},</if>
+            <if test="unitPrice != null">unit_price = #{unitPrice},</if>
+            <if test="amount != null">amount = #{amount},</if>
+            <if test="sourceRefType != null">source_ref_type = #{sourceRefType},</if>
+            <if test="sourceRefId != null">source_ref_id = #{sourceRefId},</if>
+            update_time = NOW(),
+            update_user = #{updatedBy}
+        </set>
+        WHERE uuid = #{uuid}
+    </update>
+
+    <delete id="deleteByUuid" parameterType="string">
+        DELETE FROM goods_transaction_dynamic_info
+        WHERE uuid = #{uuid}
+    </delete>
+
+    <delete id="deleteBySourceRef">
+        DELETE FROM goods_transaction_dynamic_info
+        WHERE source_ref_type = #{sourceRefType}
+          AND source_ref_id = #{sourceRefId}
+    </delete>
+
+</mapper>

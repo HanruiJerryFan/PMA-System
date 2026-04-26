@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "classpath:dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jerry.salesmanagement.mapper.SystemConfigMapper">
+
+    <select id="selectByKey" resultType="com.jerry.salesmanagement.pojo.SystemConfig">
+        SELECT
+            id,
+            config_key AS configKey,
+            config_value AS configValue,
+            description,
+            created_at AS createdAt,
+            updated_at AS updatedAt
+        FROM system_config
+        WHERE config_key = #{configKey}
+        LIMIT 1
+    </select>
+
+    <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.SystemConfig">
+        SELECT
+            id,
+            config_key AS configKey,
+            config_value AS configValue,
+            description,
+            created_at AS createdAt,
+            updated_at AS updatedAt
+        FROM system_config
+        ORDER BY config_key ASC
+    </select>
+
+    <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.SystemConfig">
+        INSERT INTO system_config (
+            config_key,
+            config_value,
+            description,
+            created_at,
+            updated_at
+        ) VALUES (
+            #{configKey},
+            #{configValue},
+            #{description},
+            NOW(),
+            NOW()
+        )
+    </insert>
+
+    <update id="updateByKey" parameterType="com.jerry.salesmanagement.pojo.SystemConfig">
+        UPDATE system_config
+        SET
+            config_value = #{configValue},
+            description = #{description},
+            updated_at = NOW()
+        WHERE config_key = #{configKey}
+    </update>
+
+    <delete id="deleteByKey">
+        DELETE FROM system_config
+        WHERE config_key = #{configKey}
+    </delete>
+</mapper>

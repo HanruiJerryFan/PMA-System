@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "classpath://org/mybatis/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jerry.salesmanagement.mapper.ProjectStatusHistoryMapper">
+    <sql id="BaseSelect">
+        SELECT
+            h.id,
+            h.uuid,
+            h.project_id AS projectId,
+            h.stage_id AS stageId,
+            s.description AS stageName,
+            h.created_at AS createdAt,
+            h.created_by AS createdBy
+        FROM project_status_history h
+        LEFT JOIN stage s ON h.stage_id = s.id
+    </sql>
+
+    <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.ProjectStatusHistory">
+        <include refid="BaseSelect"/>
+        ORDER BY h.created_at DESC, h.id DESC
+    </select>
+
+    <select id="selectByUuid" resultType="com.jerry.salesmanagement.pojo.ProjectStatusHistory">
+        <include refid="BaseSelect"/>
+        WHERE h.uuid = #{uuid}
+    </select>
+
+    <select id="selectByProjectId" resultType="com.jerry.salesmanagement.pojo.ProjectStatusHistory">
+        <include refid="BaseSelect"/>
+        WHERE h.project_id = #{projectId}
+        ORDER BY h.created_at DESC, h.id DESC
+    </select>
+
+    <select id="selectCurrentStageSortOrderByProjectId" resultType="java.lang.Integer">
+        SELECT MAX(s.sort_order)
+        FROM project_status_history h
+        INNER JOIN stage s ON h.stage_id = s.id
+        WHERE h.project_id = #{projectId}
+    </select>
+
+    <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.ProjectStatusHistory" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO project_status_history (
+            uuid,
+            project_id,
+            stage_id,
+            created_at,
+            created_by
+        ) VALUES (
+            #{uuid},
+            #{projectId},
+            #{stageId},
+            #{createdAt},
+            #{createdBy}
+        )
+    </insert>
+
+    <update id="update" parameterType="com.jerry.salesmanagement.pojo.ProjectStatusHistory">
+        UPDATE project_status_history
+        <set>
+            <if test="projectId != null">project_id = #{projectId},</if>
+            <if test="stageId != null">stage_id = #{stageId},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+            <if test="createdBy != null">created_by = #{createdBy},</if>
+        </set>
+        WHERE uuid = #{uuid}
+    </update>
+
+    <delete id="deleteByUuid">
+        DELETE FROM project_status_history
+        WHERE uuid = #{uuid}
+    </delete>
+</mapper>

@@ -1,0 +1,18 @@
+[Unit]
+Description=SalesManagement Backend
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/salesmanagement/backend
+EnvironmentFile=/opt/salesmanagement/backend/backend.env
+ExecStart=/bin/sh -c '/usr/bin/java $JAVA_OPTS -jar /opt/salesmanagement/backend/spring-boot.jar'
+Restart=always
+RestartSec=5
+SuccessExitStatus=143
+
+[Install]
+WantedBy=multi-user.target
+

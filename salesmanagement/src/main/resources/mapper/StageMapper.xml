@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jerry.salesmanagement.mapper.StageMapper">
+    <select id="selectById" parameterType="long" resultType="com.jerry.salesmanagement.pojo.Stage">
+        SELECT
+            id,
+            stage_code AS stageCode,
+            description,
+            sort_order AS sortOrder,
+            is_active AS isActive
+        FROM stage
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.Stage">
+        SELECT
+            id,
+            stage_code AS stageCode,
+            description,
+            sort_order AS sortOrder,
+            is_active AS isActive
+        FROM stage
+        ORDER BY sort_order ASC, id ASC
+    </select>
+
+    <select id="selectActive" resultType="com.jerry.salesmanagement.pojo.Stage">
+        SELECT
+            id,
+            stage_code AS stageCode,
+            description,
+            sort_order AS sortOrder,
+            is_active AS isActive
+        FROM stage
+        WHERE is_active = 1
+        ORDER BY sort_order ASC, id ASC
+    </select>
+
+    <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.Stage" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO stage (stage_code, description, sort_order, is_active)
+        VALUES (#{stageCode}, #{description}, #{sortOrder}, #{isActive})
+    </insert>
+
+    <update id="update" parameterType="com.jerry.salesmanagement.pojo.Stage">
+        UPDATE stage
+        SET stage_code = #{stageCode},
+            description = #{description},
+            sort_order = #{sortOrder},
+            is_active = #{isActive}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById" parameterType="long">
+        DELETE FROM stage WHERE id = #{id}
+    </delete>
+</mapper>

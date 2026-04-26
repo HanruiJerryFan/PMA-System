@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "classpath:dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jerry.salesmanagement.mapper.SysUserMapper">
+
+    <select id="selectById" parameterType="long" resultType="com.jerry.salesmanagement.pojo.SysUser">
+        SELECT
+            id,
+            username,
+            password,
+            real_name AS realName,
+            status,
+            force_password_change AS forcePasswordChange,
+            create_time AS createTime,
+            create_user AS createUser,
+            update_time AS updateTime,
+            update_user AS updateUser
+        FROM sys_user
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectByUsername" parameterType="string" resultType="com.jerry.salesmanagement.pojo.SysUser">
+        SELECT
+            id,
+            username,
+            password,
+            real_name AS realName,
+            status,
+            force_password_change AS forcePasswordChange,
+            create_time AS createTime,
+            create_user AS createUser,
+            update_time AS updateTime,
+            update_user AS updateUser
+        FROM sys_user
+        WHERE username = #{username}
+    </select>
+
+    <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.SysUser">
+        SELECT
+            id,
+            username,
+            password,
+            real_name AS realName,
+            status,
+            force_password_change AS forcePasswordChange,
+            create_time AS createTime,
+            create_user AS createUser,
+            update_time AS updateTime,
+            update_user AS updateUser
+        FROM sys_user
+    </select>
+
+    <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.SysUser"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO sys_user (
+            username,
+            password,
+            real_name,
+            status,
+            force_password_change,
+            create_time,
+            create_user
+        ) VALUES (
+            #{username},
+            #{password},
+            #{realName},
+            #{status},
+            #{forcePasswordChange},
+            NOW(),
+            #{createUser}
+        )
+    </insert>
+
+    <update id="update" parameterType="com.jerry.salesmanagement.pojo.SysUser">
+        UPDATE sys_user
+        <set>
+            <if test="username != null">username = #{username},</if>
+            <if test="password != null">password = #{password},</if>
+            <if test="realName != null">real_name = #{realName},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="forcePasswordChange != null">force_password_change = #{forcePasswordChange},</if>
+            update_time = NOW(),
+            update_user = #{updateUser}
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById" parameterType="long">
+        DELETE FROM sys_user
+        WHERE id = #{id}
+    </delete>
+
+    <!-- selectbyId --> 
+
+</mapper>

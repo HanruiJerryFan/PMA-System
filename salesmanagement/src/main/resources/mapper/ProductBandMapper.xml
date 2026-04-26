@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "classpath://org/mybatis/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jerry.salesmanagement.mapper.ProductBandMapper">
+    <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.ProductBand">
+        SELECT id, code, band_name AS description, sort_order AS sortOrder, is_active AS isActive
+        FROM product_band
+        ORDER BY sort_order ASC, id ASC
+    </select>
+
+    <select id="selectById" parameterType="long" resultType="com.jerry.salesmanagement.pojo.ProductBand">
+        SELECT id, code, band_name AS description, sort_order AS sortOrder, is_active AS isActive
+        FROM product_band
+        WHERE id = #{id}
+    </select>
+
+    <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.ProductBand" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO product_band (code, band_name, sort_order, is_active)
+        VALUES (#{code}, #{description}, #{sortOrder}, #{isActive})
+    </insert>
+
+    <update id="update" parameterType="com.jerry.salesmanagement.pojo.ProductBand">
+        UPDATE product_band
+        SET code = #{code}, band_name = #{description}, sort_order = #{sortOrder}, is_active = #{isActive}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById" parameterType="long">
+        DELETE FROM product_band WHERE id = #{id}
+    </delete>
+</mapper>

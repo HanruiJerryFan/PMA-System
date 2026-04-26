@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "classpath://org/mybatis/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jerry.salesmanagement.mapper.ProductHistoryPriceMapper">
+
+    <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.ProductHistoryPrice">
+        SELECT
+            php.id,
+            php.product_basic_info_uuid AS productBasicInfoUuid,
+            php.reference_price AS referencePrice,
+            php.supplier_customer_id AS supplierCustomerId,
+            c.customer_name AS supplier,
+            php.create_time AS createTime,
+            php.create_user AS createUser
+        FROM product_history_price php
+        LEFT JOIN customer_info c ON php.supplier_customer_id = c.uuid
+        ORDER BY php.create_time DESC, php.id DESC
+    </select>
+
+    <select id="selectById" parameterType="long"
+            resultType="com.jerry.salesmanagement.pojo.ProductHistoryPrice">
+        SELECT
+            php.id,
+            php.product_basic_info_uuid AS productBasicInfoUuid,
+            php.reference_price AS referencePrice,
+            php.supplier_customer_id AS supplierCustomerId,
+            c.customer_name AS supplier,
+            php.create_time AS createTime,
+            php.create_user AS createUser
+        FROM product_history_price php
+        LEFT JOIN customer_info c ON php.supplier_customer_id = c.uuid
+        WHERE php.id = #{id}
+    </select>
+
+    <select id="selectByProductUuid" parameterType="string"
+            resultType="com.jerry.salesmanagement.pojo.ProductHistoryPrice">
+        SELECT
+            php.id,
+            php.product_basic_info_uuid AS productBasicInfoUuid,
+            php.reference_price AS referencePrice,
+            php.supplier_customer_id AS supplierCustomerId,
+            c.customer_name AS supplier,
+            php.create_time AS createTime,
+            php.create_user AS createUser
+        FROM product_history_price php
+        LEFT JOIN customer_info c ON php.supplier_customer_id = c.uuid
+        WHERE php.product_basic_info_uuid = #{productUuid}
+        ORDER BY php.create_time DESC, php.id DESC
+    </select>
+
+    <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.ProductHistoryPrice"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO product_history_price (
+            product_basic_info_uuid,
+            reference_price,
+            supplier_customer_id,
+            create_time,
+            create_user
+        ) VALUES (
+            #{productBasicInfoUuid},
+            #{referencePrice},
+            #{supplierCustomerId},
+            NOW(),
+            #{createUser}
+        )
+    </insert>
+
+    <update id="update" parameterType="com.jerry.salesmanagement.pojo.ProductHistoryPrice">
+        UPDATE product_history_price
+        <set>
+            <if test="productBasicInfoUuid != null">product_basic_info_uuid = #{productBasicInfoUuid},</if>
+            <if test="referencePrice != null">reference_price = #{referencePrice},</if>
+            <if test="supplierCustomerId != null">supplier_customer_id = #{supplierCustomerId},</if>
+            <if test="createUser != null">create_user = #{createUser},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById" parameterType="long">
+        DELETE FROM product_history_price WHERE id = #{id}
+    </delete>
+</mapper>

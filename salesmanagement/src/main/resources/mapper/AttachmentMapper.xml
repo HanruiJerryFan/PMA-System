@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "classpath:dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jerry.salesmanagement.mapper.AttachmentMapper">
+
+    <select id="selectByUuid" parameterType="string" resultType="com.jerry.salesmanagement.pojo.Attachment">
+        SELECT
+            id,
+            uuid,
+            business_type AS businessType,
+            business_uuid AS businessUuid,
+            file_name AS fileName,
+            original_file_name AS originalFileName,
+            file_ext AS fileExt,
+            mime_type AS mimeType,
+            file_size AS fileSize,
+            storage_path AS storagePath,
+            uploaded_by AS uploadedBy,
+            uploaded_at AS uploadedAt
+        FROM attachment
+        WHERE uuid = #{uuid}
+    </select>
+
+    <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.Attachment">
+        SELECT
+            id,
+            uuid,
+            business_type AS businessType,
+            business_uuid AS businessUuid,
+            file_name AS fileName,
+            original_file_name AS originalFileName,
+            file_ext AS fileExt,
+            mime_type AS mimeType,
+            file_size AS fileSize,
+            storage_path AS storagePath,
+            uploaded_by AS uploadedBy,
+            uploaded_at AS uploadedAt
+        FROM attachment
+        ORDER BY uploaded_at DESC, id DESC
+    </select>
+
+    <select id="selectByBusiness" resultType="com.jerry.salesmanagement.pojo.Attachment">
+        SELECT
+            id,
+            uuid,
+            business_type AS businessType,
+            business_uuid AS businessUuid,
+            file_name AS fileName,
+            original_file_name AS originalFileName,
+            file_ext AS fileExt,
+            mime_type AS mimeType,
+            file_size AS fileSize,
+            storage_path AS storagePath,
+            uploaded_by AS uploadedBy,
+            uploaded_at AS uploadedAt
+        FROM attachment
+        WHERE business_type = #{param1}
+        <if test="param2 != null and param2 != ''">
+            AND business_uuid = #{param2}
+        </if>
+        ORDER BY uploaded_at DESC, id DESC
+    </select>
+
+    <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.Attachment">
+        INSERT INTO attachment (
+            uuid,
+            business_type,
+            business_uuid,
+            file_name,
+            original_file_name,
+            file_ext,
+            mime_type,
+            file_size,
+            storage_path,
+            uploaded_by,
+            uploaded_at
+        ) VALUES (
+            #{uuid},
+            #{businessType},
+            #{businessUuid},
+            #{fileName},
+            #{originalFileName},
+            #{fileExt},
+            #{mimeType},
+            #{fileSize},
+            #{storagePath},
+            #{uploadedBy},
+            NOW()
+        )
+    </insert>
+
+    <update id="updateByUuid" parameterType="com.jerry.salesmanagement.pojo.Attachment">
+        UPDATE attachment
+        <set>
+            <if test="businessType != null">business_type = #{businessType},</if>
+            <if test="businessUuid != null">business_uuid = #{businessUuid},</if>
+            <if test="fileName != null">file_name = #{fileName},</if>
+            <if test="originalFileName != null">original_file_name = #{originalFileName},</if>
+            <if test="fileExt != null">file_ext = #{fileExt},</if>
+            <if test="mimeType != null">mime_type = #{mimeType},</if>
+            <if test="fileSize != null">file_size = #{fileSize},</if>
+            <if test="storagePath != null">storage_path = #{storagePath},</if>
+            <if test="uploadedBy != null">uploaded_by = #{uploadedBy},</if>
+            uploaded_at = NOW()
+        </set>
+        WHERE uuid = #{uuid}
+    </update>
+
+    <delete id="deleteByUuid" parameterType="string">
+        DELETE FROM attachment
+        WHERE uuid = #{uuid}
+    </delete>
+</mapper>

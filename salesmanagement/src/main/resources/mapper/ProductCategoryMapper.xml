@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "classpath://org/mybatis/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jerry.salesmanagement.mapper.ProductCategoryMapper">
+
+    <select id="selectById" parameterType="long" resultType="com.jerry.salesmanagement.pojo.ProductCategory">
+        SELECT id, code, category_name AS name, sort_order AS sortOrder, is_active AS isActive
+        FROM product_category
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.ProductCategory">
+        SELECT id, code, category_name AS name, sort_order AS sortOrder, is_active AS isActive
+        FROM product_category
+        ORDER BY sort_order ASC, id ASC
+    </select>
+
+    <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.ProductCategory" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO product_category (code, category_name, sort_order, is_active)
+        VALUES (#{code}, #{name}, #{sortOrder}, #{isActive})
+    </insert>
+
+    <update id="update" parameterType="com.jerry.salesmanagement.pojo.ProductCategory">
+        UPDATE product_category
+        <set>
+            <if test="code != null">code = #{code},</if>
+            <if test="name != null">category_name = #{name},</if>
+            <if test="sortOrder != null">sort_order = #{sortOrder},</if>
+            <if test="isActive != null">is_active = #{isActive},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById" parameterType="long">
+        DELETE FROM product_category
+        WHERE id = #{id}
+    </delete>
+</mapper>

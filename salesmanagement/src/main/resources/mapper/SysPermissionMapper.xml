@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "classpath:dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jerry.salesmanagement.mapper.SysPermissionMapper">
+    <select id="selectById" parameterType="long" resultType="com.jerry.salesmanagement.pojo.SysPermission">
+        SELECT
+            id,
+            permission_code AS permissionCode,
+            permission_name AS permissionName,
+            create_time AS createTime,
+            create_user AS createUser,
+            update_time AS updateTime,
+            update_user AS updateUser
+        FROM sys_permission
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectByPermissionCode" parameterType="string" resultType="com.jerry.salesmanagement.pojo.SysPermission">
+        SELECT
+            id,
+            permission_code AS permissionCode,
+            permission_name AS permissionName,
+            create_time AS createTime,
+            create_user AS createUser,
+            update_time AS updateTime,
+            update_user AS updateUser
+        FROM sys_permission
+        WHERE permission_code = #{permissionCode}
+        LIMIT 1
+    </select>
+
+    <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.SysPermission">
+        SELECT
+            id,
+            permission_code AS permissionCode,
+            permission_name AS permissionName,
+            create_time AS createTime,
+            create_user AS createUser,
+            update_time AS updateTime,
+            update_user AS updateUser
+        FROM sys_permission
+    </select>
+
+    <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.SysPermission"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO sys_permission (
+            permission_code,
+            permission_name,
+            create_time,
+            create_user
+        ) VALUES (
+            #{permissionCode},
+            #{permissionName},
+            NOW(),
+            #{createUser}
+        )
+    </insert>
+
+    <update id="update" parameterType="com.jerry.salesmanagement.pojo.SysPermission">
+        UPDATE sys_permission
+        <set>
+            <if test="permissionCode != null">permission_code = #{permissionCode},</if>
+            <if test="permissionName != null">permission_name = #{permissionName},</if>
+            update_time = NOW(),
+            update_user = #{updateUser}
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById" parameterType="long">
+        DELETE FROM sys_permission
+        WHERE id = #{id}
+    </delete>
+</mapper>

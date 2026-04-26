@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "classpath://org/mybatis/mybatis-3-mapper.dtd">
+  
+<mapper namespace="com.jerry.salesmanagement.mapper.LoginRecordMapper">
+    <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.LoginRecord">
+        SELECT
+            id,
+            user_id AS userId,
+            login_start_time AS loginStartTime,
+            login_end_time AS loginEndTime,
+            duration_seconds AS durationSeconds,
+            login_ip AS loginIp,
+            user_agent AS userAgent,
+            last_seen_at AS lastSeenAt,
+            logout_reason AS logoutReason,
+            created_at AS createdAt
+        FROM login_record
+        ORDER BY login_start_time DESC, id DESC
+    </select>
+
+    <select id="selectById" parameterType="long" resultType="com.jerry.salesmanagement.pojo.LoginRecord">
+        SELECT
+            id,
+            user_id AS userId,
+            login_start_time AS loginStartTime,
+            login_end_time AS loginEndTime,
+            duration_seconds AS durationSeconds,
+            login_ip AS loginIp,
+            user_agent AS userAgent,
+            last_seen_at AS lastSeenAt,
+            logout_reason AS logoutReason,
+            created_at AS createdAt
+        FROM login_record
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectByUserId" parameterType="long" resultType="com.jerry.salesmanagement.pojo.LoginRecord">
+        SELECT
+            id,
+            user_id AS userId,
+            login_start_time AS loginStartTime,
+            login_end_time AS loginEndTime,
+            duration_seconds AS durationSeconds,
+            login_ip AS loginIp,
+            user_agent AS userAgent,
+            last_seen_at AS lastSeenAt,
+            logout_reason AS logoutReason,
+            created_at AS createdAt
+        FROM login_record
+        WHERE user_id = #{userId}
+        ORDER BY login_start_time DESC, id DESC
+    </select>
+
+    <select id="selectTimedOutActive" parameterType="java.util.Date" resultType="com.jerry.salesmanagement.pojo.LoginRecord">
+        SELECT
+            id,
+            user_id AS userId,
+            login_start_time AS loginStartTime,
+            login_end_time AS loginEndTime,
+            duration_seconds AS durationSeconds,
+            login_ip AS loginIp,
+            user_agent AS userAgent,
+            last_seen_at AS lastSeenAt,
+            logout_reason AS logoutReason,
+            created_at AS createdAt
+        FROM login_record
+        WHERE login_end_time IS NULL
+          AND last_seen_at IS NOT NULL
+          AND last_seen_at &lt;= #{cutoffTime}
+    </select>
+
+    <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.LoginRecord"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO login_record (
+            user_id,
+            login_start_time,
+            duration_seconds,
+            login_ip,
+            user_agent,
+            last_seen_at,
+            logout_reason,
+            created_at
+        ) VALUES (
+            #{userId},
+            #{loginStartTime},
+            #{durationSeconds},
+            #{loginIp},
+            #{userAgent},
+            #{lastSeenAt},
+            #{logoutReason},
+            #{createdAt}
+        )
+    </insert>
+
+    <update id="update" parameterType="com.jerry.salesmanagement.pojo.LoginRecord">
+        UPDATE login_record
+        <set>
+            <if test="loginEndTime != null">login_end_time = #{loginEndTime},</if>
+            <if test="durationSeconds != null">duration_seconds = #{durationSeconds},</if>
+            <if test="loginIp != null">login_ip = #{loginIp},</if>
+            <if test="userAgent != null">user_agent = #{userAgent},</if>
+            <if test="lastSeenAt != null">last_seen_at = #{lastSeenAt},</if>
+            <if test="logoutReason != null">logout_reason = #{logoutReason},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+</mapper>

@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "classpath://org/mybatis/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jerry.salesmanagement.mapper.ProjectMapper">
+    <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.Project">
+        SELECT
+            id,
+            uuid,
+            project_number AS projectNumber,
+            project_name AS projectName,
+            customer_id AS customerId,
+            manager_id AS managerId,
+            participant_1_user_id AS participant1UserId,
+            participant_2_user_id AS participant2UserId,
+            participant_3_user_id AS participant3UserId,
+            region_id AS regionId,
+            project_type_id AS projectTypeId,
+            warranty_until AS warrantyUntil,
+            plan_start_time AS planStartTime,
+            plan_end_time AS planEndTime,
+            sales_contract_attachment_uuid AS salesContractAttachmentUuid,
+            create_time AS createTime,
+            create_user AS createUser,
+            update_time AS updateTime,
+            update_user AS updateUser
+        FROM project_basic_info
+    </select>
+
+    <select id="selectByUuid" parameterType="string"
+            resultType="com.jerry.salesmanagement.pojo.Project">
+        SELECT
+            id,
+            uuid,
+            project_number AS projectNumber,
+            project_name AS projectName,
+            customer_id AS customerId,
+            manager_id AS managerId,
+            participant_1_user_id AS participant1UserId,
+            participant_2_user_id AS participant2UserId,
+            participant_3_user_id AS participant3UserId,
+            region_id AS regionId,
+            project_type_id AS projectTypeId,
+            warranty_until AS warrantyUntil,
+            plan_start_time AS planStartTime,
+            plan_end_time AS planEndTime,
+            sales_contract_attachment_uuid AS salesContractAttachmentUuid,
+            create_time AS createTime,
+            create_user AS createUser,
+            update_time AS updateTime,
+            update_user AS updateUser
+        FROM project_basic_info
+        WHERE uuid = #{uuid}
+    </select>
+
+    <select id="selectByProjectNumber" parameterType="string"
+            resultType="com.jerry.salesmanagement.pojo.Project">
+        SELECT
+            id,
+            uuid,
+            project_number AS projectNumber,
+            project_name AS projectName,
+            customer_id AS customerId,
+            manager_id AS managerId,
+            participant_1_user_id AS participant1UserId,
+            participant_2_user_id AS participant2UserId,
+            participant_3_user_id AS participant3UserId,
+            region_id AS regionId,
+            project_type_id AS projectTypeId,
+            warranty_until AS warrantyUntil,
+            plan_start_time AS planStartTime,
+            plan_end_time AS planEndTime,
+            sales_contract_attachment_uuid AS salesContractAttachmentUuid,
+            create_time AS createTime,
+            create_user AS createUser,
+            update_time AS updateTime,
+            update_user AS updateUser
+        FROM project_basic_info
+        WHERE project_number = #{projectNumber}
+        LIMIT 1
+    </select>
+
+    <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.Project">
+        INSERT INTO project_basic_info (
+            uuid,
+            project_number,
+            project_name,
+            customer_id,
+            customer_uuid,
+            manager_id,
+            participant_1_user_id,
+            participant_2_user_id,
+            participant_3_user_id,
+            region_id,
+            project_type_id,
+            warranty_until,
+            plan_start_time,
+            plan_end_time,
+            sales_contract_attachment_uuid,
+            create_time,
+            create_user
+        ) VALUES (
+            #{uuid},
+            #{projectNumber},
+            #{projectName},
+            #{customerId},
+            #{customerId},
+            #{managerId},
+            #{participant1UserId},
+            #{participant2UserId},
+            #{participant3UserId},
+            #{regionId},
+            #{projectTypeId},
+            #{warrantyUntil},
+            #{planStartTime},
+            #{planEndTime},
+            #{salesContractAttachmentUuid},
+            NOW(),
+            #{createUser}
+        )
+    </insert>
+
+    <update id="updateByUuid" parameterType="com.jerry.salesmanagement.pojo.Project">
+        UPDATE project_basic_info
+        <set>
+            <if test="projectNumber != null">project_number = #{projectNumber},</if>
+            <if test="projectName != null">project_name = #{projectName},</if>
+            <if test="customerId != null">customer_id = #{customerId},</if>
+            <if test="customerId != null">customer_uuid = #{customerId},</if>
+            <if test="managerId != null">manager_id = #{managerId},</if>
+            <if test="participant1UserId != null">participant_1_user_id = #{participant1UserId},</if>
+            <if test="participant2UserId != null">participant_2_user_id = #{participant2UserId},</if>
+            <if test="participant3UserId != null">participant_3_user_id = #{participant3UserId},</if>
+            <if test="regionId != null">region_id = #{regionId},</if>
+            <if test="projectTypeId != null">project_type_id = #{projectTypeId},</if>
+            <if test="warrantyUntil != null">warranty_until = #{warrantyUntil},</if>
+            <if test="planStartTime != null">plan_start_time = #{planStartTime},</if>
+            <if test="planEndTime != null">plan_end_time = #{planEndTime},</if>
+            <if test="salesContractAttachmentUuid != null">sales_contract_attachment_uuid = #{salesContractAttachmentUuid},</if>
+            update_time = NOW(),
+            update_user = #{updateUser}
+        </set>
+        WHERE uuid = #{uuid}
+    </update>
+
+    <delete id="deleteByUuid" parameterType="string">
+        DELETE FROM project_basic_info
+        WHERE uuid = #{uuid}
+    </delete>
+</mapper>

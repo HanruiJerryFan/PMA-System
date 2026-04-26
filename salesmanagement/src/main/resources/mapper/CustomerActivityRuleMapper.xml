@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "classpath://org/mybatis/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jerry.salesmanagement.mapper.CustomerActivityRuleMapper">
+    <select id="selectById" parameterType="long" resultType="com.jerry.salesmanagement.pojo.CustomerActivityRule">
+        SELECT id, status_code AS statusCode, min_idle_days AS minIdleDays, max_idle_days AS maxIdleDays, sort_order AS sortOrder, is_active AS isActive
+        FROM customer_activity_rule
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectByStatusCode" parameterType="string" resultType="com.jerry.salesmanagement.pojo.CustomerActivityRule">
+        SELECT id, status_code AS statusCode, min_idle_days AS minIdleDays, max_idle_days AS maxIdleDays, sort_order AS sortOrder, is_active AS isActive
+        FROM customer_activity_rule
+        WHERE status_code = #{statusCode}
+        LIMIT 1
+    </select>
+
+    <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.CustomerActivityRule">
+        SELECT id, status_code AS statusCode, min_idle_days AS minIdleDays, max_idle_days AS maxIdleDays, sort_order AS sortOrder, is_active AS isActive
+        FROM customer_activity_rule
+        ORDER BY sort_order ASC, id ASC
+    </select>
+
+    <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.CustomerActivityRule" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO customer_activity_rule (status_code, min_idle_days, max_idle_days, sort_order, is_active)
+        VALUES (#{statusCode}, #{minIdleDays}, #{maxIdleDays}, #{sortOrder}, #{isActive})
+    </insert>
+
+    <update id="update" parameterType="com.jerry.salesmanagement.pojo.CustomerActivityRule">
+        UPDATE customer_activity_rule
+        SET status_code = #{statusCode},
+            min_idle_days = #{minIdleDays},
+            max_idle_days = #{maxIdleDays},
+            sort_order = #{sortOrder},
+            is_active = #{isActive}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById" parameterType="long">
+        DELETE FROM customer_activity_rule WHERE id = #{id}
+    </delete>
+</mapper>

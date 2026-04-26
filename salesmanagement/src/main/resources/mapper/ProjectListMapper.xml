@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "classpath:dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jerry.salesmanagement.mapper.ProjectListMapper">
+
+    <select id="selectByUuid" parameterType="string" resultType="com.jerry.salesmanagement.pojo.ProjectList">
+        SELECT
+            pl.id,
+            pl.uuid,
+            pl.project_id AS projectId,
+            pl.list_name AS listName,
+            pl.list_type AS listType,
+            c.customer_name AS customerName,
+            pl.entry_date AS entryDate,
+            pl.pdf_attachment_id AS pdfAttachmentId,
+            pl.create_time AS createTime,
+            pl.create_user AS createUser,
+            pl.update_time AS updateTime,
+            pl.update_user AS updateUser
+        FROM project_list pl
+        LEFT JOIN project_basic_info p ON pl.project_id = p.uuid
+        LEFT JOIN customer_info c ON p.customer_id = c.uuid
+        WHERE pl.uuid = #{uuid}
+    </select>
+
+    <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.ProjectList">
+        SELECT
+            pl.id,
+            pl.uuid,
+            pl.project_id AS projectId,
+            pl.list_name AS listName,
+            pl.list_type AS listType,
+            c.customer_name AS customerName,
+            pl.entry_date AS entryDate,
+            pl.pdf_attachment_id AS pdfAttachmentId,
+            pl.create_time AS createTime,
+            pl.create_user AS createUser,
+            pl.update_time AS updateTime,
+            pl.update_user AS updateUser
+        FROM project_list pl
+        LEFT JOIN project_basic_info p ON pl.project_id = p.uuid
+        LEFT JOIN customer_info c ON p.customer_id = c.uuid
+        ORDER BY pl.entry_date DESC, pl.update_time DESC, pl.create_time DESC
+    </select>
+
+    <select id="selectByProjectId" parameterType="string" resultType="com.jerry.salesmanagement.pojo.ProjectList">
+        SELECT
+            pl.id,
+            pl.uuid,
+            pl.project_id AS projectId,
+            pl.list_name AS listName,
+            pl.list_type AS listType,
+            c.customer_name AS customerName,
+            pl.entry_date AS entryDate,
+            pl.pdf_attachment_id AS pdfAttachmentId,
+            pl.create_time AS createTime,
+            pl.create_user AS createUser,
+            pl.update_time AS updateTime,
+            pl.update_user AS updateUser
+        FROM project_list pl
+        LEFT JOIN project_basic_info p ON pl.project_id = p.uuid
+        LEFT JOIN customer_info c ON p.customer_id = c.uuid
+        WHERE pl.project_id = #{projectId}
+        ORDER BY pl.entry_date DESC, pl.update_time DESC, pl.create_time DESC
+    </select>
+
+    <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.ProjectList">
+        INSERT INTO project_list (
+            uuid,
+            project_id,
+            list_name,
+            list_type,
+            entry_date,
+            pdf_attachment_id,
+            create_time,
+            create_user
+        ) VALUES (
+            #{uuid},
+            #{projectId},
+            #{listName},
+            #{listType},
+            #{entryDate},
+            #{pdfAttachmentId},
+            NOW(),
+            #{createUser}
+        )
+    </insert>
+
+    <update id="updateByUuid" parameterType="com.jerry.salesmanagement.pojo.ProjectList">
+        UPDATE project_list
+        <set>
+            <if test="projectId != null">project_id = #{projectId},</if>
+            <if test="listName != null">list_name = #{listName},</if>
+            <if test="listType != null">list_type = #{listType},</if>
+            entry_date = #{entryDate},
+            <if test="pdfAttachmentId != null">pdf_attachment_id = #{pdfAttachmentId},</if>
+            update_time = NOW(),
+            update_user = #{updateUser}
+        </set>
+        WHERE uuid = #{uuid}
+    </update>
+
+    <delete id="deleteByUuid" parameterType="string">
+        DELETE FROM project_list
+        WHERE uuid = #{uuid}
+    </delete>
+</mapper>

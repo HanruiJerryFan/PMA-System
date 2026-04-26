@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "classpath://org/mybatis/mybatis-3-mapper.dtd">
+  
+<mapper namespace="com.jerry.salesmanagement.mapper.RegionMapper">
+    
+    <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.Region">
+        SELECT
+            id,
+            `level`,
+            parent_code AS parentCode,
+            area_code AS areaCode,
+            zip_code AS zipCode,
+            city_code AS cityCode,
+            name,
+            short_name AS shortName,
+            merger_name AS mergerName,
+            pinyin,
+            lng,
+            lat
+        FROM region
+        ORDER BY area_code
+    </select>
+
+    <select id="selectByLevel" parameterType="int" resultType="com.jerry.salesmanagement.pojo.Region">
+        SELECT
+            id,
+            `level`,
+            parent_code AS parentCode,
+            area_code AS areaCode,
+            zip_code AS zipCode,
+            city_code AS cityCode,
+            name,
+            short_name AS shortName,
+            merger_name AS mergerName,
+            pinyin,
+            lng,
+            lat
+        FROM region
+        WHERE `level` = #{level}
+        ORDER BY area_code
+    </select>
+
+    <select id="selectById" parameterType="int" resultType="com.jerry.salesmanagement.pojo.Region">
+        SELECT
+            id,
+            `level`,
+            parent_code AS parentCode,
+            area_code AS areaCode,
+            zip_code AS zipCode,
+            city_code AS cityCode,
+            name,
+            short_name AS shortName,
+            merger_name AS mergerName,
+            pinyin,
+            lng,
+            lat
+        FROM region
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectByAreaCode" parameterType="long" resultType="com.jerry.salesmanagement.pojo.Region">
+        SELECT
+            id,
+            `level`,
+            parent_code AS parentCode,
+            area_code AS areaCode,
+            zip_code AS zipCode,
+            city_code AS cityCode,
+            name,
+            short_name AS shortName,
+            merger_name AS mergerName,
+            pinyin,
+            lng,
+            lat
+        FROM region
+        WHERE area_code = #{areaCode}
+    </select>
+
+    <select id="selectByAreaCodePrefix" parameterType="string" resultType="com.jerry.salesmanagement.pojo.Region">
+        SELECT
+            id,
+            `level`,
+            parent_code AS parentCode,
+            area_code AS areaCode,
+            zip_code AS zipCode,
+            city_code AS cityCode,
+            name,
+            short_name AS shortName,
+            merger_name AS mergerName,
+            pinyin,
+            lng,
+            lat
+        FROM region
+        WHERE CAST(area_code AS CHAR) LIKE CONCAT(#{codePrefix}, '%')
+        ORDER BY
+            CASE
+                WHEN `level` = 2 THEN 0
+                WHEN `level` = 1 THEN 1
+                ELSE 2
+            END,
+            area_code
+        LIMIT 1
+    </select>
+
+    <select id="selectByParentCode" parameterType="long" resultType="com.jerry.salesmanagement.pojo.Region">
+        SELECT
+            id,
+            `level`,
+            parent_code AS parentCode,
+            area_code AS areaCode,
+            zip_code AS zipCode,
+            city_code AS cityCode,
+            name,
+            short_name AS shortName,
+            merger_name AS mergerName,
+            pinyin,
+            lng,
+            lat
+        FROM region
+        WHERE parent_code = #{parentCode}
+    </select>
+
+    <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.Region" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO region (
+            `level`,
+            parent_code,
+            area_code,
+            zip_code,
+            city_code,
+            name,
+            short_name,
+            merger_name,
+            pinyin,
+            lng,
+            lat
+        ) VALUES (
+            #{level},
+            #{parentCode},
+            #{areaCode},
+            #{zipCode},
+            #{cityCode},
+            #{name},
+            #{shortName},
+            #{mergerName},
+            #{pinyin},
+            #{lng},
+            #{lat}
+        )
+    </insert>
+
+    <update id="updateById" parameterType="com.jerry.salesmanagement.pojo.Region">
+        UPDATE region
+        SET
+            `level` = #{level},
+            parent_code = #{parentCode},
+            area_code = #{areaCode},
+            zip_code = #{zipCode},
+            city_code = #{cityCode},
+            name = #{name},
+            short_name = #{shortName},
+            merger_name = #{mergerName},
+            pinyin = #{pinyin},
+            lng = #{lng},
+            lat = #{lat}
+        WHERE id = #{id}
+    </update>
+</mapper>

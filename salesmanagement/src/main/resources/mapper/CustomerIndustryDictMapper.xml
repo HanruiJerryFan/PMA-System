@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "classpath://org/mybatis/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jerry.salesmanagement.mapper.CustomerIndustryDictMapper">
+    <select id="selectById" parameterType="long" resultType="com.jerry.salesmanagement.pojo.CustomerIndustryDict">
+        SELECT
+            id,
+            industry_name AS industryName,
+            is_active AS isActive
+        FROM customer_industry_dict
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectByName" parameterType="string" resultType="com.jerry.salesmanagement.pojo.CustomerIndustryDict">
+        SELECT
+            id,
+            industry_name AS industryName,
+            is_active AS isActive
+        FROM customer_industry_dict
+        WHERE industry_name = #{industryName}
+        LIMIT 1
+    </select>
+
+    <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.CustomerIndustryDict">
+        SELECT
+            id,
+            industry_name AS industryName,
+            is_active AS isActive
+        FROM customer_industry_dict
+        ORDER BY id ASC
+    </select>
+
+    <select id="selectActive" resultType="com.jerry.salesmanagement.pojo.CustomerIndustryDict">
+        SELECT
+            id,
+            industry_name AS industryName,
+            is_active AS isActive
+        FROM customer_industry_dict
+        WHERE is_active = 1
+        ORDER BY id ASC
+    </select>
+
+    <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.CustomerIndustryDict" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO customer_industry_dict (industry_name, is_active)
+        VALUES (#{industryName}, #{isActive})
+    </insert>
+
+    <update id="update" parameterType="com.jerry.salesmanagement.pojo.CustomerIndustryDict">
+        UPDATE customer_industry_dict
+        SET industry_name = #{industryName},
+            is_active = #{isActive}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById" parameterType="long">
+        DELETE FROM customer_industry_dict
+        WHERE id = #{id}
+    </delete>
+</mapper>

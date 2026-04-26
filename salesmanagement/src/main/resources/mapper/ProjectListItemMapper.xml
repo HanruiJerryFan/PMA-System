@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "classpath:dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jerry.salesmanagement.mapper.ProjectListItemMapper">
+
+    <select id="selectByUuid" parameterType="string" resultType="com.jerry.salesmanagement.pojo.ProjectListItem">
+        SELECT
+            id,
+            uuid,
+            project_list_id AS projectListId,
+            material_id AS materialId,
+            material_code AS materialCode,
+            item_name AS itemName,
+            model,
+            brand,
+            unit,
+            quantity,
+            unit_price AS unitPrice,
+            total_amount AS totalAmount,
+            source_type AS sourceType,
+            remark,
+            create_time AS createTime,
+            create_user AS createUser,
+            update_time AS updateTime,
+            update_user AS updateUser
+        FROM project_list_item
+        WHERE uuid = #{uuid}
+    </select>
+
+    <select id="selectByProjectListId" parameterType="string" resultType="com.jerry.salesmanagement.pojo.ProjectListItem">
+        SELECT
+            id,
+            uuid,
+            project_list_id AS projectListId,
+            material_id AS materialId,
+            material_code AS materialCode,
+            item_name AS itemName,
+            model,
+            brand,
+            unit,
+            quantity,
+            unit_price AS unitPrice,
+            total_amount AS totalAmount,
+            source_type AS sourceType,
+            remark,
+            create_time AS createTime,
+            create_user AS createUser,
+            update_time AS updateTime,
+            update_user AS updateUser
+        FROM project_list_item
+        WHERE project_list_id = #{projectListId}
+        ORDER BY id ASC
+    </select>
+
+    <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.ProjectListItem">
+        INSERT INTO project_list_item (
+            uuid,
+            project_list_id,
+            material_id,
+            material_code,
+            item_name,
+            model,
+            brand,
+            unit,
+            quantity,
+            unit_price,
+            total_amount,
+            source_type,
+            remark,
+            create_time,
+            create_user
+        ) VALUES (
+            #{uuid},
+            #{projectListId},
+            #{materialId},
+            #{materialCode},
+            #{itemName},
+            #{model},
+            #{brand},
+            #{unit},
+            #{quantity},
+            #{unitPrice},
+            #{totalAmount},
+            #{sourceType},
+            #{remark},
+            NOW(),
+            #{createUser}
+        )
+    </insert>
+
+    <update id="updateByUuid" parameterType="com.jerry.salesmanagement.pojo.ProjectListItem">
+        UPDATE project_list_item
+        <set>
+            <if test="projectListId != null">project_list_id = #{projectListId},</if>
+            <if test="materialId != null">material_id = #{materialId},</if>
+            <if test="materialCode != null">material_code = #{materialCode},</if>
+            <if test="itemName != null">item_name = #{itemName},</if>
+            <if test="model != null">model = #{model},</if>
+            <if test="brand != null">brand = #{brand},</if>
+            <if test="unit != null">unit = #{unit},</if>
+            <if test="quantity != null">quantity = #{quantity},</if>
+            <if test="unitPrice != null">unit_price = #{unitPrice},</if>
+            <if test="totalAmount != null">total_amount = #{totalAmount},</if>
+            <if test="sourceType != null">source_type = #{sourceType},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            update_time = NOW(),
+            update_user = #{updateUser}
+        </set>
+        WHERE uuid = #{uuid}
+    </update>
+
+    <delete id="deleteByUuid" parameterType="string">
+        DELETE FROM project_list_item
+        WHERE uuid = #{uuid}
+    </delete>
+
+    <delete id="deleteByProjectListId" parameterType="string">
+        DELETE FROM project_list_item
+        WHERE project_list_id = #{projectListId}
+    </delete>
+</mapper>

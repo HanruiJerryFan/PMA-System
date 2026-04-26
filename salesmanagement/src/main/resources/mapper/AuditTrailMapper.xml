@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "classpath://org/mybatis/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jerry.salesmanagement.mapper.AuditTrailMapper">
+    <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.AuditTrail">
+        SELECT
+            a.id,
+            a.user_id AS userId,
+            u.username AS username,
+            a.module,
+            a.action,
+            a.target_type AS targetType,
+            a.target_id AS targetId,
+            a.detail,
+            a.occurred_at AS occurredAt
+        FROM audit_trail a
+        LEFT JOIN sys_user u ON a.user_id = u.id
+        <where>
+            <if test="userId != null">
+                a.user_id = #{userId}
+            </if>
+            <if test="module != null and module != ''">
+                AND a.module = #{module}
+            </if>
+            <if test="action != null and action != ''">
+                AND a.action = #{action}
+            </if>
+        </where>
+        ORDER BY a.occurred_at DESC, a.id DESC
+    </select>
+
+    <select id="selectById" resultType="com.jerry.salesmanagement.pojo.AuditTrail">
+        SELECT
+            a.id,
+            a.user_id AS userId,
+            u.username AS username,
+            a.module,
+            a.action,
+            a.target_type AS targetType,
+            a.target_id AS targetId,
+            a.detail,
+            a.occurred_at AS occurredAt
+        FROM audit_trail a
+        LEFT JOIN sys_user u ON a.user_id = u.id
+        WHERE a.id = #{id}
+    </select>
+
+    <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.AuditTrail" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO audit_trail (
+            user_id,
+            module,
+            action,
+            target_type,
+            target_id,
+            detail,
+            occurred_at
+        ) VALUES (
+            #{userId},
+            #{module},
+            #{action},
+            #{targetType},
+            #{targetId},
+            #{detail},
+            COALESCE(#{occurredAt}, NOW())
+        )
+    </insert>
+</mapper>

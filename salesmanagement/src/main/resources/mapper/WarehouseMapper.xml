@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "classpath://org/mybatis/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jerry.salesmanagement.mapper.WarehouseMapper">
+    <select id="selectById" parameterType="long" resultType="com.jerry.salesmanagement.pojo.Warehouse">
+        SELECT
+            id,
+            warehouse_code AS warehouseCode,
+            warehouse_name AS warehouseName,
+            warehouse_address AS warehouseAddress,
+            contact_name AS contactName,
+            contact_phone AS contactPhone,
+            remark
+        FROM warehouse_info
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.Warehouse">
+        SELECT
+            id,
+            warehouse_code AS warehouseCode,
+            warehouse_name AS warehouseName,
+            warehouse_address AS warehouseAddress,
+            contact_name AS contactName,
+            contact_phone AS contactPhone,
+            remark
+        FROM warehouse_info
+        ORDER BY id DESC
+    </select>
+
+    <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.Warehouse"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO warehouse_info (
+            warehouse_code,
+            warehouse_name,
+            warehouse_address,
+            contact_name,
+            contact_phone,
+            remark
+        ) VALUES (
+            #{warehouseCode},
+            #{warehouseName},
+            #{warehouseAddress},
+            #{contactName},
+            #{contactPhone},
+            #{remark}
+        )
+    </insert>
+
+    <update id="update" parameterType="com.jerry.salesmanagement.pojo.Warehouse">
+        UPDATE warehouse_info
+        <set>
+            <if test="warehouseCode != null">warehouse_code = #{warehouseCode},</if>
+            <if test="warehouseName != null">warehouse_name = #{warehouseName},</if>
+            <if test="warehouseAddress != null">warehouse_address = #{warehouseAddress},</if>
+            <if test="contactName != null">contact_name = #{contactName},</if>
+            <if test="contactPhone != null">contact_phone = #{contactPhone},</if>
+            <if test="remark != null">remark = #{remark},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById" parameterType="long">
+        DELETE FROM warehouse_info
+        WHERE id = #{id}
+    </delete>
+</mapper>

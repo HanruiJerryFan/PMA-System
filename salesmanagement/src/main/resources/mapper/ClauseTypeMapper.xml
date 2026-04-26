@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "classpath://org/mybatis/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jerry.salesmanagement.mapper.ClauseTypeMapper">
+    <select id="selectById" parameterType="long" resultType="com.jerry.salesmanagement.pojo.ClauseType">
+        SELECT
+            id,
+            description
+        FROM clause_type
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.ClauseType">
+        SELECT
+            id,
+            description
+        FROM clause_type
+    </select>
+</mapper>

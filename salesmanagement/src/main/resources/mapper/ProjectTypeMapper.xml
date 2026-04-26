@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "classpath://mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jerry.salesmanagement.mapper.ProjectTypeMapper">
+    <select id="selectById" parameterType="long" resultType="com.jerry.salesmanagement.pojo.ProjectType">
+        SELECT
+            id,
+            code,
+            name,
+            is_active AS isActive
+        FROM project_type
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectByCode" parameterType="string" resultType="com.jerry.salesmanagement.pojo.ProjectType">
+        SELECT
+            id,
+            code,
+            name,
+            is_active AS isActive
+        FROM project_type
+        WHERE code = #{code}
+        LIMIT 1
+    </select>
+
+    <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.ProjectType">
+        SELECT
+            id,
+            code,
+            name,
+            is_active AS isActive
+        FROM project_type
+        ORDER BY id ASC
+    </select>
+
+    <select id="selectActive" resultType="com.jerry.salesmanagement.pojo.ProjectType">
+        SELECT
+            id,
+            code,
+            name,
+            is_active AS isActive
+        FROM project_type
+        WHERE is_active = 1
+        ORDER BY id ASC
+    </select>
+
+    <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.ProjectType" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO project_type (code, name, is_active, type_name, type_desc)
+        VALUES (#{code}, #{name}, #{isActive}, #{code}, #{name})
+    </insert>
+
+    <update id="update" parameterType="com.jerry.salesmanagement.pojo.ProjectType">
+        UPDATE project_type
+        SET code = #{code},
+            name = #{name},
+            is_active = #{isActive},
+            type_name = #{code},
+            type_desc = #{name}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById" parameterType="long">
+        DELETE FROM project_type WHERE id = #{id}
+    </delete>
+</mapper>

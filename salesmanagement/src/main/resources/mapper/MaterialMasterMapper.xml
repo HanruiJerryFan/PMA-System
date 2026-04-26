@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "classpath://org/mybatis/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jerry.salesmanagement.mapper.MaterialMasterMapper">
+
+    <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.MaterialMaster">
+        SELECT
+            id,
+            uuid,
+            brand_code AS brandCode,
+            category_code AS categoryCode,
+            subcategory_code AS subcategoryCode,
+            sequence_no AS sequenceNo,
+            band_code AS bandCode,
+            material_code AS materialCode,
+            category_id AS categoryId,
+            subcategory_id AS subcategoryId,
+            product_name AS productName,
+            product_model AS productModel,
+            brand_id AS brandId,
+            manufacturer,
+            unit,
+            frequency,
+            specification,
+            other_note AS otherNote,
+            is_active AS isActive,
+            created_at AS createdAt,
+            created_by AS createdBy,
+            updated_at AS updatedAt,
+            updated_by AS updatedBy
+        FROM product_basic_info
+        ORDER BY material_code ASC, id ASC
+    </select>
+
+    <select id="selectByUuid" parameterType="string" resultType="com.jerry.salesmanagement.pojo.MaterialMaster">
+        SELECT
+            id,
+            uuid,
+            brand_code AS brandCode,
+            category_code AS categoryCode,
+            subcategory_code AS subcategoryCode,
+            sequence_no AS sequenceNo,
+            band_code AS bandCode,
+            material_code AS materialCode,
+            category_id AS categoryId,
+            subcategory_id AS subcategoryId,
+            product_name AS productName,
+            product_model AS productModel,
+            brand_id AS brandId,
+            manufacturer,
+            unit,
+            frequency,
+            specification,
+            other_note AS otherNote,
+            is_active AS isActive,
+            created_at AS createdAt,
+            created_by AS createdBy,
+            updated_at AS updatedAt,
+            updated_by AS updatedBy
+        FROM product_basic_info
+        WHERE uuid = #{uuid}
+    </select>
+
+    <select id="selectByMaterialCode" parameterType="string" resultType="com.jerry.salesmanagement.pojo.MaterialMaster">
+        SELECT
+            id,
+            uuid,
+            brand_code AS brandCode,
+            category_code AS categoryCode,
+            subcategory_code AS subcategoryCode,
+            sequence_no AS sequenceNo,
+            band_code AS bandCode,
+            material_code AS materialCode,
+            category_id AS categoryId,
+            subcategory_id AS subcategoryId,
+            product_name AS productName,
+            product_model AS productModel,
+            brand_id AS brandId,
+            manufacturer,
+            unit,
+            frequency,
+            specification,
+            other_note AS otherNote,
+            is_active AS isActive,
+            created_at AS createdAt,
+            created_by AS createdBy,
+            updated_at AS updatedAt,
+            updated_by AS updatedBy
+        FROM product_basic_info
+        WHERE material_code = #{materialCode}
+        LIMIT 1
+    </select>
+
+    <select id="selectMaxMaterialCodeByPrefix" parameterType="string" resultType="string">
+        SELECT MAX(material_code)
+        FROM product_basic_info
+        WHERE material_code LIKE CONCAT(#{prefix}, '%')
+    </select>
+
+    <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.MaterialMaster">
+        INSERT INTO product_basic_info (
+            uuid,
+            brand_code,
+            category_code,
+            subcategory_code,
+            sequence_no,
+            band_code,
+            material_code,
+            category_id,
+            subcategory_id,
+            product_name,
+            product_model,
+            brand_id,
+            manufacturer,
+            unit,
+            frequency,
+            specification,
+            other_note,
+            is_active,
+            created_at,
+            created_by
+        ) VALUES (
+            #{uuid},
+            #{brandCode},
+            #{categoryCode},
+            #{subcategoryCode},
+            #{sequenceNo},
+            #{bandCode},
+            #{materialCode},
+            #{categoryId},
+            #{subcategoryId},
+            #{productName},
+            #{productModel},
+            #{brandId},
+            #{manufacturer},
+            #{unit},
+            #{frequency},
+            #{specification},
+            #{otherNote},
+            #{isActive},
+            NOW(),
+            #{createdBy}
+        )
+    </insert>
+
+    <update id="updateByUuid" parameterType="com.jerry.salesmanagement.pojo.MaterialMaster">
+        UPDATE product_basic_info
+        <set>
+            <if test="categoryId != null">category_id = #{categoryId},</if>
+            <if test="subcategoryId != null">subcategory_id = #{subcategoryId},</if>
+            <if test="productName != null">product_name = #{productName},</if>
+            <if test="productModel != null">product_model = #{productModel},</if>
+            <if test="brandId != null">brand_id = #{brandId},</if>
+            <if test="manufacturer != null">manufacturer = #{manufacturer},</if>
+            <if test="unit != null">unit = #{unit},</if>
+            <if test="frequency != null">frequency = #{frequency},</if>
+            <if test="specification != null">specification = #{specification},</if>
+            <if test="otherNote != null">other_note = #{otherNote},</if>
+            <if test="isActive != null">is_active = #{isActive},</if>
+            updated_at = NOW(),
+            updated_by = #{updatedBy}
+        </set>
+        WHERE uuid = #{uuid}
+    </update>
+
+    <delete id="deleteByUuid" parameterType="string">
+        DELETE FROM product_basic_info
+        WHERE uuid = #{uuid}
+    </delete>
+
+</mapper>

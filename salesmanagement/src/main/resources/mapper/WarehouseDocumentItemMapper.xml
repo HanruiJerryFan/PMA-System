@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "classpath://org/mybatis/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jerry.salesmanagement.mapper.WarehouseDocumentItemMapper">
+
+    <select id="selectByDocNumber" parameterType="string"
+            resultType="com.jerry.salesmanagement.pojo.WarehouseDocumentItem">
+        SELECT
+            id,
+            uuid,
+            doc_number AS docNumber,
+            line_no AS lineNo,
+            material_id AS materialId,
+            material_code AS materialCode,
+            material_name AS materialName,
+            model,
+            display_name AS displayName,
+            display_model AS displayModel,
+            brand,
+            unit,
+            quantity,
+            unit_price AS unitPrice,
+            amount,
+            remark,
+            create_time AS createTime,
+            create_user AS createUser,
+            update_time AS updateTime,
+            update_user AS updateUser
+        FROM warehouse_doc_item
+        WHERE doc_number = #{docNumber}
+        ORDER BY line_no ASC, id ASC
+    </select>
+
+    <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.WarehouseDocumentItem"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO warehouse_doc_item (
+            uuid,
+            doc_number,
+            line_no,
+            material_id,
+            material_code,
+            material_name,
+            model,
+            display_name,
+            display_model,
+            brand,
+            unit,
+            quantity,
+            unit_price,
+            amount,
+            remark,
+            create_time,
+            create_user
+        ) VALUES (
+            #{uuid},
+            #{docNumber},
+            #{lineNo},
+            #{materialId},
+            #{materialCode},
+            #{materialName},
+            #{model},
+            #{displayName},
+            #{displayModel},
+            #{brand},
+            #{unit},
+            #{quantity},
+            #{unitPrice},
+            #{amount},
+            #{remark},
+            NOW(),
+            #{createUser}
+        )
+    </insert>
+
+    <delete id="deleteByDocNumber" parameterType="string">
+        DELETE FROM warehouse_doc_item
+        WHERE doc_number = #{docNumber}
+    </delete>
+
+</mapper>

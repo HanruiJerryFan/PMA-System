@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "classpath://org/mybatis/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jerry.salesmanagement.mapper.CustomerContactMapper">
+    <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.CustomerContact">
+        SELECT
+            id,
+            uuid,
+            client_id AS clientId,
+            contact_name AS contactName,
+            contact_position AS contactPosition,
+            contact_phone AS contactPhone,
+            wechat,
+            email,
+            qq,
+            remark,
+            create_time AS createTime,
+            create_user AS createUser,
+            update_time AS updateTime,
+            update_user AS updateUser
+        FROM customer_contact
+    </select>
+
+    <select id="selectByUuid" parameterType="string" resultType="com.jerry.salesmanagement.pojo.CustomerContact">
+        SELECT
+            id,
+            uuid,
+            client_id AS clientId,
+            contact_name AS contactName,
+            contact_position AS contactPosition,
+            contact_phone AS contactPhone,
+            wechat,
+            email,
+            qq,
+            remark,
+            create_time AS createTime,
+            create_user AS createUser,
+            update_time AS updateTime,
+            update_user AS updateUser
+        FROM customer_contact
+        WHERE uuid = #{uuid}
+    </select>
+
+    <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.CustomerContact">
+        INSERT INTO customer_contact (
+            uuid,
+            client_id,
+            contact_name,
+            contact_position,
+            contact_phone,
+            wechat,
+            email,
+            qq,
+            remark,
+            create_time,
+            create_user
+        ) VALUES (
+            #{uuid},
+            #{clientId},
+            #{contactName},
+            #{contactPosition},
+            #{contactPhone},
+            #{wechat},
+            #{email},
+            #{qq},
+            #{remark},
+            NOW(),
+            #{createUser}
+        )
+    </insert>
+
+    <update id="updateByUuid" parameterType="com.jerry.salesmanagement.pojo.CustomerContact">
+        UPDATE customer_contact
+        <set>
+            <if test="clientId != null">client_id = #{clientId},</if>
+            <if test="contactName != null">contact_name = #{contactName},</if>
+            <if test="contactPosition != null">contact_position = #{contactPosition},</if>
+            <if test="contactPhone != null">contact_phone = #{contactPhone},</if>
+            <if test="wechat != null">wechat = #{wechat},</if>
+            <if test="email != null">email = #{email},</if>
+            <if test="qq != null">qq = #{qq},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            update_time = NOW(),
+            update_user = #{updateUser}
+        </set>
+        WHERE uuid = #{uuid}
+    </update>
+
+    <delete id="deleteByUuid">
+        DELETE FROM customer_contact
+        WHERE uuid = #{uuid}
+    </delete>
+</mapper>
