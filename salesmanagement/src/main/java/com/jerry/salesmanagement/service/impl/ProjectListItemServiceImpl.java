@@ -43,6 +43,39 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
     private static final String IMPORT_MODE_FAIL_FAST = "FAIL_FAST";
     private static final String IMPORT_MODE_PARTIAL_SUCCESS = "PARTIAL_SUCCESS";
 
+    private static final Set<String> ITEM_REFERENCE_HEADERS = Set.of("materialid", "materialcode", "itemname");
+    private static final Map<String, String> HEADER_ALIASES = Map.ofEntries(
+            Map.entry("materialuuid", "materialid"),
+            Map.entry("物料id", "materialid"),
+            Map.entry("材料id", "materialid"),
+            Map.entry("物料编码", "materialcode"),
+            Map.entry("物料代码", "materialcode"),
+            Map.entry("材料编码", "materialcode"),
+            Map.entry("材料代码", "materialcode"),
+            Map.entry("materialname", "itemname"),
+            Map.entry("productname", "itemname"),
+            Map.entry("name", "itemname"),
+            Map.entry("物料名称", "itemname"),
+            Map.entry("材料名称", "itemname"),
+            Map.entry("商品名称", "itemname"),
+            Map.entry("名称", "itemname"),
+            Map.entry("型号", "model"),
+            Map.entry("规格型号", "model"),
+            Map.entry("型号规格", "model"),
+            Map.entry("品牌", "brand"),
+            Map.entry("单位", "unit"),
+            Map.entry("数量", "quantity"),
+            Map.entry("qty", "quantity"),
+            Map.entry("销售价格", "unitprice"),
+            Map.entry("销售价", "unitprice"),
+            Map.entry("销售单价", "unitprice"),
+            Map.entry("单价", "unitprice"),
+            Map.entry("价格", "unitprice"),
+            Map.entry("备注", "remark"),
+            Map.entry("说明", "remark"),
+            Map.entry("来源类型", "sourcetype")
+    );
+
     private static final Set<String> SOURCE_TYPES = Set.of(
             "PROJECT_PURCHASE",
             "WAREHOUSE_TRANSFER_TO_PROJECT"
@@ -136,8 +169,8 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
             }
 
             Map<String, Integer> headerIndexMap = buildHeaderIndexMap(sheet.getRow(headerRowIndex));
-            if (!headerIndexMap.containsKey("itemname") || !headerIndexMap.containsKey("quantity")) {
-                throw new IllegalArgumentException("Excel must contain Item Name and Quantity columns");
+            if (!hasItemReferenceColumn(headerIndexMap) || !headerIndexMap.containsKey("quantity")) {
+                throw new IllegalArgumentException("Excel must contain Quantity and one of Material ID, Material Code, or Item Name columns");
             }
 
             int totalRows = 0;
@@ -294,7 +327,7 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
                 continue;
             }
             Map<String, Integer> headerIndexMap = buildHeaderIndexMap(row);
-            if (headerIndexMap.containsKey("itemname") && headerIndexMap.containsKey("quantity")) {
+            if (hasItemReferenceColumn(headerIndexMap) && headerIndexMap.containsKey("quantity")) {
                 return rowIndex;
             }
         }
@@ -321,10 +354,16 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
         if (!StringUtils.hasText(value)) {
             return "";
         }
-        return value.trim().toLowerCase(Locale.ROOT)
+        String normalized = value.trim().toLowerCase(Locale.ROOT)
                 .replace("_", "")
                 .replace("-", "")
-                .replace(" ", "");
+                .replace(" ", "")
+                .replace("　", "");
+        return HEADER_ALIASES.getOrDefault(normalized, normalized);
+    }
+
+    private boolean hasItemReferenceColumn(Map<String, Integer> headerIndexMap) {
+        return ITEM_REFERENCE_HEADERS.stream().anyMatch(headerIndexMap::containsKey);
     }
 
     private Map<String, String> extractRowData(Row row, Map<String, Integer> headerIndexMap) {
@@ -345,7 +384,7 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
         }
 
         DataFormatter formatter = new DataFormatter();
-        String[] keys = {"materialcode", "itemname", "model", "brand", "unit", "quantity", "unitprice", "remark"};
+        String[] keys = {"materialid", "materialcode", "itemname", "model", "brand", "unit", "quantity", "unitprice", "sourcetype", "remark"};
         for (String key : keys) {
             Integer columnIndex = headerIndexMap.get(key);
             if (columnIndex == null) {

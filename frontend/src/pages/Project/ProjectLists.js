@@ -18,6 +18,7 @@ import {
   Switch,
   Table,
   Tag,
+  Tooltip,
   message,
 } from "antd";
 import { DatePicker } from "antd";
@@ -51,6 +52,8 @@ const IMPORT_MODE_OPTIONS = [
   { value: "PARTIAL_SUCCESS", label: "部分成功" },
   { value: "FAIL_FAST", label: "遇错即停" },
 ];
+
+const PROJECT_LIST_IMPORT_TEMPLATE_HEADERS = ["物料编码", "物料名称", "型号", "品牌", "单位", "数量", "销售价格", "备注"];
 
 function normalizeResponseData(response) {
   return response?.data ?? response ?? [];
@@ -109,6 +112,7 @@ export default function ProjectLists() {
   const canExport = hasAnyAuthority(currentUser, pagePermissions.exportAuthorities);
   const canAccessAttachments = hasAnyAuthority(currentUser, ["attachment.access"]);
   const canManageAttachments = hasAnyAuthority(currentUser, ["attachment.manage"]);
+  const importDisabledReason = !canManage ? "当前账号没有项目管理权限" : !selectedListUuid ? "请先选择一个项目清单" : "";
 
   const selectedCategoryId = Form.useWatch("categoryId", itemForm);
   const selectedSubcategoryId = Form.useWatch("subcategoryId", itemForm);
@@ -402,7 +406,7 @@ export default function ProjectLists() {
   };
 
   const downloadTemplate = () => {
-    downloadExcel("project-list-items-template.xls", "项目清单明细导入模板", ["物料ID", "数量", "销售价格", "备注"], [["", 1, 0, ""]]);
+    downloadExcel("project-list-items-template.xls", "项目清单明细导入模板", PROJECT_LIST_IMPORT_TEMPLATE_HEADERS, []);
   };
 
   const startImport = async () => {
@@ -618,9 +622,13 @@ export default function ProjectLists() {
               <Button icon={<EyeOutlined />} disabled={!projectUuidFilter && !selectedList?.projectId} onClick={() => openAggregateDashboard("FINAL_PROCUREMENT")}>
                 最终采购清单
               </Button>
-              <Button disabled={!canManage || !selectedListUuid} onClick={() => importInputRef.current?.click()}>
-                导入 Excel
-              </Button>
+              <Tooltip title={importDisabledReason}>
+                <span>
+                  <Button disabled={Boolean(importDisabledReason)} onClick={() => importInputRef.current?.click()}>
+                    导入 Excel
+                  </Button>
+                </span>
+              </Tooltip>
               <Button disabled={!canManage} onClick={downloadTemplate}>
                 下载模板
               </Button>
@@ -780,7 +788,7 @@ export default function ProjectLists() {
         <Modal title="导入项目清单明细" open={importModalVisible} onOk={startImport} onCancel={() => { setImportModalVisible(false); setPendingImportFile(null); if (importInputRef.current) importInputRef.current.value = ""; }} okText="开始导入" cancelText="取消" confirmLoading={importing} destroyOnHidden>
           <Space direction="vertical" size={16} style={{ width: "100%" }}>
             <div><strong>当前文件：</strong> {pendingImportFile?.name || "-"}</div>
-            <div>支持导入字段：物料ID、数量、销售价格、备注。</div>
+            <div>支持导入字段：物料编码、物料名称、型号、品牌、单位、数量、销售价格、备注。物料编码或物料名称至少填写一项。</div>
             <Space><span>导入前覆盖现有明细</span><Switch checked={replaceExistingOnImport} onChange={setReplaceExistingOnImport} /></Space>
             <div><div style={{ marginBottom: 8 }}>导入模式</div><Select value={importMode} onChange={setImportMode} style={{ width: "100%" }}>{IMPORT_MODE_OPTIONS.map((item) => <Option key={item.value} value={item.value}>{item.label}</Option>)}</Select></div>
           </Space>
