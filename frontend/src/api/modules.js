@@ -216,6 +216,7 @@ export const attachmentAPI = {
   uploadAttachment: (formData) =>
     api.post("/attachments/upload", formData, {
       headers: { "Content-Type": "multipart/form-data" },
+      timeout: 120000,
     }),
   downloadAttachment: (uuid) =>
     api.get(`/attachments/download/${uuid}`, {

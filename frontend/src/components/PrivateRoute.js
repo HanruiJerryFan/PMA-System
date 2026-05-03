@@ -8,14 +8,17 @@ function PrivateRoute({ children, requiredAuthorities = [] }) {
   const [authenticated, setAuthenticated] = useState(null);
   const [authorized, setAuthorized] = useState(true);
   const [forcePasswordChange, setForcePasswordChange] = useState(false);
+  const requiredAuthoritiesKey = requiredAuthorities.join("|");
 
   useEffect(() => {
+    const authorityList = requiredAuthoritiesKey ? requiredAuthoritiesKey.split("|") : [];
+
     async function checkAuth() {
       try {
         const user = await getCurrentUser();
         setAuthenticated(!!user);
         setForcePasswordChange(Boolean(user?.forcePasswordChange));
-        setAuthorized(hasAnyAuthority(user, requiredAuthorities));
+        setAuthorized(hasAnyAuthority(user, authorityList));
       } catch (error) {
         setAuthenticated(false);
         setAuthorized(false);
@@ -24,7 +27,7 @@ function PrivateRoute({ children, requiredAuthorities = [] }) {
     }
 
     checkAuth();
-  }, [requiredAuthorities]);
+  }, [requiredAuthoritiesKey]);
 
   if (authenticated === null) {
     return <div>Loading...</div>;

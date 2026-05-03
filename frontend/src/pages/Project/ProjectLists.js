@@ -61,6 +61,14 @@ function getListTypeLabel(value) {
   return LIST_TYPE_OPTIONS.find((item) => item.value === value)?.label || value || "-";
 }
 
+function isProcurementListType(value) {
+  return value === "PROCUREMENT" || value === "FINAL_PROCUREMENT";
+}
+
+function getUnitPriceLabel(listType) {
+  return isProcurementListType(listType) ? "采购价格" : "销售价格";
+}
+
 function formatAmount(value) {
   if (value == null || value === "") return "-";
   return Number(value).toFixed(2);
@@ -148,6 +156,7 @@ export default function ProjectLists() {
   })), [projectLists, projectMap]);
 
   const selectedList = useMemo(() => decoratedLists.find((item) => item.uuid === selectedListUuid) || null, [decoratedLists, selectedListUuid]);
+  const selectedUnitPriceLabel = useMemo(() => getUnitPriceLabel(selectedList?.listType), [selectedList?.listType]);
 
   const summary = useMemo(() => decoratedLists.reduce((acc, item) => {
     acc.total += 1;
@@ -451,7 +460,7 @@ export default function ProjectLists() {
     downloadExcel(
       `${selectedList.projectLabel || "项目"}-${selectedList.listName || selectedList.listTypeLabel || "清单"}.xls`,
       "项目清单明细",
-      ["物料编码", "物料名称", "型号", "品牌", "单位", "数量", "销售价格", "金额", "备注"],
+      ["物料编码", "物料名称", "型号", "品牌", "单位", "数量", selectedUnitPriceLabel, "金额", "备注"],
       [...rows, ["", "", "", "", "合计", "", "", Number(totalAmount.toFixed(2)), ""]]
     );
   };
@@ -478,7 +487,7 @@ export default function ProjectLists() {
         { header: "品牌", width: 10 },
         { header: "单位", align: "center", width: 7 },
         { header: "数量", align: "right", width: 8 },
-        { header: "销售价格", align: "right", width: 10 },
+        { header: selectedUnitPriceLabel, align: "right", width: 10 },
         { header: "金额", align: "right", width: 10 },
         { header: "备注", width: 14 },
       ],
@@ -566,7 +575,7 @@ export default function ProjectLists() {
     { title: "品牌", dataIndex: "brand", key: "brand", width: 120 },
     { title: "单位", dataIndex: "unit", key: "unit", width: 100 },
     { title: "数量", dataIndex: "quantity", key: "quantity", width: 120 },
-    { title: "销售价格", dataIndex: "unitPrice", key: "unitPrice", width: 120, render: formatAmount },
+    { title: selectedUnitPriceLabel, dataIndex: "unitPrice", key: "unitPrice", width: 120, render: formatAmount },
     { title: "金额", dataIndex: "totalAmount", key: "totalAmount", width: 120, render: formatAmount },
     { title: "备注", dataIndex: "remark", key: "remark", width: 220 },
   ];
@@ -780,7 +789,7 @@ export default function ProjectLists() {
             </Descriptions>
             <Row gutter={16}>
               <Col span={8}><Form.Item name="quantity" label="数量" rules={[{ required: true, message: "请输入数量" }]}><InputNumber min={selectedList?.listType === "CHANGE" ? undefined : 0.0001} precision={4} style={{ width: "100%" }} placeholder={selectedList?.listType === "CHANGE" ? "销售变更清单可输入正数或负数" : "请输入数量"} /></Form.Item></Col>
-              <Col span={8}><Form.Item name="unitPrice" label="销售价格"><InputNumber min={0} precision={2} style={{ width: "100%" }} /></Form.Item></Col>
+              <Col span={8}><Form.Item name="unitPrice" label={selectedUnitPriceLabel}><InputNumber min={0} precision={2} style={{ width: "100%" }} /></Form.Item></Col>
               <Col span={8}><Form.Item name="remark" label="备注"><Input placeholder="请输入备注" /></Form.Item></Col>
             </Row>
             <Form.Item name="materialCode" hidden><Input /></Form.Item>
@@ -794,7 +803,7 @@ export default function ProjectLists() {
         <Modal title="导入项目清单明细" open={importModalVisible} onOk={startImport} onCancel={() => { setImportModalVisible(false); setPendingImportFile(null); if (importInputRef.current) importInputRef.current.value = ""; }} okText="开始导入" cancelText="取消" confirmLoading={importing} destroyOnHidden>
           <Space direction="vertical" size={16} style={{ width: "100%" }}>
             <div><strong>当前文件：</strong> {pendingImportFile?.name || "-"}</div>
-            <div>支持导入字段：物料编码、物料名称、型号、品牌、单位、数量、销售价格、备注。物料编码或物料名称至少填写一项。</div>
+            <div>支持导入字段：物料编码、物料名称、型号、品牌、单位、数量、销售价格/采购价格/单价、备注。物料编码或物料名称至少填写一项。</div>
             <Space><span>导入前覆盖现有明细</span><Switch checked={replaceExistingOnImport} onChange={setReplaceExistingOnImport} /></Space>
             <div><div style={{ marginBottom: 8 }}>导入模式</div><Select value={importMode} onChange={setImportMode} style={{ width: "100%" }}>{IMPORT_MODE_OPTIONS.map((item) => <Option key={item.value} value={item.value}>{item.label}</Option>)}</Select></div>
           </Space>

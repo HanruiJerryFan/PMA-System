@@ -136,7 +136,7 @@ function ItemEditor({ field, form, materialOptions, materialMap, onRemove }) {
         </Col>
         <Col xs={24} md={8} lg={4}>
           <Form.Item name={[field.name, "unitPrice"]} label="单价">
-            <InputNumber min={0} precision={2} style={{ width: "100%" }} />
+            <InputNumber min={0} precision={4} style={{ width: "100%" }} />
           </Form.Item>
         </Col>
         <Col xs={24} md={8} lg={6}>

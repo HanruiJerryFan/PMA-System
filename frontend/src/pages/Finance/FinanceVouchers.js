@@ -534,9 +534,16 @@ export default function FinanceVouchers() {
     () =>
       filteredVisibleVouchers.reduce(
         (accumulator, item) => {
+          const bookedAmount = Number(item.bookedAmount || 0);
           accumulator.income += Number(item.actualIncomeAmount || 0);
           accumulator.expense += Number(item.actualExpenseAmount || 0);
-          accumulator.booked += Number(item.bookedAmount || 0);
+          accumulator.booked += bookedAmount;
+          if (item.transactionDirection === "RECEIVE") {
+            accumulator.incomeBooked += bookedAmount;
+          }
+          if (item.transactionDirection === "PAY") {
+            accumulator.expenseBooked += Math.abs(bookedAmount);
+          }
           accumulator.pending += item.isCompleted ? 0 : 1;
           accumulator.notInvoiced += item.invoiceStatus === "NOT_INVOICED" ? 1 : 0;
           accumulator.payable += item.receivablePayableType === "应付" ? 1 : 0;
@@ -549,6 +556,8 @@ export default function FinanceVouchers() {
           income: 0,
           expense: 0,
           booked: 0,
+          incomeBooked: 0,
+          expenseBooked: 0,
           pending: 0,
           notInvoiced: 0,
           payable: 0,
@@ -560,7 +569,10 @@ export default function FinanceVouchers() {
     [filteredVisibleVouchers]
   );
 
-  const balanceTotal = useMemo(() => Number((summary.income - summary.booked).toFixed(2)), [summary.booked, summary.income]);
+  const balanceTotal = useMemo(
+    () => Number((summary.incomeBooked - summary.expenseBooked).toFixed(2)),
+    [summary.expenseBooked, summary.incomeBooked]
+  );
 
   const statCards = useMemo(
     () => [
@@ -728,6 +740,15 @@ export default function FinanceVouchers() {
     const incomeTotal = rows.reduce((sum, item) => sum + Number(item.actualIncomeAmount || 0), 0);
     const expenseTotal = rows.reduce((sum, item) => sum + Number(item.actualExpenseAmount || 0), 0);
     const bookedTotal = rows.reduce((sum, item) => sum + Number(item.bookedAmount || 0), 0);
+    const incomeBookedTotal = rows.reduce(
+      (sum, item) => sum + (item.transactionDirection === "RECEIVE" ? Number(item.bookedAmount || 0) : 0),
+      0
+    );
+    const expenseBookedTotal = rows.reduce(
+      (sum, item) => sum + (item.transactionDirection === "PAY" ? Math.abs(Number(item.bookedAmount || 0)) : 0),
+      0
+    );
+    const balanceTotal = incomeBookedTotal - expenseBookedTotal;
     const payload = {
       title: "财务凭证台账",
       subtitle: `生成时间：${dayjs().format("YYYY-MM-DD HH:mm")}`,
@@ -737,6 +758,9 @@ export default function FinanceVouchers() {
         { label: "收入合计", value: incomeTotal.toFixed(2) },
         { label: "支出合计", value: expenseTotal.toFixed(2) },
         { label: "记账合计", value: bookedTotal.toFixed(2) },
+        { label: "收入记账合计", value: incomeBookedTotal.toFixed(2) },
+        { label: "支出记账合计", value: expenseBookedTotal.toFixed(2) },
+        { label: "结余合计", value: balanceTotal.toFixed(2) },
       ],
       columns: [
         { header: "序号", align: "center", width: 5 },

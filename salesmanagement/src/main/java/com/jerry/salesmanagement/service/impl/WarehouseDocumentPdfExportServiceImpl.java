@@ -203,7 +203,7 @@ public class WarehouseDocumentPdfExportServiceImpl extends PdfExportSupport impl
                 escapeHtml(item.getBrand()),
                 escapeHtml(item.getUnit()),
                 escapeHtml(item.getQuantity() == null ? "" : trimTrailingZero(item.getQuantity())),
-                item.getUnitPrice() == null ? "" : escapeHtml(formatMoney(item.getUnitPrice())),
+                item.getUnitPrice() == null ? "" : escapeHtml(formatUnitPrice(item.getUnitPrice())),
                 escapeHtml(resolveAmountText(item)),
                 escapeHtml(item.getRemark())
         );
@@ -243,6 +243,13 @@ public class WarehouseDocumentPdfExportServiceImpl extends PdfExportSupport impl
             return String.valueOf((long) Math.rint(normalized));
         }
         return value.toString();
+    }
+
+    private String formatUnitPrice(Double value) {
+        if (value == null) {
+            return "";
+        }
+        return String.format(java.util.Locale.ROOT, "%.4f", value);
     }
 
     private String firstNonBlank(String first, String second) {

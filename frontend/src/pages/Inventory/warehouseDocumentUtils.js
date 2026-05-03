@@ -40,6 +40,7 @@ export const CUSTOMER_TYPE_RULES = {
 
 export const normalize = (response) => response?.data ?? response ?? [];
 export const formatAmount = (value) => (value == null || value === "" ? "-" : Number(value).toFixed(2));
+export const formatUnitPrice = (value) => (value == null || value === "" ? "-" : Number(value).toFixed(4));
 export const docMeta = (docType) => DOC_TYPES[docType] || DOC_TYPES.INBOUND_NOTE;
 export const categoryLabel = (value) => BUSINESS_CATEGORIES[value] || value || "-";
 export const materialBrand = (item) => item?.brandName || item?.brand || item?.brandCode || item?.manufacturer || "-";

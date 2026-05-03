@@ -99,7 +99,7 @@ export default function InventoryTransactions() {
         item.warehouseLabel || "",
         item.txnTime ? dayjs(item.txnTime).format("YYYY-MM-DD HH:mm:ss") : "",
         item.quantity ?? "",
-        item.unitPrice ?? "",
+        item.unitPrice != null ? Number(item.unitPrice).toFixed(4) : "",
         item.amount ?? "",
         item.sourceRefType || "",
         item.sourceRefId || "",
@@ -137,7 +137,7 @@ export default function InventoryTransactions() {
           dataIndex: "unitPrice",
           key: "unitPrice",
           width: 110,
-          render: (value) => (value != null ? Number(value).toFixed(2) : "-"),
+          render: (value) => (value != null ? Number(value).toFixed(4) : "-"),
         },
         {
           title: "金额",

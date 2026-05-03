@@ -80,12 +80,12 @@ function App() {
 
     const heartbeatInterval = window.setInterval(() => {
       heartbeat()
-        .then(() => getCurrentUser())
-        .then((user) => {
-          setCurrentUser(user);
-          setLoggedIn(Boolean(user));
-        })
-        .catch(() => {});
+        .catch((error) => {
+          if (error.response?.status === 401) {
+            setCurrentUser(null);
+            setLoggedIn(false);
+          }
+        });
     }, 2 * 60 * 1000);
 
     const handlePageHide = () => {

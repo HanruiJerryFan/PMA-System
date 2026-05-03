@@ -4,7 +4,7 @@ import { Button, Card, Empty, Input, InputNumber, Select, Space, Tag, message } 
 import { DownloadOutlined, FilePdfOutlined } from "@ant-design/icons";
 import { getCurrentUser } from "../../api/auth";
 import CRUDTable from "../../components/Common/CRUDTable";
-import { contractAPI, exportAPI } from "../../api/modules";
+import { contractAPI, customerAPI, exportAPI, projectAPI } from "../../api/modules";
 import { hasAnyAuthority } from "../../utils/authorities";
 import { resolvePagePermissions } from "../../utils/pagePermissions";
 import { downloadApiFile, downloadExcel, resolveBlobErrorMessage } from "../../utils/exporters";
@@ -13,6 +13,9 @@ const { Option } = Select;
 
 export default function ContractClauses() {
   const [contracts, setContracts] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [contractTypes, setContractTypes] = useState([]);
   const [clauseTypes, setClauseTypes] = useState([]);
   const [selectedContractUuid, setSelectedContractUuid] = useState(null);
   const [clauses, setClauses] = useState([]);
@@ -22,14 +25,40 @@ export default function ContractClauses() {
   const pagePermissions = useMemo(() => resolvePagePermissions("/contract/clauses"), []);
   const canExport = hasAnyAuthority(currentUser, pagePermissions.exportAuthorities);
 
-  const contractMap = useMemo(
-    () => Object.fromEntries(contracts.map((item) => [item.uuid, item])),
-    [contracts]
+  const customerMap = useMemo(
+    () => Object.fromEntries(customers.map((item) => [item.uuid, item.customerName])),
+    [customers]
+  );
+
+  const projectMap = useMemo(
+    () => Object.fromEntries(projects.map((item) => [item.uuid, item.projectName])),
+    [projects]
+  );
+
+  const contractTypeMap = useMemo(
+    () => Object.fromEntries(contractTypes.map((item) => [item.id, item.typeName])),
+    [contractTypes]
   );
 
   const clauseTypeMap = useMemo(
     () => Object.fromEntries(clauseTypes.map((item) => [item.id, item.description])),
     [clauseTypes]
+  );
+
+  const decoratedContracts = useMemo(
+    () =>
+      contracts.map((item) => ({
+        ...item,
+        customerLabel: customerMap[item.clientId] || item.clientId || "-",
+        projectLabel: projectMap[item.projectBasicInfoId] || item.projectBasicInfoId || "-",
+        contractTypeLabel: contractTypeMap[item.contractTypeId] || item.contractTypeId || "-",
+      })),
+    [contracts, contractTypeMap, customerMap, projectMap]
+  );
+
+  const contractMap = useMemo(
+    () => Object.fromEntries(decoratedContracts.map((item) => [item.uuid, item])),
+    [decoratedContracts]
   );
 
   const selectedContract = selectedContractUuid ? contractMap[selectedContractUuid] : null;
@@ -56,6 +85,14 @@ export default function ContractClauses() {
       setSelectedContractUuid((current) =>
         current && contractList.some((item) => item.uuid === current) ? current : contractList[0]?.uuid || null
       );
+      const [customerResponse, projectResponse, contractTypeResponse] = await Promise.all([
+        customerAPI.getCustomerOptions(),
+        projectAPI.getProjectOptions(),
+        contractAPI.getContractTypes(),
+      ]);
+      setCustomers(customerResponse.data || []);
+      setProjects(projectResponse.data || []);
+      setContractTypes(contractTypeResponse.data || []);
     } finally {
       setLoading(false);
     }
@@ -137,8 +174,9 @@ export default function ContractClauses() {
       fileName: `contract-clauses-${selectedContract.contractNumber || selectedContract.uuid}.pdf`,
       metadata: [
         { label: "合同编号", value: selectedContract.contractNumber || "-" },
-        { label: "客户", value: selectedContract.clientId || "-" },
-        { label: "项目", value: selectedContract.projectBasicInfoId || "-" },
+        { label: "客户", value: selectedContract.customerLabel || "-" },
+        { label: "项目", value: selectedContract.projectLabel || "-" },
+        { label: "合同类型", value: selectedContract.contractTypeLabel || "-" },
       ],
       columns: [
         { header: "序号", align: "center", width: 6 },
@@ -167,22 +205,23 @@ export default function ContractClauses() {
         title="合同列表"
         columns={[
           { title: "合同编号", dataIndex: "contractNumber", key: "contractNumber", width: 180 },
-          { title: "客户", dataIndex: "clientId", key: "clientId", width: 220 },
-          { title: "项目", dataIndex: "projectBasicInfoId", key: "projectBasicInfoId", width: 220 },
+          { title: "客户", dataIndex: "customerLabel", key: "customerLabel", width: 220 },
+          { title: "项目", dataIndex: "projectLabel", key: "projectLabel", width: 220 },
           {
             title: "合同类型",
-            dataIndex: "contractTypeId",
-            key: "contractTypeId",
+            dataIndex: "contractTypeLabel",
+            key: "contractTypeLabel",
             width: 140,
-            render: (value) => value ?? "-",
           },
         ]}
-        dataSource={contracts}
+        dataSource={decoratedContracts}
         loading={loading}
         rowKey="uuid"
         searchFields={[
           { name: "contractNumber", label: "合同编号" },
-          { name: "clientId", label: "客户" },
+          { name: "customerLabel", label: "客户" },
+          { name: "projectLabel", label: "项目" },
+          { name: "contractTypeLabel", label: "合同类型" },
         ]}
         tableProps={{
           rowClassName: (record) => (record.uuid === selectedContractUuid ? "ant-table-row-selected" : ""),

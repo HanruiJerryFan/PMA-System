@@ -25,6 +25,7 @@ import {
   categoryLabel,
   docMeta,
   formatAmount,
+  formatUnitPrice,
   normalize,
   toChineseUppercaseRmb,
 } from "./warehouseDocumentUtils";
@@ -390,7 +391,7 @@ export default function WarehouseDoc() {
                       <td style={centerCell}>{item.brand || ""}</td>
                       <td style={centerCell}>{item.unit || ""}</td>
                       <td style={rightCell}>{item.quantity ?? ""}</td>
-                      <td style={rightCell}>{item.unitPrice != null ? formatAmount(item.unitPrice) : ""}</td>
+                      <td style={rightCell}>{item.unitPrice != null ? formatUnitPrice(item.unitPrice) : ""}</td>
                       <td style={rightCell}>{item.amount != null ? formatAmount(item.amount) : ""}</td>
                       <td style={bodyCell}>{item.remark || ""}</td>
                     </tr>
@@ -509,7 +510,7 @@ function buildWarehouseDocumentItemRow(item, index) {
     <td class="center text-cell">${escapeHtml(item.brand || "")}</td>
     <td class="center nowrap">${escapeHtml(item.unit || "")}</td>
     <td class="right nowrap">${escapeHtml(item.quantity ?? "")}</td>
-    <td class="right nowrap">${item.unitPrice != null ? escapeHtml(Number(item.unitPrice).toFixed(2)) : ""}</td>
+    <td class="right nowrap">${item.unitPrice != null ? escapeHtml(Number(item.unitPrice).toFixed(4)) : ""}</td>
     <td class="right nowrap">${item.amount != null ? escapeHtml(Number(item.amount).toFixed(2)) : ""}</td>
     <td class="text-cell">${escapeHtml(item.remark || "")}</td>
   </tr>`;

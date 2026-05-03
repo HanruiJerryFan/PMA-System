@@ -61,6 +61,7 @@ export default function CRUDTable({
   const [filteredData, setFilteredData] = useState(dataSource);
   const [currentUser, setCurrentUser] = useState(null);
   const [initialFormValues, setInitialFormValues] = useState({});
+  const [modalInitKey, setModalInitKey] = useState(0);
   const [form] = Form.useForm();
   const [searchForm] = Form.useForm();
   const pagePermissions = useMemo(() => resolvePagePermissions(location.pathname), [location.pathname]);
@@ -115,17 +116,19 @@ export default function CRUDTable({
     }
 
     form.resetFields();
-    if (Object.keys(defaultFormValues).length > 0) {
-      form.setFieldsValue(defaultFormValues);
+    if (Object.keys(initialFormValues).length > 0) {
+      form.setFieldsValue(initialFormValues);
     }
-  }, [defaultFormValues, editingRecord, form, initialFormValues, isModalVisible]);
+  }, [editingRecord, form, initialFormValues, isModalVisible, modalInitKey]);
 
   const handleCreate = () => {
     if (!canCreate) {
       return;
     }
+    const nextInitialFormValues = resolveDefaultFormValues(formFields, null);
     setEditingRecord(null);
-    setInitialFormValues(defaultFormValues);
+    setInitialFormValues(nextInitialFormValues);
+    setModalInitKey((current) => current + 1);
     setIsModalVisible(true);
   };
 
@@ -136,6 +139,7 @@ export default function CRUDTable({
     const nextInitialFormValues = mapRecordToFormValues(record);
     setEditingRecord(record);
     setInitialFormValues(nextInitialFormValues);
+    setModalInitKey((current) => current + 1);
     setIsModalVisible(true);
   };
 
@@ -230,8 +234,8 @@ export default function CRUDTable({
     }
 
     form.resetFields();
-    if (Object.keys(defaultFormValues).length > 0) {
-      form.setFieldsValue(defaultFormValues);
+    if (Object.keys(initialFormValues).length > 0) {
+      form.setFieldsValue(initialFormValues);
     }
   };
 

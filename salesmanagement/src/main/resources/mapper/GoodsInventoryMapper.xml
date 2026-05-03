@@ -6,31 +6,17 @@
 
     <sql id="balanceSelect">
         SELECT
-            CONCAT(
-                COALESCE(material_id, ''),
-                ':',
-                COALESCE(CAST(warehouse_id AS CHAR), ''),
-                ':',
-                COALESCE(project_id, '')
-            ) AS uuid,
-            material_id AS materialId,
-            material_code AS materialCode,
-            material_name AS materialName,
-            model,
-            brand,
-            category AS businessCategory,
-            warehouse_id AS warehouseId,
-            MAX(w.warehouse_name) AS warehouseName,
-            project_id AS projectId,
-            MAX(p.project_name) AS projectName,
+            COALESCE(material_id, material_code) AS uuid,
+            MAX(material_id) AS materialId,
+            MAX(material_code) AS materialCode,
+            MAX(material_name) AS materialName,
+            MAX(model) AS model,
+            MAX(brand) AS brand,
             ROUND(SUM(CASE WHEN txn_type = 'IN' THEN quantity ELSE 0 END), 2) AS inboundQuantity,
             ROUND(SUM(CASE WHEN txn_type = 'OUT' THEN quantity ELSE 0 END), 2) AS outboundQuantity,
-            ROUND(SUM(CASE WHEN txn_type = 'IN' THEN quantity ELSE -quantity END), 2) AS balanceQuantity,
-            MAX(txn_time) AS lastTxnTime
+            ROUND(SUM(CASE WHEN txn_type = 'IN' THEN quantity ELSE -quantity END), 2) AS balanceQuantity
         FROM goods_transaction_dynamic_info gtdi
-        LEFT JOIN warehouse_info w ON w.id = gtdi.warehouse_id
-        LEFT JOIN project_basic_info p ON p.uuid = gtdi.project_id
-        GROUP BY material_id, material_code, material_name, model, brand, category, warehouse_id, project_id
+        GROUP BY COALESCE(material_id, material_code)
     </sql>
 
     <select id="selectByUuid" parameterType="string" resultType="com.jerry.salesmanagement.pojo.GoodsInventory">
@@ -43,7 +29,7 @@
 
     <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.GoodsInventory">
         <include refid="balanceSelect"/>
-        ORDER BY material_code ASC, warehouse_id ASC, project_id ASC
+        ORDER BY materialCode ASC
     </select>
 
 </mapper>

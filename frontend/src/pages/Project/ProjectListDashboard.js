@@ -47,6 +47,15 @@ function getListTypeMeta(value) {
   };
 }
 
+function isProcurementListType(value) {
+  return value === "PROCUREMENT" || value === "FINAL_PROCUREMENT";
+}
+
+function getUnitPriceLabel(listType, aggregate = false) {
+  const label = isProcurementListType(listType) ? "采购价格" : "销售价格";
+  return aggregate ? `汇总${label}` : label;
+}
+
 function formatAmount(value) {
   if (value == null || value === "") {
     return "-";
@@ -85,6 +94,10 @@ export default function ProjectListDashboard() {
   const isAggregateView = Boolean(aggregateType);
   const effectiveListType = aggregateType || projectList?.listType;
   const listTypeMeta = useMemo(() => getListTypeMeta(effectiveListType), [effectiveListType]);
+  const unitPriceLabel = useMemo(
+    () => getUnitPriceLabel(effectiveListType, isAggregateView),
+    [effectiveListType, isAggregateView]
+  );
   const itemSummary = useMemo(
     () =>
       listItems.reduce(
@@ -173,7 +186,7 @@ export default function ProjectListDashboard() {
     { title: "品牌", dataIndex: "brand", key: "brand", width: 140 },
     { title: "单位", dataIndex: "unit", key: "unit", width: 100 },
     { title: "数量", dataIndex: "quantity", key: "quantity", width: 120 },
-    { title: isAggregateView ? "汇总单价" : "销售价格", dataIndex: "unitPrice", key: "unitPrice", width: 120, render: formatAmount },
+    { title: unitPriceLabel, dataIndex: "unitPrice", key: "unitPrice", width: 120, render: formatAmount },
     { title: "金额", dataIndex: "totalAmount", key: "totalAmount", width: 120, render: formatAmount },
     ...(isAggregateView ? [{ title: "来源清单数", dataIndex: "sourceListCount", key: "sourceListCount", width: 120 }] : []),
     { title: "备注", dataIndex: "remark", key: "remark", width: 220 },
@@ -217,8 +230,8 @@ export default function ProjectListDashboard() {
       fileName,
       isAggregateView ? "最终清单明细" : "项目清单明细",
       isAggregateView
-        ? ["物料编码", "物料名称", "型号", "品牌", "单位", "数量", "汇总单价", "金额", "来源清单数"]
-        : ["物料编码", "物料名称", "型号", "品牌", "单位", "数量", "销售价格", "金额", "备注"],
+        ? ["物料编码", "物料名称", "型号", "品牌", "单位", "数量", unitPriceLabel, "金额", "来源清单数"]
+        : ["物料编码", "物料名称", "型号", "品牌", "单位", "数量", unitPriceLabel, "金额", "备注"],
       [...rows, ["", "", "", "", "合计", "", "", Number(totalAmount.toFixed(2)), ""]]
     );
   };
@@ -244,7 +257,7 @@ export default function ProjectListDashboard() {
             { header: "品牌", width: 10 },
             { header: "单位", align: "center", width: 7 },
             { header: "数量", align: "right", width: 8 },
-            { header: "汇总单价", align: "right", width: 10 },
+            { header: unitPriceLabel, align: "right", width: 10 },
             { header: "金额", align: "right", width: 10 },
             { header: "来源清单数", align: "right", width: 10 },
           ]
@@ -255,7 +268,7 @@ export default function ProjectListDashboard() {
             { header: "品牌", width: 10 },
             { header: "单位", align: "center", width: 7 },
             { header: "数量", align: "right", width: 8 },
-            { header: "销售价格", align: "right", width: 10 },
+            { header: unitPriceLabel, align: "right", width: 10 },
             { header: "金额", align: "right", width: 10 },
             { header: "备注", width: 14 },
           ],

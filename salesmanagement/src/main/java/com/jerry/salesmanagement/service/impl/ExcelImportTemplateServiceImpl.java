@@ -62,7 +62,7 @@ public class ExcelImportTemplateServiceImpl implements ExcelImportTemplateServic
             "品牌",
             "单位",
             "数量",
-            "销售价格",
+            "单价",
             "备注"
     };
 
