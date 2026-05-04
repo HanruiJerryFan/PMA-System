@@ -76,28 +76,27 @@ function getBusinessOptionKey(type, item) {
   return item.uuid || item.id || item.docNumber || null;
 }
 
-function buildBusinessOptionLabel(type, item, businessLabelMap = {}) {
+function buildBusinessOptionLabel(type, item) {
   if (!item) {
     return "-";
   }
   if (type === "projects") {
-    return `${item.projectNumber || "未编号项目"}${item.projectName ? ` / ${item.projectName}` : ""}`;
+    return item.projectNumber || "未编号项目";
   }
   if (type === "project-lists") {
-    const projectLabel = item.projectId ? businessLabelMap.projects?.[item.projectId] : "";
-    return `${item.listName || "未命名清单"}${projectLabel ? ` / ${projectLabel}` : ""}`;
+    return item.listName || "未命名清单";
   }
   if (type === "finance-vouchers") {
-    return `${item.voucherNo || "未命名凭证"}${item.summary ? ` / ${item.summary}` : ""}`;
+    return item.voucherNo || "未编号凭证";
   }
   if (type === "contracts") {
-    return `${item.contractNumber || "未命名合同"}${item.subItemContent ? ` / ${item.subItemContent}` : ""}`;
+    return item.contractNumber || "未编号合同";
   }
   if (type === "customers") {
-    return `${item.customerCode || "未编号客户"}${item.customerName ? ` / ${item.customerName}` : ""}`;
+    return item.customerCode || "未编号客户";
   }
   if (type === "warehouse-documents") {
-    return `${item.docNumber || "未命名单据"}${item.counterpartyName ? ` / ${item.counterpartyName}` : ""}`;
+    return item.docNumber || "未编号单据";
   }
   return item.uuid || item.id || "-";
 }
@@ -256,7 +255,7 @@ export default function AttachmentCenter() {
           nextMap[type] = rows.reduce((accumulator, item) => {
             const key = getBusinessOptionKey(type, item);
             if (key != null) {
-              accumulator[key] = buildBusinessOptionLabel(type, item, nextMap);
+              accumulator[key] = buildBusinessOptionLabel(type, item);
             }
             return accumulator;
           }, {});
@@ -577,7 +576,7 @@ export default function AttachmentCenter() {
                   }}
                   options={businessOptions.map((item) => ({
                     value: item.uuid || item.docNumber || item.id,
-                    label: buildBusinessOptionLabel(selectedUploadBusinessType, item, businessLabelMap),
+                    label: buildBusinessOptionLabel(selectedUploadBusinessType, item),
                   }))}
                 />
               </Form.Item>
