@@ -489,6 +489,87 @@ export default function ProjectListDashboard() {
     );
   };
 
+  const exportAggregateSectionExcel = (section) => {
+    const sectionUnitPriceLabel = getUnitPriceLabel(section.key, true);
+    const rows = (section.items || []).map((item) => [
+      item.materialCode || "",
+      item.itemName || "",
+      item.model || "",
+      item.brand || "",
+      item.unit || "",
+      Number(item.quantity || 0),
+      item.unitPrice == null ? "" : Number(item.unitPrice),
+      calculateItemAmount(item),
+      item.sourceListCount || 0,
+    ]);
+    const totalAmount = rows.reduce((sum, row) => sum + Number(row[7] || 0), 0);
+    downloadExcel(
+      `${project?.projectName || "项目"}-${section.title}.xls`,
+      section.title,
+      ["物料编码", "物料名称", "型号", "品牌", "单位", "数量", sectionUnitPriceLabel, "金额", "来源清单数"],
+      [...rows, ["", "", "", "", "合计", "", "", Number(totalAmount.toFixed(2)), ""]]
+    );
+  };
+
+  const exportAggregateSectionPdf = async (section) => {
+    const sectionUnitPriceLabel = getUnitPriceLabel(section.key, true);
+    const totalAmount = (section.items || []).reduce((sum, item) => sum + calculateItemAmount(item), 0);
+    const payload = {
+      title: section.title,
+      subtitle: `生成时间：${dayjs().format("YYYY-MM-DD HH:mm")}`,
+      fileName: `${project?.projectName || "项目"}-${section.title}.pdf`,
+      metadata: [
+        { label: "项目", value: project?.projectName || "-" },
+        { label: "清单名称", value: section.title },
+        { label: "客户", value: aggregateView?.customerName || "-" },
+        { label: "清单类型", value: section.title },
+      ],
+      summaries: [{ label: "合计金额", value: formatAmount(totalAmount) }],
+      columns: [
+        { header: "物料编码", width: 13 },
+        { header: "物料名称", width: 18 },
+        { header: "型号", width: 15 },
+        { header: "品牌", width: 10 },
+        { header: "单位", align: "center", width: 7 },
+        { header: "数量", align: "right", width: 8 },
+        { header: sectionUnitPriceLabel, align: "right", width: 10 },
+        { header: "金额", align: "right", width: 10 },
+        { header: "来源清单数", align: "right", width: 10 },
+      ],
+      rows: (section.items || []).map((item) => [
+        item.materialCode || "",
+        item.itemName || "",
+        item.model || "",
+        item.brand || "",
+        item.unit || "",
+        item.quantity || "",
+        formatAmount(item.unitPrice),
+        formatAmount(calculateItemAmount(item)),
+        item.sourceListCount || 0,
+      ]),
+      extraSections: [
+        {
+          title: "来源清单",
+          columns: [
+            { header: "清单名称", width: 40 },
+            { header: "清单类型", width: 20 },
+            { header: "录入日期", align: "center", width: 20 },
+          ],
+          rows: (section.sourceLists || []).map((item) => [
+            item.listName || "",
+            getListTypeMeta(item.listType).label,
+            item.entryDate ? dayjs(item.entryDate).format("YYYY-MM-DD") : "",
+          ]),
+        },
+      ],
+    };
+    try {
+      await downloadApiFile(exportAPI.downloadTablePdf(payload), payload.fileName, "application/pdf");
+    } catch (error) {
+      message.error(await resolveBlobErrorMessage(error, "导出 PDF 失败"));
+    }
+  };
+
   const handleExportPdf = async () => {
     const totalAmount = listItems.reduce((sum, item) => sum + calculateItemAmount(item), 0);
     const combinedPdfColumns = [
@@ -819,6 +900,22 @@ export default function ProjectListDashboard() {
               <Space wrap>
                 <Tag color={section.color}>{section.items.length} 条明细</Tag>
                 <Tag>金额 {formatAmount(section.summary.amount)}</Tag>
+                <Button
+                  size="small"
+                  icon={<DownloadOutlined />}
+                  disabled={!section.items.length}
+                  onClick={() => exportAggregateSectionExcel(section)}
+                >
+                  导出 Excel
+                </Button>
+                <Button
+                  size="small"
+                  icon={<FilePdfOutlined />}
+                  disabled={!section.items.length}
+                  onClick={() => exportAggregateSectionPdf(section)}
+                >
+                  导出 PDF
+                </Button>
               </Space>
             }
           >
