@@ -70,6 +70,27 @@ public class AttachmentServiceImpl implements AttachmentService {
             if (!StringUtils.hasText(attachment.getBusinessUuid())) {
                 attachment.setBusinessUuid(existing.getBusinessUuid());
             }
+            if (!StringUtils.hasText(attachment.getFileName())) {
+                attachment.setFileName(existing.getFileName());
+            }
+            if (!StringUtils.hasText(attachment.getOriginalFileName())) {
+                attachment.setOriginalFileName(existing.getOriginalFileName());
+            }
+            if (!StringUtils.hasText(attachment.getFileExt())) {
+                attachment.setFileExt(existing.getFileExt());
+            }
+            if (!StringUtils.hasText(attachment.getMimeType())) {
+                attachment.setMimeType(existing.getMimeType());
+            }
+            if (attachment.getFileSize() == null) {
+                attachment.setFileSize(existing.getFileSize());
+            }
+            if (!StringUtils.hasText(attachment.getStoragePath())) {
+                attachment.setStoragePath(existing.getStoragePath());
+            }
+            if (attachment.getUploadedBy() == null) {
+                attachment.setUploadedBy(existing.getUploadedBy());
+            }
         }
         validateAttachment(attachment);
         mapper.updateByUuid(attachment);

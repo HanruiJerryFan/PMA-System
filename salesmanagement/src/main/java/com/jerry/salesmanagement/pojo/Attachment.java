@@ -17,5 +17,7 @@ public class Attachment {
     private Long fileSize;
     private String storagePath;
     private Long uploadedBy;
+    private String uploadedByName;
+    private String uploadedByUsername;
     private Date uploadedAt;
 }

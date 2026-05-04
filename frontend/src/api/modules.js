@@ -222,6 +222,11 @@ export const attachmentAPI = {
     api.get(`/attachments/download/${uuid}`, {
       responseType: "blob",
     }),
+  previewAttachmentPdf: (uuid) =>
+    api.get(`/attachments/preview/${uuid}`, {
+      responseType: "blob",
+      timeout: 120000,
+    }),
   createAttachment: (data) => api.post("/attachments", data),
   updateAttachment: (uuid, data) => api.put(`/attachments/${uuid}`, data),
   deleteAttachment: (uuid) => api.delete(`/attachments/${uuid}`),

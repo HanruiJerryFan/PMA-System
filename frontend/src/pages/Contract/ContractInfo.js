@@ -127,9 +127,6 @@ export default function ContractInfo() {
       formData.append("file", pendingContractAttachmentFile);
       formData.append("businessType", "contracts");
       formData.append("businessUuid", createdContract.uuid);
-      if (currentUser?.id != null) {
-        formData.append("uploadedBy", String(currentUser.id));
-      }
       await attachmentAPI.uploadAttachment(formData);
     }
     await fetchContracts();
@@ -143,9 +140,6 @@ export default function ContractInfo() {
       formData.append("file", pendingContractAttachmentFile);
       formData.append("businessType", "contracts");
       formData.append("businessUuid", uuid);
-      if (currentUser?.id != null) {
-        formData.append("uploadedBy", String(currentUser.id));
-      }
       await attachmentAPI.uploadAttachment(formData);
     }
     await fetchContracts();

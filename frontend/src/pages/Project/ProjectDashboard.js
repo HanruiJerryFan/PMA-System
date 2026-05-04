@@ -693,9 +693,6 @@ export default function ProjectDashboard() {
         formData.append("file", pendingListAttachmentFile);
         formData.append("businessType", "project-lists");
         formData.append("businessUuid", created.uuid);
-        if (currentUser?.id != null) {
-          formData.append("uploadedBy", String(currentUser.id));
-        }
         const uploadedAttachment = await attachmentAPI.uploadAttachment(formData);
         await projectAPI.updateProjectList(created.uuid, {
           projectId: project.uuid,
@@ -816,7 +813,7 @@ export default function ProjectDashboard() {
     ];
 
   const attachmentColumns = [
-    { title: "文件名", dataIndex: "fileName", key: "fileName" },
+    { title: "文件名", dataIndex: "originalFileName", key: "originalFileName" },
     { title: "扩展名", dataIndex: "fileExt", key: "fileExt", render: (value) => value || "-" },
     { title: "上传时间", dataIndex: "uploadedAt", key: "uploadedAt", render: (value) => formatDate(value, "YYYY-MM-DD HH:mm") },
   ];
@@ -1152,11 +1149,8 @@ export default function ProjectDashboard() {
                     快速新增
                   </Button>
                 ) : null}
-                <Button icon={<EyeOutlined />} onClick={() => openAggregateProjectListDashboard("FINAL_SALES")}>
-                  最终销售清单
-                </Button>
-                <Button icon={<EyeOutlined />} onClick={() => openAggregateProjectListDashboard("FINAL_PROCUREMENT")}>
-                  最终采购清单
+                <Button icon={<EyeOutlined />} onClick={() => openAggregateProjectListDashboard("FINAL_ALL")}>
+                  最终清单总览
                 </Button>
                 <Button icon={<UnorderedListOutlined />} onClick={() => navigate(`/project/lists?projectUuid=${project.uuid}`)}>
                   查看当前项目全部清单

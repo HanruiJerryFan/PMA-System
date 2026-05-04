@@ -649,9 +649,6 @@ export default function FinanceVouchers() {
       formData.append("file", pendingVoucherAttachmentFile);
       formData.append("businessType", "finance-vouchers");
       formData.append("businessUuid", createdVoucher.uuid);
-      if (currentUser?.id != null) {
-        formData.append("uploadedBy", String(currentUser.id));
-      }
       await attachmentAPI.uploadAttachment(formData);
     }
     await fetchVouchers();
@@ -665,9 +662,6 @@ export default function FinanceVouchers() {
       formData.append("file", pendingVoucherAttachmentFile);
       formData.append("businessType", "finance-vouchers");
       formData.append("businessUuid", uuid);
-      if (currentUser?.id != null) {
-        formData.append("uploadedBy", String(currentUser.id));
-      }
       await attachmentAPI.uploadAttachment(formData);
     }
     await fetchVouchers();

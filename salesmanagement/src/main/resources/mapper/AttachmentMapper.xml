@@ -6,60 +6,69 @@
 
     <select id="selectByUuid" parameterType="string" resultType="com.jerry.salesmanagement.pojo.Attachment">
         SELECT
-            id,
-            uuid,
-            business_type AS businessType,
-            business_uuid AS businessUuid,
-            file_name AS fileName,
-            original_file_name AS originalFileName,
-            file_ext AS fileExt,
-            mime_type AS mimeType,
-            file_size AS fileSize,
-            storage_path AS storagePath,
-            uploaded_by AS uploadedBy,
-            uploaded_at AS uploadedAt
-        FROM attachment
-        WHERE uuid = #{uuid}
+            a.id,
+            a.uuid,
+            a.business_type AS businessType,
+            a.business_uuid AS businessUuid,
+            a.file_name AS fileName,
+            a.original_file_name AS originalFileName,
+            a.file_ext AS fileExt,
+            a.mime_type AS mimeType,
+            a.file_size AS fileSize,
+            a.storage_path AS storagePath,
+            a.uploaded_by AS uploadedBy,
+            u.real_name AS uploadedByName,
+            u.username AS uploadedByUsername,
+            a.uploaded_at AS uploadedAt
+        FROM attachment a
+        LEFT JOIN sys_user u ON u.id = a.uploaded_by
+        WHERE a.uuid = #{uuid}
     </select>
 
     <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.Attachment">
         SELECT
-            id,
-            uuid,
-            business_type AS businessType,
-            business_uuid AS businessUuid,
-            file_name AS fileName,
-            original_file_name AS originalFileName,
-            file_ext AS fileExt,
-            mime_type AS mimeType,
-            file_size AS fileSize,
-            storage_path AS storagePath,
-            uploaded_by AS uploadedBy,
-            uploaded_at AS uploadedAt
-        FROM attachment
-        ORDER BY uploaded_at DESC, id DESC
+            a.id,
+            a.uuid,
+            a.business_type AS businessType,
+            a.business_uuid AS businessUuid,
+            a.file_name AS fileName,
+            a.original_file_name AS originalFileName,
+            a.file_ext AS fileExt,
+            a.mime_type AS mimeType,
+            a.file_size AS fileSize,
+            a.storage_path AS storagePath,
+            a.uploaded_by AS uploadedBy,
+            u.real_name AS uploadedByName,
+            u.username AS uploadedByUsername,
+            a.uploaded_at AS uploadedAt
+        FROM attachment a
+        LEFT JOIN sys_user u ON u.id = a.uploaded_by
+        ORDER BY a.uploaded_at DESC, a.id DESC
     </select>
 
     <select id="selectByBusiness" resultType="com.jerry.salesmanagement.pojo.Attachment">
         SELECT
-            id,
-            uuid,
-            business_type AS businessType,
-            business_uuid AS businessUuid,
-            file_name AS fileName,
-            original_file_name AS originalFileName,
-            file_ext AS fileExt,
-            mime_type AS mimeType,
-            file_size AS fileSize,
-            storage_path AS storagePath,
-            uploaded_by AS uploadedBy,
-            uploaded_at AS uploadedAt
-        FROM attachment
-        WHERE business_type = #{param1}
+            a.id,
+            a.uuid,
+            a.business_type AS businessType,
+            a.business_uuid AS businessUuid,
+            a.file_name AS fileName,
+            a.original_file_name AS originalFileName,
+            a.file_ext AS fileExt,
+            a.mime_type AS mimeType,
+            a.file_size AS fileSize,
+            a.storage_path AS storagePath,
+            a.uploaded_by AS uploadedBy,
+            u.real_name AS uploadedByName,
+            u.username AS uploadedByUsername,
+            a.uploaded_at AS uploadedAt
+        FROM attachment a
+        LEFT JOIN sys_user u ON u.id = a.uploaded_by
+        WHERE a.business_type = #{param1}
         <if test="param2 != null and param2 != ''">
-            AND business_uuid = #{param2}
+            AND a.business_uuid = #{param2}
         </if>
-        ORDER BY uploaded_at DESC, id DESC
+        ORDER BY a.uploaded_at DESC, a.id DESC
     </select>
 
     <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.Attachment">

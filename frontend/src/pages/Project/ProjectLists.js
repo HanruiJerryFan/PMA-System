@@ -259,9 +259,6 @@ export default function ProjectLists() {
     formData.append("file", pendingListAttachmentFile);
     formData.append("businessType", "project-lists");
     formData.append("businessUuid", projectListUuid);
-    if (currentUser?.id != null) {
-      formData.append("uploadedBy", String(currentUser.id));
-    }
     return attachmentAPI.uploadAttachment(formData);
   };
 
@@ -526,7 +523,7 @@ export default function ProjectLists() {
               openProjectListDashboard(record);
             }}
           >
-            清单总览
+            当前清单总览
           </Button>
           <Button
             type="link"
@@ -593,13 +590,10 @@ export default function ProjectLists() {
                   返回项目总览
                 </Button>
                 <Button icon={<EyeOutlined />} disabled={!selectedListUuid} onClick={() => openProjectListDashboard(selectedList)}>
-                  进入清单总览
+                  当前清单总览
                 </Button>
-                <Button icon={<EyeOutlined />} onClick={() => openAggregateDashboard("FINAL_SALES")}>
-                  最终销售清单
-                </Button>
-                <Button icon={<EyeOutlined />} onClick={() => openAggregateDashboard("FINAL_PROCUREMENT")}>
-                  最终采购清单
+                <Button icon={<EyeOutlined />} onClick={() => openAggregateDashboard("FINAL_ALL")}>
+                  最终清单总览
                 </Button>
               </Space>
             }
@@ -628,14 +622,8 @@ export default function ProjectLists() {
               <Button type="primary" icon={<PlusOutlined />} disabled={!canManage} onClick={() => openListModal()}>
                 新增清单
               </Button>
-              <Button icon={<EyeOutlined />} disabled={!selectedListUuid} onClick={() => openProjectListDashboard(selectedList)}>
-                清单总览
-              </Button>
-              <Button icon={<EyeOutlined />} disabled={!projectUuidFilter && !selectedList?.projectId} onClick={() => openAggregateDashboard("FINAL_SALES")}>
-                最终销售清单
-              </Button>
-              <Button icon={<EyeOutlined />} disabled={!projectUuidFilter && !selectedList?.projectId} onClick={() => openAggregateDashboard("FINAL_PROCUREMENT")}>
-                最终采购清单
+              <Button icon={<EyeOutlined />} disabled={!projectUuidFilter && !selectedList?.projectId} onClick={() => openAggregateDashboard("FINAL_ALL")}>
+                最终清单总览
               </Button>
               <Tooltip title={importDisabledReason}>
                 <span>
@@ -664,7 +652,7 @@ export default function ProjectLists() {
           extra={
             <Space wrap>
               <Button icon={<EyeOutlined />} disabled={!selectedListUuid} onClick={() => openProjectListDashboard(selectedList)}>
-                清单总览
+                当前清单总览
               </Button>
               <Button icon={<LinkOutlined />} disabled={!selectedListUuid || !canAccessAttachments} onClick={() => navigate(`/attachment/center?businessType=project-lists&businessUuid=${selectedListUuid}`)}>
                 清单附件

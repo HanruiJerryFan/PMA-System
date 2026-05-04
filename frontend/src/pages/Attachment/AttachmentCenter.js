@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Alert, Button, Form, Input, InputNumber, Modal, Select, Space, Tag, message } from "antd";
-import { DeleteOutlined, DownloadOutlined, UploadOutlined } from "@ant-design/icons";
+import { Alert, Button, Form, Input, Modal, Select, Space, Tag, message } from "antd";
+import { DeleteOutlined, DownloadOutlined, EyeOutlined, UploadOutlined } from "@ant-design/icons";
 import CRUDTable from "../../components/Common/CRUDTable";
 import { getCurrentUser } from "../../api/auth";
 import { attachmentAPI, contractAPI, customerAPI, financeAPI, inventoryAPI, projectAPI } from "../../api/modules";
@@ -44,6 +44,17 @@ function getBusinessTypeLabel(value) {
 
 function normalizeResponseData(response) {
   return response?.data ?? response ?? [];
+}
+
+function isPdfAttachment(record) {
+  const mimeType = String(record?.mimeType || "").toLowerCase();
+  const fileExt = String(record?.fileExt || "").toLowerCase();
+  const fileName = String(record?.originalFileName || "").toLowerCase();
+  return mimeType === "application/pdf" || fileExt === "pdf" || fileName.endsWith(".pdf");
+}
+
+function getUploaderLabel(record) {
+  return record?.uploadedByName || record?.uploadedByUsername || (record?.uploadedBy ? `用户 ${record.uploadedBy}` : "-");
 }
 
 function buildBusinessOptionLabel(type, item) {
@@ -101,6 +112,16 @@ export default function AttachmentCenter() {
       ? `附件中心 / ${label} / ${businessUuidFilter}`
       : `附件中心 / ${label}`;
   }, [businessTypeFilter, businessUuidFilter]);
+
+  const decoratedAttachments = useMemo(
+    () =>
+      attachments.map((item) => ({
+        ...item,
+        businessTypeLabel: getBusinessTypeLabel(item.businessType),
+        uploaderLabel: getUploaderLabel(item),
+      })),
+    [attachments]
+  );
 
   const resetUploadForm = useCallback(() => {
     uploadForm.resetFields();
@@ -206,6 +227,34 @@ export default function AttachmentCenter() {
     }
   };
 
+  const handlePreviewPdf = async (record) => {
+    if (!canAccess) {
+      message.error("无权限操作");
+      return;
+    }
+    if (!isPdfAttachment(record)) {
+      message.warning("仅 PDF 附件支持网页预览");
+      return;
+    }
+    const previewWindow = window.open("", "_blank", "noopener,noreferrer");
+    try {
+      const response = await attachmentAPI.previewAttachmentPdf(record.uuid);
+      const blob = response?.data instanceof Blob ? response.data : response;
+      const previewUrl = URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
+      if (previewWindow) {
+        previewWindow.location.href = previewUrl;
+      } else {
+        window.open(previewUrl, "_blank", "noopener,noreferrer");
+      }
+      window.setTimeout(() => URL.revokeObjectURL(previewUrl), 60 * 1000);
+    } catch (error) {
+      if (previewWindow) {
+        previewWindow.close();
+      }
+      message.error(await resolveBlobErrorMessage(error, "PDF 预览失败"));
+    }
+  };
+
   const closeUploadModal = () => {
     setUploadVisible(false);
     setSelectedFile(null);
@@ -237,9 +286,6 @@ export default function AttachmentCenter() {
       formData.append("businessType", values.businessType);
       if (values.businessUuid) {
         formData.append("businessUuid", values.businessUuid);
-      }
-      if (currentUser?.id != null) {
-        formData.append("uploadedBy", String(currentUser.id));
       }
 
       setUploading(true);
@@ -281,20 +327,17 @@ export default function AttachmentCenter() {
             ? [
                 {
                   title: "业务类型",
-                  dataIndex: "businessType",
-                  key: "businessType",
+                  dataIndex: "businessTypeLabel",
+                  key: "businessTypeLabel",
                   width: 180,
-                  render: getBusinessTypeLabel,
                 },
                 { title: "业务 UUID", dataIndex: "businessUuid", key: "businessUuid", width: 220 },
               ]
             : []),
-          { title: "存储文件名", dataIndex: "fileName", key: "fileName", width: 220 },
-          { title: "原始文件名", dataIndex: "originalFileName", key: "originalFileName", width: 220 },
-          { title: "MIME 类型", dataIndex: "mimeType", key: "mimeType", width: 180 },
+          { title: "文件名", dataIndex: "originalFileName", key: "originalFileName", width: 260 },
+          { title: "文件类型", dataIndex: "fileExt", key: "fileExt", width: 100, render: (value) => value || "-" },
           { title: "文件大小", dataIndex: "fileSize", key: "fileSize", width: 120, render: formatFileSize },
-          { title: "存储路径", dataIndex: "storagePath", key: "storagePath", width: 320 },
-          { title: "上传人", dataIndex: "uploadedBy", key: "uploadedBy", width: 100 },
+          { title: "上传人", dataIndex: "uploaderLabel", key: "uploaderLabel", width: 140 },
           {
             title: "上传时间",
             dataIndex: "uploadedAt",
@@ -302,29 +345,48 @@ export default function AttachmentCenter() {
             width: 180,
             render: (value) => (value ? new Date(value).toLocaleString() : "-"),
           },
-          {
-            title: "下载",
-            key: "download",
-            width: 120,
-            render: (_, record) => (
-              <Button type="link" icon={<DownloadOutlined />} onClick={() => handleDownload(record)} disabled={!canAccess}>
-                下载
-              </Button>
-            ),
-          },
         ]}
-        dataSource={attachments}
+        dataSource={decoratedAttachments}
         loading={loading}
         onUpdate={handleUpdate}
         onDelete={handleDelete}
         updateAuthorities={["attachment.manage"]}
         deleteAuthorities={["attachment.manage"]}
         rowKey="uuid"
+        enableView={false}
+        rowActions={({ record }) => (
+          <>
+            <Button
+              type="link"
+              icon={<EyeOutlined />}
+              onClick={() => handlePreviewPdf(record)}
+              disabled={!canAccess || !isPdfAttachment(record)}
+              size="small"
+            >
+              预览PDF
+            </Button>
+            <Button
+              type="link"
+              icon={<DownloadOutlined />}
+              onClick={() => handleDownload(record)}
+              disabled={!canAccess}
+              size="small"
+            >
+              下载
+            </Button>
+          </>
+        )}
         searchFields={[
-          { name: "businessType", label: "业务类型" },
+          { name: "businessTypeLabel", label: "业务类型" },
           { name: "businessUuid", label: "业务 UUID" },
-          { name: "fileName", label: "存储文件名" },
+          { name: "originalFileName", label: "文件名" },
+          { name: "uploaderLabel", label: "上传人" },
         ]}
+        transformValues={(values) => ({
+          businessType: values.businessType,
+          businessUuid: values.businessUuid || null,
+          originalFileName: values.originalFileName || null,
+        })}
         formFields={[
           {
             name: "businessType",
@@ -346,36 +408,9 @@ export default function AttachmentCenter() {
             component: <Input placeholder="请输入关联业务 UUID" />,
           },
           {
-            name: "fileName",
-            label: "存储文件名",
-            rules: [{ required: true, message: "请输入存储文件名" }],
-            component: <Input placeholder="请输入存储文件名" />,
-          },
-          {
             name: "originalFileName",
-            label: "原始文件名",
-            component: <Input placeholder="请输入原始文件名" />,
-          },
-          {
-            name: "mimeType",
-            label: "MIME 类型",
-            component: <Input placeholder="例如：application/pdf" />,
-          },
-          {
-            name: "fileSize",
-            label: "文件大小",
-            component: <InputNumber min={0} style={{ width: "100%" }} />,
-          },
-          {
-            name: "storagePath",
-            label: "存储路径",
-            rules: [{ required: true, message: "请输入存储路径" }],
-            component: <Input placeholder="请输入存储路径" />,
-          },
-          {
-            name: "uploadedBy",
-            label: "上传人用户 ID",
-            component: <InputNumber min={1} style={{ width: "100%" }} />,
+            label: "文件名",
+            component: <Input placeholder="请输入展示文件名" />,
           },
         ]}
       />
