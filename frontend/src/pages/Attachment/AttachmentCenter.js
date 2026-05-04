@@ -117,7 +117,7 @@ export default function AttachmentCenter() {
   const [loading, setLoading] = useState(false);
   const [uploadVisible, setUploadVisible] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFiles, setSelectedFiles] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [businessOptionsLoading, setBusinessOptionsLoading] = useState(false);
   const [businessOptions, setBusinessOptions] = useState([]);
@@ -390,7 +390,7 @@ export default function AttachmentCenter() {
 
   const closeUploadModal = () => {
     setUploadVisible(false);
-    setSelectedFile(null);
+    setSelectedFiles([]);
     if (uploadInputRef.current) {
       uploadInputRef.current.value = "";
     }
@@ -409,21 +409,32 @@ export default function AttachmentCenter() {
     }
     try {
       const values = await uploadForm.validateFields();
-      if (!selectedFile) {
+      if (!selectedFiles.length) {
         message.error("请选择要上传的文件");
         return;
       }
 
-      const formData = new FormData();
-      formData.append("file", selectedFile);
-      formData.append("businessType", values.businessType);
-      if (values.businessUuid) {
-        formData.append("businessUuid", values.businessUuid);
+      setUploading(true);
+      const failedFiles = [];
+      for (const file of selectedFiles) {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("businessType", values.businessType);
+        if (values.businessUuid) {
+          formData.append("businessUuid", values.businessUuid);
+        }
+        try {
+          await attachmentAPI.uploadAttachment(formData);
+        } catch (error) {
+          failedFiles.push(file.name);
+        }
       }
 
-      setUploading(true);
-      await attachmentAPI.uploadAttachment(formData);
-      message.success("附件上传成功");
+      if (failedFiles.length) {
+        message.warning(`已上传 ${selectedFiles.length - failedFiles.length} 个文件，失败 ${failedFiles.length} 个：${failedFiles.join("、")}`);
+      } else {
+        message.success(`已上传 ${selectedFiles.length} 个附件`);
+      }
       closeUploadModal();
       await fetchAttachments();
     } catch (error) {
@@ -604,32 +615,39 @@ export default function AttachmentCenter() {
                 <input
                   ref={uploadInputRef}
                   type="file"
-                  onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
+                  multiple
+                  onChange={(event) => setSelectedFiles(Array.from(event.target.files || []))}
                   style={{ display: "none" }}
                 />
                 <Button icon={<UploadOutlined />} onClick={() => uploadInputRef.current?.click()}>
-                  选择文件
+                  批量选择文件
                 </Button>
-                {selectedFile ? (
-                  <>
+                {selectedFiles.length ? (
+                  <Space wrap size={6}>
                     <Tag color="blue" style={{ marginInlineEnd: 0 }}>
-                      {selectedFile.name}
+                      已选择 {selectedFiles.length} 个文件
                     </Tag>
+                    {selectedFiles.slice(0, 4).map((file) => (
+                      <Tag key={`${file.name}-${file.size}-${file.lastModified}`} style={{ marginInlineEnd: 0 }}>
+                        {file.name}
+                      </Tag>
+                    ))}
+                    {selectedFiles.length > 4 ? <Tag>另 {selectedFiles.length - 4} 个</Tag> : null}
                     <Button
                       type="link"
                       size="small"
                       danger
                       icon={<DeleteOutlined />}
                       onClick={() => {
-                        setSelectedFile(null);
+                        setSelectedFiles([]);
                         if (uploadInputRef.current) {
                           uploadInputRef.current.value = "";
                         }
                       }}
                     >
-                      移除
+                      清空
                     </Button>
-                  </>
+                  </Space>
                 ) : (
                   <span style={{ color: "#8c8c8c", fontSize: 12 }}>未选择文件</span>
                 )}

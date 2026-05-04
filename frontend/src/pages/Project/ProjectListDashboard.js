@@ -66,6 +66,13 @@ function formatAmount(value) {
   return Number(value).toFixed(2);
 }
 
+function formatQuantity(value) {
+  if (value == null || value === "") {
+    return "-";
+  }
+  return Number(value).toFixed(4).replace(/\.?0+$/, "");
+}
+
 function calculateItemAmount(item) {
   if (item?.totalAmount !== undefined && item?.totalAmount !== null && item?.totalAmount !== "") {
     return Number(Number(item.totalAmount).toFixed(2));
@@ -129,6 +136,89 @@ function buildCombinedAggregateView(projectId, salesView, procurementView) {
   };
 }
 
+function buildFinalListKey(item) {
+  if (item?.materialId) {
+    return `material:${item.materialId}`;
+  }
+  if (item?.materialCode) {
+    return `code:${item.materialCode}`;
+  }
+  return [
+    item?.itemName || "",
+    item?.model || "",
+    item?.brand || "",
+    item?.unit || "",
+  ].join("|");
+}
+
+function resolveMergedUnitPrice(quantity, amount, fallbackUnitPrice) {
+  if (quantity) {
+    return Number((amount / quantity).toFixed(2));
+  }
+  return fallbackUnitPrice == null || fallbackUnitPrice === "" ? null : Number(fallbackUnitPrice);
+}
+
+function buildFinalListRows(salesItems = [], procurementItems = []) {
+  const rowMap = new Map();
+
+  const absorbItem = (item, side) => {
+    const key = buildFinalListKey(item);
+    const current = rowMap.get(key) || {
+      key,
+      materialCode: item.materialCode || "",
+      itemName: item.itemName || "",
+      model: item.model || "",
+      brand: item.brand || "",
+      unit: item.unit || "",
+      salesQuantity: 0,
+      procurementQuantity: 0,
+      salesAmount: 0,
+      procurementAmount: 0,
+      salesUnitPriceFallback: null,
+      procurementUnitPriceFallback: null,
+    };
+
+    ["materialCode", "itemName", "model", "brand", "unit"].forEach((field) => {
+      if (!current[field] && item[field]) {
+        current[field] = item[field];
+      }
+    });
+
+    const quantity = Number(item.quantity || 0);
+    const amount = calculateItemAmount(item);
+    if (side === "sales") {
+      current.salesQuantity += quantity;
+      current.salesAmount += amount;
+      current.salesUnitPriceFallback = item.unitPrice;
+    } else {
+      current.procurementQuantity += quantity;
+      current.procurementAmount += amount;
+      current.procurementUnitPriceFallback = item.unitPrice;
+    }
+    rowMap.set(key, current);
+  };
+
+  salesItems.forEach((item) => absorbItem(item, "sales"));
+  procurementItems.forEach((item) => absorbItem(item, "procurement"));
+
+  return Array.from(rowMap.values())
+    .map((item) => ({
+      ...item,
+      salesAmount: Number(item.salesAmount.toFixed(2)),
+      procurementAmount: Number(item.procurementAmount.toFixed(2)),
+      salesUnitPrice: resolveMergedUnitPrice(item.salesQuantity, item.salesAmount, item.salesUnitPriceFallback),
+      procurementUnitPrice: resolveMergedUnitPrice(item.procurementQuantity, item.procurementAmount, item.procurementUnitPriceFallback),
+      unprocuredQuantity: Number((item.salesQuantity - item.procurementQuantity).toFixed(4)),
+    }))
+    .sort((left, right) =>
+      String(left.materialCode || left.itemName || "").localeCompare(
+        String(right.materialCode || right.itemName || ""),
+        "zh-CN",
+        { numeric: true }
+      )
+    );
+}
+
 export default function ProjectListDashboard() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -175,6 +265,26 @@ export default function ProjectListDashboard() {
           })
         : [],
     [aggregateView, isCombinedAggregateView]
+  );
+  const finalListRows = useMemo(
+    () =>
+      isCombinedAggregateView
+        ? buildFinalListRows(aggregateView?.sales?.items || [], aggregateView?.procurement?.items || [])
+        : [],
+    [aggregateView?.procurement?.items, aggregateView?.sales?.items, isCombinedAggregateView]
+  );
+  const finalListSummary = useMemo(
+    () =>
+      finalListRows.reduce(
+        (accumulator, item) => {
+          accumulator.salesAmount += Number(item.salesAmount || 0);
+          accumulator.procurementAmount += Number(item.procurementAmount || 0);
+          accumulator.unprocuredQuantity += Number(item.unprocuredQuantity || 0);
+          return accumulator;
+        },
+        { salesAmount: 0, procurementAmount: 0, unprocuredQuantity: 0 }
+      ),
+    [finalListRows]
   );
 
   const currentPdfAttachment = useMemo(() => {
@@ -286,27 +396,59 @@ export default function ProjectListDashboard() {
     { title: "录入日期", dataIndex: "entryDate", key: "entryDate", width: 140, render: (value) => value ? dayjs(value).format("YYYY-MM-DD") : "-" },
   ];
 
+  const finalListColumns = [
+    { title: "物料编码", dataIndex: "materialCode", key: "materialCode", width: 140 },
+    { title: "物料名称", dataIndex: "itemName", key: "itemName", width: 220 },
+    { title: "型号", dataIndex: "model", key: "model", width: 180 },
+    { title: "品牌", dataIndex: "brand", key: "brand", width: 140 },
+    { title: "单位", dataIndex: "unit", key: "unit", width: 90 },
+    { title: "销售数量", dataIndex: "salesQuantity", key: "salesQuantity", width: 120, align: "right", render: formatQuantity },
+    { title: "采购数量", dataIndex: "procurementQuantity", key: "procurementQuantity", width: 120, align: "right", render: formatQuantity },
+    { title: "销售单价", dataIndex: "salesUnitPrice", key: "salesUnitPrice", width: 120, align: "right", render: formatAmount },
+    { title: "销售金额", dataIndex: "salesAmount", key: "salesAmount", width: 120, align: "right", render: formatAmount },
+    { title: "采购单价", dataIndex: "procurementUnitPrice", key: "procurementUnitPrice", width: 120, align: "right", render: formatAmount },
+    { title: "采购金额", dataIndex: "procurementAmount", key: "procurementAmount", width: 120, align: "right", render: formatAmount },
+    { title: "未采购数量", dataIndex: "unprocuredQuantity", key: "unprocuredQuantity", width: 130, align: "right", render: formatQuantity },
+  ];
+
   const handleExportExcel = () => {
     const fileName = `${project?.projectName || "项目"}-${aggregateView?.listName || projectList?.listName || "清单"}.xls`;
     if (isCombinedAggregateView) {
-      const rows = listItems.map((item) => [
-        item.aggregateTypeLabel || getListTypeMeta(item.aggregateType).label,
+      const rows = finalListRows.map((item) => [
         item.materialCode || "",
         item.itemName || "",
         item.model || "",
         item.brand || "",
         item.unit || "",
-        Number(item.quantity || 0),
-        item.unitPrice == null ? "" : Number(item.unitPrice),
-        calculateItemAmount(item),
-        item.sourceListCount || 0,
+        Number(item.salesQuantity || 0),
+        Number(item.procurementQuantity || 0),
+        item.salesUnitPrice == null ? "" : Number(item.salesUnitPrice),
+        Number(item.salesAmount || 0),
+        item.procurementUnitPrice == null ? "" : Number(item.procurementUnitPrice),
+        Number(item.procurementAmount || 0),
+        Number(item.unprocuredQuantity || 0),
       ]);
-      const totalAmount = rows.reduce((sum, row) => sum + Number(row[8] || 0), 0);
       downloadExcel(
         fileName,
-        "最终清单总览",
-        ["汇总类型", "物料编码", "物料名称", "型号", "品牌", "单位", "数量", "汇总价格", "金额", "来源清单数"],
-        [...rows, ["", "", "", "", "", "合计", "", "", Number(totalAmount.toFixed(2)), ""]]
+        "最终清单",
+        ["物料编码", "物料名称", "型号", "品牌", "单位", "销售数量", "采购数量", "销售单价", "销售金额", "采购单价", "采购金额", "未采购数量"],
+        [
+          ...rows,
+          [
+            "",
+            "",
+            "",
+            "",
+            "合计",
+            "",
+            "",
+            "",
+            Number(finalListSummary.salesAmount.toFixed(2)),
+            "",
+            Number(finalListSummary.procurementAmount.toFixed(2)),
+            Number(finalListSummary.unprocuredQuantity.toFixed(4)),
+          ],
+        ]
       );
       return;
     }
@@ -350,28 +492,32 @@ export default function ProjectListDashboard() {
   const handleExportPdf = async () => {
     const totalAmount = listItems.reduce((sum, item) => sum + calculateItemAmount(item), 0);
     const combinedPdfColumns = [
-      { header: "汇总类型", width: 9 },
-      { header: "物料编码", width: 13 },
-      { header: "物料名称", width: 17 },
-      { header: "型号", width: 14 },
-      { header: "品牌", width: 9 },
-      { header: "单位", align: "center", width: 6 },
-      { header: "数量", align: "right", width: 8 },
-      { header: "汇总价格", align: "right", width: 9 },
-      { header: "金额", align: "right", width: 9 },
-      { header: "来源数", align: "right", width: 6 },
+      { header: "物料编码", width: 10 },
+      { header: "物料名称", width: 14 },
+      { header: "型号", width: 12 },
+      { header: "品牌", width: 8 },
+      { header: "单位", align: "center", width: 5 },
+      { header: "销售数量", align: "right", width: 7 },
+      { header: "采购数量", align: "right", width: 7 },
+      { header: "销售单价", align: "right", width: 7 },
+      { header: "销售金额", align: "right", width: 8 },
+      { header: "采购单价", align: "right", width: 7 },
+      { header: "采购金额", align: "right", width: 8 },
+      { header: "未采购", align: "right", width: 7 },
     ];
-    const combinedPdfRows = listItems.map((item) => [
-      item.aggregateTypeLabel || getListTypeMeta(item.aggregateType).label,
+    const combinedPdfRows = finalListRows.map((item) => [
       item.materialCode || "",
       item.itemName || "",
       item.model || "",
       item.brand || "",
       item.unit || "",
-      item.quantity || "",
-      formatAmount(item.unitPrice),
-      formatAmount(calculateItemAmount(item)),
-      item.sourceListCount || 0,
+      formatQuantity(item.salesQuantity),
+      formatQuantity(item.procurementQuantity),
+      formatAmount(item.salesUnitPrice),
+      formatAmount(item.salesAmount),
+      formatAmount(item.procurementUnitPrice),
+      formatAmount(item.procurementAmount),
+      formatQuantity(item.unprocuredQuantity),
     ]);
     const payload = {
       title: isCombinedAggregateView ? "最终清单总览" : isAggregateView ? "最终清单明细" : "项目清单明细",
@@ -383,7 +529,13 @@ export default function ProjectListDashboard() {
         { label: "客户", value: aggregateView?.customerName || projectList?.customerName || "-" },
         { label: "清单类型", value: listTypeMeta.label },
       ],
-      summaries: [{ label: "合计金额", value: formatAmount(totalAmount) }],
+      summaries: isCombinedAggregateView
+        ? [
+            { label: "销售金额合计", value: formatAmount(finalListSummary.salesAmount) },
+            { label: "采购金额合计", value: formatAmount(finalListSummary.procurementAmount) },
+            { label: "未采购数量合计", value: formatQuantity(finalListSummary.unprocuredQuantity) },
+          ]
+        : [{ label: "合计金额", value: formatAmount(totalAmount) }],
       columns: isCombinedAggregateView
         ? combinedPdfColumns
         : isAggregateView
@@ -530,22 +682,22 @@ export default function ProjectListDashboard() {
           <>
             <Col xs={24} sm={12} xl={6}>
               <Card>
-                <Statistic title="最终销售明细" value={aggregateSections[0]?.items.length || 0} />
+                <Statistic title="最终清单物料" value={finalListRows.length} />
               </Card>
             </Col>
             <Col xs={24} sm={12} xl={6}>
               <Card>
-                <Statistic title="最终采购明细" value={aggregateSections[1]?.items.length || 0} />
+                <Statistic title="销售金额" value={finalListSummary.salesAmount} precision={2} />
               </Card>
             </Col>
             <Col xs={24} sm={12} xl={6}>
               <Card>
-                <Statistic title="合计金额" value={itemSummary.amount} precision={2} />
+                <Statistic title="采购金额" value={finalListSummary.procurementAmount} precision={2} />
               </Card>
             </Col>
             <Col xs={24} sm={12} xl={6}>
               <Card>
-                <Statistic title="来源清单数" value={aggregateView?.sourceListCount || 0} />
+                <Statistic title="未采购数量" value={finalListSummary.unprocuredQuantity} precision={4} />
               </Card>
             </Col>
           </>
@@ -618,6 +770,31 @@ export default function ProjectListDashboard() {
           </Descriptions.Item>
         </Descriptions>
       </Card>
+
+      {isCombinedAggregateView ? (
+        <Card
+          title="最终清单"
+          extra={
+            <Space wrap>
+              <Tag color="blue">销售金额 {formatAmount(finalListSummary.salesAmount)}</Tag>
+              <Tag color="green">采购金额 {formatAmount(finalListSummary.procurementAmount)}</Tag>
+              <Tag color={finalListSummary.unprocuredQuantity > 0 ? "orange" : "default"}>
+                未采购数量 = 销售数量 - 采购数量
+              </Tag>
+            </Space>
+          }
+        >
+          <Table
+            rowKey="key"
+            size="middle"
+            pagination={false}
+            columns={finalListColumns}
+            dataSource={finalListRows}
+            locale={{ emptyText: "暂无最终清单数据" }}
+            scroll={{ x: "max-content" }}
+          />
+        </Card>
+      ) : null}
 
       {isAggregateView ? (
         <Card title="来源清单">
