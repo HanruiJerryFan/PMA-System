@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Alert, Button, Form, Input, Modal, Select, Space, Tag, message } from "antd";
+import { Alert, Button, Form, Input, Modal, Select, Space, Spin, Tag, message } from "antd";
 import { DeleteOutlined, DownloadOutlined, EyeOutlined, UploadOutlined } from "@ant-design/icons";
 import CRUDTable from "../../components/Common/CRUDTable";
 import { getCurrentUser } from "../../api/auth";
@@ -20,6 +20,15 @@ const BUSINESS_TYPE_OPTIONS = [
   { value: "warehouse-documents", label: "出入库单" },
   { value: "other", label: "其他" },
 ];
+
+const BUSINESS_OPTION_LOADERS = {
+  projects: () => projectAPI.getProjectOptions(),
+  "project-lists": () => projectAPI.getProjectListOptions(),
+  "finance-vouchers": () => financeAPI.getFinanceVoucherOptions(),
+  contracts: () => contractAPI.getContractOptions(),
+  customers: () => customerAPI.getCustomerOptions(),
+  "warehouse-documents": () => inventoryAPI.getWarehouseDocOptions(),
+};
 
 function formatFileSize(value) {
   if (value == null || value === "") {
@@ -57,15 +66,26 @@ function getUploaderLabel(record) {
   return record?.uploadedByName || record?.uploadedByUsername || (record?.uploadedBy ? `用户 ${record.uploadedBy}` : "-");
 }
 
-function buildBusinessOptionLabel(type, item) {
+function getBusinessOptionKey(type, item) {
+  if (!item) {
+    return null;
+  }
+  if (type === "warehouse-documents") {
+    return item.docNumber || item.uuid || item.id || null;
+  }
+  return item.uuid || item.id || item.docNumber || null;
+}
+
+function buildBusinessOptionLabel(type, item, businessLabelMap = {}) {
   if (!item) {
     return "-";
   }
   if (type === "projects") {
-    return `${item.projectName || "未命名项目"}${item.projectNumber ? ` / ${item.projectNumber}` : ""}`;
+    return `${item.projectNumber || "未编号项目"}${item.projectName ? ` / ${item.projectName}` : ""}`;
   }
   if (type === "project-lists") {
-    return `${item.listName || "未命名清单"}${item.projectId ? ` / ${item.projectId}` : ""}`;
+    const projectLabel = item.projectId ? businessLabelMap.projects?.[item.projectId] : "";
+    return `${item.listName || "未命名清单"}${projectLabel ? ` / ${projectLabel}` : ""}`;
   }
   if (type === "finance-vouchers") {
     return `${item.voucherNo || "未命名凭证"}${item.summary ? ` / ${item.summary}` : ""}`;
@@ -74,12 +94,22 @@ function buildBusinessOptionLabel(type, item) {
     return `${item.contractNumber || "未命名合同"}${item.subItemContent ? ` / ${item.subItemContent}` : ""}`;
   }
   if (type === "customers") {
-    return `${item.customerName || "未命名客户"}${item.customerCode ? ` / ${item.customerCode}` : ""}`;
+    return `${item.customerCode || "未编号客户"}${item.customerName ? ` / ${item.customerName}` : ""}`;
   }
   if (type === "warehouse-documents") {
     return `${item.docNumber || "未命名单据"}${item.counterpartyName ? ` / ${item.counterpartyName}` : ""}`;
   }
   return item.uuid || item.id || "-";
+}
+
+function resolveBusinessDisplayLabel(type, businessUuid, businessLabelMap) {
+  if (!businessUuid) {
+    return "-";
+  }
+  if (type === "other") {
+    return businessUuid;
+  }
+  return businessLabelMap?.[type]?.[businessUuid] || "未识别业务对象";
 }
 
 export default function AttachmentCenter() {
@@ -92,8 +122,15 @@ export default function AttachmentCenter() {
   const [currentUser, setCurrentUser] = useState(null);
   const [businessOptionsLoading, setBusinessOptionsLoading] = useState(false);
   const [businessOptions, setBusinessOptions] = useState([]);
+  const [businessLabelLoading, setBusinessLabelLoading] = useState(false);
+  const [businessLabelMap, setBusinessLabelMap] = useState({});
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [previewTitle, setPreviewTitle] = useState("");
   const [uploadForm] = Form.useForm();
   const uploadInputRef = useRef(null);
+  const previewUrlRef = useRef("");
   const pagePermissions = useMemo(() => resolvePagePermissions("/attachment/center"), []);
   const canManage = hasAnyAuthority(currentUser, pagePermissions.manageAuthorities);
   const canAccess = hasAnyAuthority(currentUser, pagePermissions.exportAuthorities);
@@ -108,19 +145,23 @@ export default function AttachmentCenter() {
       return "附件中心";
     }
     const label = getBusinessTypeLabel(businessTypeFilter);
+    const businessLabel = businessLabelLoading
+      ? "加载中..."
+      : resolveBusinessDisplayLabel(businessTypeFilter, businessUuidFilter, businessLabelMap);
     return businessUuidFilter
-      ? `附件中心 / ${label} / ${businessUuidFilter}`
+      ? `附件中心 / ${label} / ${businessLabel}`
       : `附件中心 / ${label}`;
-  }, [businessTypeFilter, businessUuidFilter]);
+  }, [businessLabelLoading, businessLabelMap, businessTypeFilter, businessUuidFilter]);
 
   const decoratedAttachments = useMemo(
     () =>
       attachments.map((item) => ({
         ...item,
         businessTypeLabel: getBusinessTypeLabel(item.businessType),
+        businessDisplayLabel: resolveBusinessDisplayLabel(item.businessType, item.businessUuid, businessLabelMap),
         uploaderLabel: getUploaderLabel(item),
       })),
-    [attachments]
+    [attachments, businessLabelMap]
   );
 
   const resetUploadForm = useCallback(() => {
@@ -162,6 +203,82 @@ export default function AttachmentCenter() {
     fetchCurrentUser();
   }, []);
 
+  useEffect(
+    () => () => {
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    const requiredTypes = new Set(
+      attachments
+        .map((item) => item.businessType)
+        .filter((type) => type && type !== "other" && BUSINESS_OPTION_LOADERS[type])
+    );
+
+    if (businessTypeFilter && businessTypeFilter !== "other" && BUSINESS_OPTION_LOADERS[businessTypeFilter]) {
+      requiredTypes.add(businessTypeFilter);
+    }
+    if (requiredTypes.has("project-lists")) {
+      requiredTypes.add("projects");
+    }
+
+    if (!requiredTypes.size) {
+      setBusinessLabelMap({});
+      setBusinessLabelLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function fetchBusinessLabels() {
+      setBusinessLabelLoading(true);
+      try {
+        const rawOptionsByType = {};
+        await Promise.all(
+          Array.from(requiredTypes).map(async (type) => {
+            try {
+              const response = await BUSINESS_OPTION_LOADERS[type]();
+              rawOptionsByType[type] = normalizeResponseData(response);
+            } catch {
+              rawOptionsByType[type] = [];
+            }
+          })
+        );
+
+        const nextMap = {};
+        const orderedTypes = ["projects", ...Array.from(requiredTypes).filter((type) => type !== "projects")];
+        orderedTypes.forEach((type) => {
+          const rows = rawOptionsByType[type] || [];
+          nextMap[type] = rows.reduce((accumulator, item) => {
+            const key = getBusinessOptionKey(type, item);
+            if (key != null) {
+              accumulator[key] = buildBusinessOptionLabel(type, item, nextMap);
+            }
+            return accumulator;
+          }, {});
+        });
+
+        if (!cancelled) {
+          setBusinessLabelMap(nextMap);
+        }
+      } finally {
+        if (!cancelled) {
+          setBusinessLabelLoading(false);
+        }
+      }
+    }
+
+    fetchBusinessLabels();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [attachments, businessTypeFilter]);
+
   useEffect(() => {
     if (!uploadVisible || !selectedUploadBusinessType || selectedUploadBusinessType === "other") {
       setBusinessOptions([]);
@@ -172,15 +289,7 @@ export default function AttachmentCenter() {
     async function fetchBusinessOptions() {
       setBusinessOptionsLoading(true);
       try {
-        const loaderMap = {
-          projects: () => projectAPI.getProjectOptions(),
-          "project-lists": () => projectAPI.getProjectListOptions(),
-          "finance-vouchers": () => financeAPI.getFinanceVoucherOptions(),
-          contracts: () => contractAPI.getContractOptions(),
-          customers: () => customerAPI.getCustomerOptions(),
-          "warehouse-documents": () => inventoryAPI.getWarehouseDocOptions(),
-        };
-        const response = await loaderMap[selectedUploadBusinessType]?.();
+        const response = await BUSINESS_OPTION_LOADERS[selectedUploadBusinessType]?.();
         setBusinessOptions(normalizeResponseData(response));
       } catch (error) {
         setBusinessOptions([]);
@@ -227,6 +336,21 @@ export default function AttachmentCenter() {
     }
   };
 
+  const clearPreviewUrl = () => {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = "";
+    }
+    setPreviewUrl("");
+  };
+
+  const closePreviewModal = () => {
+    setPreviewVisible(false);
+    setPreviewLoading(false);
+    setPreviewTitle("");
+    clearPreviewUrl();
+  };
+
   const handlePreviewPdf = async (record) => {
     if (!canAccess) {
       message.error("无权限操作");
@@ -236,22 +360,32 @@ export default function AttachmentCenter() {
       message.warning("仅 PDF 附件支持网页预览");
       return;
     }
-    const previewWindow = window.open("", "_blank", "noopener,noreferrer");
+    clearPreviewUrl();
+    setPreviewTitle(record.originalFileName || record.fileName || "PDF 附件");
+    setPreviewVisible(true);
+    setPreviewLoading(true);
     try {
       const response = await attachmentAPI.previewAttachmentPdf(record.uuid);
-      const blob = response?.data instanceof Blob ? response.data : response;
-      const previewUrl = URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
-      if (previewWindow) {
-        previewWindow.location.href = previewUrl;
-      } else {
-        window.open(previewUrl, "_blank", "noopener,noreferrer");
+      const blob = response?.data instanceof Blob ? response.data : new Blob([response?.data], { type: "application/pdf" });
+      const contentType = String(response?.headers?.["content-type"] || blob.type || "").toLowerCase();
+
+      if (!blob.size) {
+        throw new Error("PDF 文件为空");
       }
-      window.setTimeout(() => URL.revokeObjectURL(previewUrl), 60 * 1000);
+      if (contentType && !contentType.includes("application/pdf")) {
+        const text = await blob.text();
+        throw new Error(text || "后端没有返回 PDF 文件");
+      }
+
+      const pdfBlob = blob.type === "application/pdf" ? blob : new Blob([blob], { type: "application/pdf" });
+      const nextPreviewUrl = URL.createObjectURL(pdfBlob);
+      previewUrlRef.current = nextPreviewUrl;
+      setPreviewUrl(nextPreviewUrl);
     } catch (error) {
-      if (previewWindow) {
-        previewWindow.close();
-      }
+      closePreviewModal();
       message.error(await resolveBlobErrorMessage(error, "PDF 预览失败"));
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
@@ -331,7 +465,7 @@ export default function AttachmentCenter() {
                   key: "businessTypeLabel",
                   width: 180,
                 },
-                { title: "业务 UUID", dataIndex: "businessUuid", key: "businessUuid", width: 220 },
+                { title: "业务对象", dataIndex: "businessDisplayLabel", key: "businessDisplayLabel", width: 260 },
               ]
             : []),
           { title: "文件名", dataIndex: "originalFileName", key: "originalFileName", width: 260 },
@@ -347,7 +481,7 @@ export default function AttachmentCenter() {
           },
         ]}
         dataSource={decoratedAttachments}
-        loading={loading}
+        loading={loading || businessLabelLoading}
         onUpdate={handleUpdate}
         onDelete={handleDelete}
         updateAuthorities={["attachment.manage"]}
@@ -378,35 +512,14 @@ export default function AttachmentCenter() {
         )}
         searchFields={[
           { name: "businessTypeLabel", label: "业务类型" },
-          { name: "businessUuid", label: "业务 UUID" },
+          { name: "businessDisplayLabel", label: "业务对象" },
           { name: "originalFileName", label: "文件名" },
           { name: "uploaderLabel", label: "上传人" },
         ]}
         transformValues={(values) => ({
-          businessType: values.businessType,
-          businessUuid: values.businessUuid || null,
           originalFileName: values.originalFileName || null,
         })}
         formFields={[
-          {
-            name: "businessType",
-            label: "业务类型",
-            rules: [{ required: true, message: "请选择业务类型" }],
-            component: (
-              <Select placeholder="请选择业务类型">
-                {BUSINESS_TYPE_OPTIONS.map((item) => (
-                  <Option key={item.value} value={item.value}>
-                    {item.label}
-                  </Option>
-                ))}
-              </Select>
-            ),
-          },
-          {
-            name: "businessUuid",
-            label: "业务 UUID",
-            component: <Input placeholder="请输入关联业务 UUID" />,
-          },
           {
             name: "originalFileName",
             label: "文件名",
@@ -464,24 +577,24 @@ export default function AttachmentCenter() {
                   }}
                   options={businessOptions.map((item) => ({
                     value: item.uuid || item.docNumber || item.id,
-                    label: buildBusinessOptionLabel(selectedUploadBusinessType, item),
+                    label: buildBusinessOptionLabel(selectedUploadBusinessType, item, businessLabelMap),
                   }))}
                 />
               </Form.Item>
             ) : null}
             <Form.Item
               name="businessUuid"
-              label="业务 UUID"
+              label="业务对象标识"
               rules={
                 selectedUploadBusinessType === "other"
-                  ? [{ required: true, message: "请输入关联业务 UUID" }]
+                  ? [{ required: true, message: "请输入业务对象标识" }]
                   : []
               }
             >
               <Input
                 placeholder={
                   selectedUploadBusinessType === "other"
-                    ? "请输入关联业务 UUID"
+                    ? "请输入业务对象标识"
                     : "选择上方业务对象后自动回填"
                 }
                 readOnly={selectedUploadBusinessType !== "other"}
@@ -526,6 +639,30 @@ export default function AttachmentCenter() {
           </Form>
         </Modal>
       ) : null}
+
+      <Modal
+        title={`PDF预览：${previewTitle || "-"}`}
+        open={previewVisible}
+        onCancel={closePreviewModal}
+        footer={null}
+        width="90vw"
+        style={{ top: 24 }}
+        destroyOnHidden
+      >
+        {previewLoading ? (
+          <div style={{ height: "78vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Spin tip="正在加载 PDF 预览" />
+          </div>
+        ) : previewUrl ? (
+          <iframe
+            title={previewTitle || "PDF预览"}
+            src={previewUrl}
+            style={{ width: "100%", height: "78vh", border: 0, background: "#f5f5f5" }}
+          />
+        ) : (
+          <Alert type="warning" showIcon message="暂无可预览的 PDF 文件" />
+        )}
+      </Modal>
     </Space>
   );
 }
