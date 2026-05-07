@@ -228,7 +228,7 @@ function calculateBookedAmountPreview(values) {
     if (values.level2Subject === "SALARY") {
       denominator = 1 - 0.13;
     } else {
-      const effectiveTaxRate = taxRate === 0 ? -0.18 : taxRate;
+      const effectiveTaxRate = taxRate === 0 ? -0.05 : taxRate;
       denominator = 1 - (0.13 - effectiveTaxRate);
     }
     if (!Number.isFinite(denominator) || denominator === 0) {

@@ -48,7 +48,7 @@ public class FinanceVoucherServiceImpl implements FinanceVoucherService {
             "OTHER"
     );
     private static final BigDecimal THIRTEEN_PERCENT = new BigDecimal("0.13");
-    private static final BigDecimal NEGATIVE_EIGHTEEN_PERCENT = new BigDecimal("-0.18");
+    private static final BigDecimal ZERO_TAX_EFFECTIVE_RATE = new BigDecimal("-0.05");
     private static final String SALARY_SUBJECT = "SALARY";
     private static final Pattern VOUCHER_NO_PATTERN = Pattern.compile("^\\d{10}$");
     private static final DateTimeFormatter VOUCHER_DAY_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd");
@@ -249,7 +249,7 @@ public class FinanceVoucherServiceImpl implements FinanceVoucherService {
         } else {
             BigDecimal selectedTaxRate = voucher.getTaxRate().setScale(2, RoundingMode.HALF_UP);
             BigDecimal effectiveTaxRate =
-                    selectedTaxRate.compareTo(BigDecimal.ZERO) == 0 ? NEGATIVE_EIGHTEEN_PERCENT : selectedTaxRate;
+                    selectedTaxRate.compareTo(BigDecimal.ZERO) == 0 ? ZERO_TAX_EFFECTIVE_RATE : selectedTaxRate;
             BigDecimal rateGap = THIRTEEN_PERCENT.subtract(effectiveTaxRate);
             denominator = BigDecimal.ONE.subtract(rateGap);
         }
