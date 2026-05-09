@@ -278,10 +278,16 @@ function calculateReceivablePayableInfo(values) {
   }
 
   if (values.transactionDirection === "PAY") {
-    if (actualAmount < invoiceAmount) {
+    if (actualAmount < invoiceAmount && values.isCompleted) {
       return {
         type: "应付",
         amount: Number((invoiceAmount - actualAmount).toFixed(2)),
+      };
+    }
+    if (actualAmount === invoiceAmount && !values.isCompleted) {
+      return {
+        type: "应付",
+        amount: Number(invoiceAmount.toFixed(2)),
       };
     }
     if (actualAmount > invoiceAmount) {
@@ -293,6 +299,29 @@ function calculateReceivablePayableInfo(values) {
   }
 
   return { type: null, amount: null };
+}
+
+function calculatePayableAmount(voucher) {
+  if (voucher.transactionDirection !== "PAY") {
+    return 0;
+  }
+
+  const invoiceAmount =
+    voucher.invoiceAmount === undefined || voucher.invoiceAmount === null || voucher.invoiceAmount === ""
+      ? null
+      : Number(voucher.invoiceAmount);
+  const actualExpense = Number(voucher.actualExpenseAmount || 0);
+
+  if (invoiceAmount == null || !(invoiceAmount > 0)) {
+    return 0;
+  }
+  if (invoiceAmount > actualExpense && voucher.isCompleted) {
+    return Number((invoiceAmount - actualExpense).toFixed(2));
+  }
+  if (invoiceAmount === actualExpense && !voucher.isCompleted) {
+    return Number(invoiceAmount.toFixed(2));
+  }
+  return 0;
 }
 
 function BookedAmountPreview({ form }) {
@@ -545,7 +574,7 @@ export default function FinanceVouchers() {
           }
           accumulator.pending += item.isCompleted ? 0 : 1;
           accumulator.notInvoiced += item.invoiceStatus === "NOT_INVOICED" ? 1 : 0;
-          accumulator.payable += item.receivablePayableType === "应付" ? 1 : 0;
+          accumulator.payableAmount += calculatePayableAmount(item);
           accumulator.missingInvoice += item.receivablePayableType === "缺票" ? 1 : 0;
           accumulator.receivable += item.receivablePayableType === "应收" ? 1 : 0;
           accumulator.pendingInvoice += item.receivablePayableType === "待开票" ? 1 : 0;
@@ -558,7 +587,7 @@ export default function FinanceVouchers() {
           expenseBooked: 0,
           pending: 0,
           notInvoiced: 0,
-          payable: 0,
+          payableAmount: 0,
           missingInvoice: 0,
           receivable: 0,
           pendingInvoice: 0,
@@ -580,7 +609,7 @@ export default function FinanceVouchers() {
       { key: "balance", title: "结余合计", value: balanceTotal, precision: 2, icon: <WalletOutlined />, accent: "#08979c", bg: "#e6fffb" },
       { key: "pending", title: "未完成数量", value: summary.pending, icon: <ClockCircleOutlined />, accent: "#595959", bg: "#f5f5f5" },
       { key: "notInvoiced", title: "未开票数量", value: summary.notInvoiced, icon: <FileTextOutlined />, accent: "#1d39c4", bg: "#f0f5ff" },
-      { key: "payable", title: "应付数量", value: summary.payable, icon: <CreditCardOutlined />, accent: "#cf1322", bg: "#fff1f0" },
+      { key: "payable", title: "应付金额", value: summary.payableAmount, precision: 2, icon: <CreditCardOutlined />, accent: "#cf1322", bg: "#fff1f0" },
       { key: "missingInvoice", title: "缺票数量", value: summary.missingInvoice, icon: <ExclamationCircleOutlined />, accent: "#fa8c16", bg: "#fff7e6" },
       { key: "receivable", title: "应收数量", value: summary.receivable, icon: <BankOutlined />, accent: "#389e0d", bg: "#f6ffed" },
       { key: "pendingInvoice", title: "待开票数量", value: summary.pendingInvoice, icon: <FileTextOutlined />, accent: "#531dab", bg: "#f9f0ff" },
@@ -739,6 +768,7 @@ export default function FinanceVouchers() {
       (sum, item) => sum + (item.transactionDirection === "PAY" ? Math.abs(Number(item.bookedAmount || 0)) : 0),
       0
     );
+    const payableAmountTotal = rows.reduce((sum, item) => sum + calculatePayableAmount(item), 0);
     const balanceTotal = incomeBookedTotal - expenseBookedTotal;
     const payload = {
       title: "财务凭证台账",
@@ -751,6 +781,7 @@ export default function FinanceVouchers() {
         { label: "支出记账合计", value: expenseBookedTotal.toFixed(2) },
         { label: "收入记账合计", value: incomeBookedTotal.toFixed(2) },
         { label: "结余合计", value: balanceTotal.toFixed(2) },
+        { label: "应付金额", value: payableAmountTotal.toFixed(2) },
       ],
       columns: [
         { header: "序号", align: "center", width: 5 },

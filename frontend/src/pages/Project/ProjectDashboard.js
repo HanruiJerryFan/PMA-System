@@ -254,10 +254,16 @@ function calculateReceivablePayableInfo(values) {
   }
 
   if (values.transactionDirection === "PAY") {
-    if (actualAmount < invoiceAmount) {
+    if (actualAmount < invoiceAmount && values.isCompleted) {
       return {
         type: "应付",
         amount: Number((invoiceAmount - actualAmount).toFixed(2)),
+      };
+    }
+    if (actualAmount === invoiceAmount && !values.isCompleted) {
+      return {
+        type: "应付",
+        amount: Number(invoiceAmount.toFixed(2)),
       };
     }
     if (actualAmount > invoiceAmount) {
