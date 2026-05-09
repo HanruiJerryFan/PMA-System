@@ -537,7 +537,6 @@ export default function FinanceVouchers() {
           const bookedAmount = Number(item.bookedAmount || 0);
           accumulator.income += Number(item.actualIncomeAmount || 0);
           accumulator.expense += Number(item.actualExpenseAmount || 0);
-          accumulator.booked += bookedAmount;
           if (item.transactionDirection === "RECEIVE") {
             accumulator.incomeBooked += bookedAmount;
           }
@@ -555,7 +554,6 @@ export default function FinanceVouchers() {
         {
           income: 0,
           expense: 0,
-          booked: 0,
           incomeBooked: 0,
           expenseBooked: 0,
           pending: 0,
@@ -578,7 +576,7 @@ export default function FinanceVouchers() {
     () => [
       { key: "income", title: "收入合计", value: summary.income, precision: 2, icon: <ArrowDownOutlined />, accent: "#1677ff", bg: "#e6f4ff" },
       { key: "expense", title: "支出合计", value: summary.expense, precision: 2, icon: <ArrowUpOutlined />, accent: "#d46b08", bg: "#fff7e6" },
-      { key: "booked", title: "记账合计", value: summary.booked, precision: 2, icon: <AccountBookOutlined />, accent: "#722ed1", bg: "#f9f0ff" },
+      { key: "booked", title: "支出记账合计", value: summary.expenseBooked, precision: 2, icon: <AccountBookOutlined />, accent: "#722ed1", bg: "#f9f0ff" },
       { key: "balance", title: "结余合计", value: balanceTotal, precision: 2, icon: <WalletOutlined />, accent: "#08979c", bg: "#e6fffb" },
       { key: "pending", title: "未完成数量", value: summary.pending, icon: <ClockCircleOutlined />, accent: "#595959", bg: "#f5f5f5" },
       { key: "notInvoiced", title: "未开票数量", value: summary.notInvoiced, icon: <FileTextOutlined />, accent: "#1d39c4", bg: "#f0f5ff" },
@@ -733,7 +731,6 @@ export default function FinanceVouchers() {
 
     const incomeTotal = rows.reduce((sum, item) => sum + Number(item.actualIncomeAmount || 0), 0);
     const expenseTotal = rows.reduce((sum, item) => sum + Number(item.actualExpenseAmount || 0), 0);
-    const bookedTotal = rows.reduce((sum, item) => sum + Number(item.bookedAmount || 0), 0);
     const incomeBookedTotal = rows.reduce(
       (sum, item) => sum + (item.transactionDirection === "RECEIVE" ? Number(item.bookedAmount || 0) : 0),
       0
@@ -751,9 +748,8 @@ export default function FinanceVouchers() {
         { label: "记录数", value: String(rows.length) },
         { label: "收入合计", value: incomeTotal.toFixed(2) },
         { label: "支出合计", value: expenseTotal.toFixed(2) },
-        { label: "记账合计", value: bookedTotal.toFixed(2) },
-        { label: "收入记账合计", value: incomeBookedTotal.toFixed(2) },
         { label: "支出记账合计", value: expenseBookedTotal.toFixed(2) },
+        { label: "收入记账合计", value: incomeBookedTotal.toFixed(2) },
         { label: "结余合计", value: balanceTotal.toFixed(2) },
       ],
       columns: [
