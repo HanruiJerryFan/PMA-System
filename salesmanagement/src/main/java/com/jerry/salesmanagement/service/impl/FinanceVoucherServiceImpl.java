@@ -194,16 +194,19 @@ public class FinanceVoucherServiceImpl implements FinanceVoucherService {
 
         BigDecimal income = defaultZero(voucher.getActualIncomeAmount());
         BigDecimal expense = defaultZero(voucher.getActualExpenseAmount());
-        if (income.compareTo(BigDecimal.ZERO) < 0 || expense.compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalArgumentException("Income and expense amounts cannot be negative");
+        if (voucher.getActualIncomeAmount() != null && voucher.getActualIncomeAmount().compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("Actual income amount cannot be negative");
+        }
+        if (voucher.getActualExpenseAmount() != null && voucher.getActualExpenseAmount().compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("Actual expense amount cannot be negative");
         }
         if (income.compareTo(BigDecimal.ZERO) > 0 && expense.compareTo(BigDecimal.ZERO) > 0) {
             throw new IllegalArgumentException("Income and expense cannot both be greater than 0");
         }
-        if ("RECEIVE".equals(voucher.getTransactionDirection()) && income.compareTo(BigDecimal.ZERO) <= 0) {
+        if ("RECEIVE".equals(voucher.getTransactionDirection()) && voucher.getActualIncomeAmount() == null) {
             throw new IllegalArgumentException("Actual income amount is required for receive vouchers");
         }
-        if ("PAY".equals(voucher.getTransactionDirection()) && expense.compareTo(BigDecimal.ZERO) <= 0) {
+        if ("PAY".equals(voucher.getTransactionDirection()) && voucher.getActualExpenseAmount() == null) {
             throw new IllegalArgumentException("Actual expense amount is required for pay vouchers");
         }
         if ("RECEIVE".equals(voucher.getTransactionDirection()) && expense.compareTo(BigDecimal.ZERO) > 0) {

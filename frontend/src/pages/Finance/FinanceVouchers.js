@@ -186,8 +186,8 @@ function validateDirectionalAmounts(values) {
     if (values.actualIncomeAmount === undefined || values.actualIncomeAmount === null || values.actualIncomeAmount === "") {
       throw new Error("收款方向必须填写实际收入");
     }
-    if (Number(values.actualIncomeAmount) <= 0) {
-      throw new Error("实际收入必须大于 0");
+    if (Number(values.actualIncomeAmount) < 0) {
+      throw new Error("实际收入不能为负数");
     }
   }
 
@@ -195,8 +195,8 @@ function validateDirectionalAmounts(values) {
     if (values.actualExpenseAmount === undefined || values.actualExpenseAmount === null || values.actualExpenseAmount === "") {
       throw new Error("付款方向必须填写实际支出");
     }
-    if (Number(values.actualExpenseAmount) <= 0) {
-      throw new Error("实际支出必须大于 0");
+    if (Number(values.actualExpenseAmount) < 0) {
+      throw new Error("实际支出不能为负数");
     }
   }
 }
