@@ -31,13 +31,14 @@ import {
   FilePdfOutlined,
   LinkOutlined,
   PlusOutlined,
-  UploadOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getCurrentUser } from "../../api/auth";
-import { attachmentAPI, exportAPI, productAPI, projectAPI } from "../../api/modules";
+import BusinessAttachmentUpload from "../../components/Common/BusinessAttachmentUpload";
+import { exportAPI, productAPI, projectAPI } from "../../api/modules";
 import { hasAnyAuthority } from "../../utils/authorities";
 import { resolvePagePermissions } from "../../utils/pagePermissions";
+import { uploadBusinessAttachments } from "../../utils/attachments";
 import { downloadApiFile, downloadExcel, resolveBlobErrorMessage } from "../../utils/exporters";
 
 const { Option } = Select;
@@ -100,7 +101,7 @@ export default function ProjectLists() {
   const [itemsLoading, setItemsLoading] = useState(false);
   const [listModalVisible, setListModalVisible] = useState(false);
   const [editingList, setEditingList] = useState(null);
-  const [pendingListAttachmentFile, setPendingListAttachmentFile] = useState(null);
+  const [pendingListAttachmentFiles, setPendingListAttachmentFiles] = useState([]);
   const [itemModalVisible, setItemModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [importModalVisible, setImportModalVisible] = useState(false);
@@ -228,7 +229,7 @@ export default function ProjectLists() {
   const openListModal = (record = null) => {
     if (!canManage) return message.error("没有维护项目清单的权限");
     setEditingList(record);
-    setPendingListAttachmentFile(null);
+    setPendingListAttachmentFiles([]);
     if (listAttachmentInputRef.current) {
       listAttachmentInputRef.current.value = "";
     }
@@ -244,22 +245,18 @@ export default function ProjectLists() {
   const closeListModal = () => {
     setListModalVisible(false);
     setEditingList(null);
-    setPendingListAttachmentFile(null);
+    setPendingListAttachmentFiles([]);
     listForm.resetFields();
     if (listAttachmentInputRef.current) {
       listAttachmentInputRef.current.value = "";
     }
   };
 
-  const uploadProjectListAttachment = async (projectListUuid) => {
-    if (!pendingListAttachmentFile || !projectListUuid) {
-      return null;
+  const uploadProjectListAttachments = async (projectListUuid) => {
+    if (!pendingListAttachmentFiles.length || !projectListUuid) {
+      return [];
     }
-    const formData = new FormData();
-    formData.append("file", pendingListAttachmentFile);
-    formData.append("businessType", "project-lists");
-    formData.append("businessUuid", projectListUuid);
-    return attachmentAPI.uploadAttachment(formData);
+    return uploadBusinessAttachments("project-lists", projectListUuid, pendingListAttachmentFiles);
   };
 
   const submitList = async () => {
@@ -274,30 +271,22 @@ export default function ProjectLists() {
       };
       if (editingList) {
         let nextPayload = payload;
-        let uploadedAttachment = null;
-        if (pendingListAttachmentFile) {
-          uploadedAttachment = await uploadProjectListAttachment(editingList.uuid);
-          nextPayload = { ...payload, pdfAttachmentId: uploadedAttachment?.uuid || null };
+        const uploadedAttachments = await uploadProjectListAttachments(editingList.uuid);
+        if (uploadedAttachments[0]?.uuid) {
+          nextPayload = { ...payload, pdfAttachmentId: uploadedAttachments[0].uuid };
         }
         await projectAPI.updateProjectList(editingList.uuid, nextPayload);
-        if (uploadedAttachment?.uuid && editingList.pdfAttachmentId && editingList.pdfAttachmentId !== uploadedAttachment.uuid) {
-          try {
-            await attachmentAPI.deleteAttachment(editingList.pdfAttachmentId);
-          } catch {
-            message.warning("项目清单已更新，但旧附件未删除，请稍后在附件中心手动清理");
-          }
-        }
-        message.success(pendingListAttachmentFile ? "项目清单及附件已更新" : "项目清单已更新");
+        message.success(pendingListAttachmentFiles.length ? "项目清单及附件已更新" : "项目清单已更新");
       } else {
-        const created = await projectAPI.createProjectList(payload);
-        if (pendingListAttachmentFile) {
-          const uploadedAttachment = await uploadProjectListAttachment(created.uuid);
+        const created = normalizeResponseData(await projectAPI.createProjectList(payload));
+        if (pendingListAttachmentFiles.length) {
+          const uploadedAttachments = await uploadProjectListAttachments(created.uuid);
           await projectAPI.updateProjectList(created.uuid, {
             ...payload,
-            pdfAttachmentId: uploadedAttachment?.uuid || null,
+            pdfAttachmentId: uploadedAttachments[0]?.uuid || null,
           });
         }
-        message.success(pendingListAttachmentFile ? "项目清单及附件已新增" : "项目清单已新增");
+        message.success(pendingListAttachmentFiles.length ? "项目清单及附件已新增" : "项目清单已新增");
       }
       closeListModal();
       await fetchProjectLists();
@@ -697,62 +686,20 @@ export default function ProjectLists() {
             </Form.Item>
             <Form.Item name="entryDate" label="录入日期"><DatePicker style={{ width: "100%" }} /></Form.Item>
             <Form.Item label="PDF附件">
-              <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                {editingList?.pdfAttachmentId && !pendingListAttachmentFile ? (
-                  <Space wrap>
-                    <Tag color="green">已关联PDF附件</Tag>
-                    <Button
-                      type="link"
-                      size="small"
-                      disabled={!canAccessAttachments}
-                      onClick={() =>
-                        navigate(
-                          `/attachment/center?businessType=project-lists&businessUuid=${editingList.uuid}`,
-                        )
-                      }
-                    >
-                      查看当前附件
-                    </Button>
-                  </Space>
-                ) : null}
-                {pendingListAttachmentFile ? (
-                  <Space wrap>
-                    <Tag color="blue">{pendingListAttachmentFile.name}</Tag>
-                    <Button type="link" size="small" danger onClick={() => {
-                      setPendingListAttachmentFile(null);
-                      if (listAttachmentInputRef.current) {
-                        listAttachmentInputRef.current.value = "";
-                      }
-                    }}>
-                      移除待上传文件
-                    </Button>
-                  </Space>
-                ) : null}
-                <input
-                  ref={listAttachmentInputRef}
-                  type="file"
-                  accept="application/pdf,.pdf"
-                  style={{ display: "none" }}
-                  onChange={(event) =>
-                    setPendingListAttachmentFile(event.target.files?.[0] || null)
-                  }
-                />
-                <Button
-                  icon={<UploadOutlined />}
-                  disabled={!canManageAttachments}
-                  onClick={() => listAttachmentInputRef.current?.click()}
-                >
-                  {editingList ? "重新选择PDF附件" : "选择PDF附件"}
-                </Button>
-                <div style={{ color: "#8c8c8c", fontSize: 12 }}>
-                  保存项目清单时会自动上传并关联当前PDF附件，不再需要手动输入附件ID。
-                </div>
-                {!canManageAttachments ? (
-                  <div style={{ color: "#d4380d", fontSize: 12 }}>
-                    当前账号没有附件上传权限，无法在这里上传PDF附件。
-                  </div>
-                ) : null}
-              </Space>
+              <BusinessAttachmentUpload
+                title="PDF附件"
+                businessType="project-lists"
+                businessUuid={editingList?.uuid}
+                pendingFiles={pendingListAttachmentFiles}
+                onPendingFilesChange={setPendingListAttachmentFiles}
+                inputRef={listAttachmentInputRef}
+                canAccess={canAccessAttachments}
+                canManage={canManageAttachments}
+                chooseText={editingList ? "继续添加 PDF 附件" : "选择 PDF 附件"}
+                helpText="保存项目清单时会自动上传并关联当前清单；第一份新上传文件会作为主 PDF 附件。"
+                noManageText="当前账号没有附件上传权限，无法在这里上传 PDF 附件。"
+                onOpenAttachments={editingList ? () => navigate(`/attachment/center?businessType=project-lists&businessUuid=${editingList.uuid}`) : undefined}
+              />
             </Form.Item>
           </Form>
         </Modal>

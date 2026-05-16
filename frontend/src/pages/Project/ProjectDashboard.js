@@ -31,11 +31,11 @@ import {
   LinkOutlined,
   PlusOutlined,
   ProfileOutlined,
-  UploadOutlined,
   UnorderedListOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getCurrentUser } from "../../api/auth";
+import BusinessAttachmentUpload from "../../components/Common/BusinessAttachmentUpload";
 import {
   attachmentAPI,
   contractAPI,
@@ -46,6 +46,7 @@ import {
   regionAPI,
 } from "../../api/modules";
 import { hasAnyAuthority } from "../../utils/authorities";
+import { uploadBusinessAttachments } from "../../utils/attachments";
 import { buildRegionOptions, buildRegionPath, formatRegionLabel } from "../../utils/regions";
 
 const { Option } = Select;
@@ -424,7 +425,7 @@ export default function ProjectDashboard() {
   const [attachments, setAttachments] = useState([]);
   const [editVisible, setEditVisible] = useState(false);
   const [listVisible, setListVisible] = useState(false);
-  const [pendingListAttachmentFile, setPendingListAttachmentFile] = useState(null);
+  const [pendingListAttachmentFiles, setPendingListAttachmentFiles] = useState([]);
   const [contractVisible, setContractVisible] = useState(false);
   const [voucherVisible, setVoucherVisible] = useState(false);
   const [advanceVisible, setAdvanceVisible] = useState(false);
@@ -688,30 +689,24 @@ export default function ProjectDashboard() {
     const values = await listForm.validateFields();
     setSubmitting(true);
     try {
-      const created = await projectAPI.createProjectList({
+      const listPayload = {
         projectId: project.uuid,
         listName: values.listName,
         listType: values.listType,
         entryDate: values.entryDate ? values.entryDate.format("YYYY-MM-DD") : null,
-      });
-      if (pendingListAttachmentFile) {
-        const formData = new FormData();
-        formData.append("file", pendingListAttachmentFile);
-        formData.append("businessType", "project-lists");
-        formData.append("businessUuid", created.uuid);
-        const uploadedAttachment = await attachmentAPI.uploadAttachment(formData);
+      };
+      const created = normalizeResponseData(await projectAPI.createProjectList(listPayload));
+      if (pendingListAttachmentFiles.length) {
+        const uploadedAttachments = await uploadBusinessAttachments("project-lists", created.uuid, pendingListAttachmentFiles);
         await projectAPI.updateProjectList(created.uuid, {
-          projectId: project.uuid,
-          listName: values.listName,
-          listType: values.listType,
-          entryDate: values.entryDate ? values.entryDate.format("YYYY-MM-DD") : null,
-          pdfAttachmentId: uploadedAttachment?.uuid || null,
+          ...listPayload,
+          pdfAttachmentId: uploadedAttachments[0]?.uuid || null,
         });
       }
       message.success("项目清单已创建");
       setListVisible(false);
       listForm.resetFields();
-      setPendingListAttachmentFile(null);
+      setPendingListAttachmentFiles([]);
       if (listAttachmentInputRef.current) {
         listAttachmentInputRef.current.value = "";
       }
@@ -1350,7 +1345,7 @@ export default function ProjectDashboard() {
         onCancel={() => {
           setListVisible(false);
           listForm.resetFields();
-          setPendingListAttachmentFile(null);
+          setPendingListAttachmentFiles([]);
           if (listAttachmentInputRef.current) {
             listAttachmentInputRef.current.value = "";
           }
@@ -1376,48 +1371,18 @@ export default function ProjectDashboard() {
             <DatePicker style={{ width: "100%" }} />
           </Form.Item>
           <Form.Item label="PDF附件">
-            <Space direction="vertical" size={8} style={{ width: "100%" }}>
-              {pendingListAttachmentFile ? (
-                <Space wrap>
-                  <span>{pendingListAttachmentFile.name}</span>
-                  <Button
-                    type="link"
-                    size="small"
-                    danger
-                    onClick={() => {
-                      setPendingListAttachmentFile(null);
-                      if (listAttachmentInputRef.current) {
-                        listAttachmentInputRef.current.value = "";
-                      }
-                    }}
-                  >
-                    移除
-                  </Button>
-                </Space>
-              ) : null}
-              <input
-                ref={listAttachmentInputRef}
-                type="file"
-                accept="application/pdf,.pdf"
-                style={{ display: "none" }}
-                onChange={(event) => setPendingListAttachmentFile(event.target.files?.[0] || null)}
-              />
-              <Button
-                icon={<UploadOutlined />}
-                disabled={!canManageAttachment}
-                onClick={() => listAttachmentInputRef.current?.click()}
-              >
-                选择PDF附件
-              </Button>
-              <div style={{ color: "#8c8c8c", fontSize: 12 }}>
-                保存项目清单时会自动上传并关联当前PDF附件。
-              </div>
-              {!canManageAttachment ? (
-                <div style={{ color: "#d4380d", fontSize: 12 }}>
-                  当前账号没有附件上传权限，无法在这里上传PDF附件。
-                </div>
-              ) : null}
-            </Space>
+            <BusinessAttachmentUpload
+              title="PDF附件"
+              businessType="project-lists"
+              pendingFiles={pendingListAttachmentFiles}
+              onPendingFilesChange={setPendingListAttachmentFiles}
+              inputRef={listAttachmentInputRef}
+              canAccess={canAccessAttachment}
+              canManage={canManageAttachment}
+              chooseText="选择 PDF 附件"
+              helpText="保存项目清单时会自动上传并关联当前清单，可一次选择多个文件。"
+              noManageText="当前账号没有附件上传权限，无法在这里上传 PDF 附件。"
+            />
           </Form.Item>
         </Form>
       </Modal>

@@ -11,6 +11,10 @@ import { downloadApiFile, downloadExcel, resolveBlobErrorMessage } from "../../u
 
 const { Option } = Select;
 
+function getContractTypeName(item) {
+  return item?.typeName || item?.name || item?.code || String(item?.id ?? "");
+}
+
 export default function ContractClauses() {
   const [contracts, setContracts] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -36,7 +40,7 @@ export default function ContractClauses() {
   );
 
   const contractTypeMap = useMemo(
-    () => Object.fromEntries(contractTypes.map((item) => [item.id, item.typeName])),
+    () => Object.fromEntries(contractTypes.map((item) => [item.id, getContractTypeName(item)])),
     [contractTypes]
   );
 
@@ -221,7 +225,28 @@ export default function ContractClauses() {
           { name: "contractNumber", label: "合同编号" },
           { name: "customerLabel", label: "客户" },
           { name: "projectLabel", label: "项目" },
-          { name: "contractTypeLabel", label: "合同类型" },
+          {
+            name: "contractTypeLabel",
+            label: "合同类型",
+            component: (
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="children"
+                placeholder="请选择合同类型"
+                style={{ width: 180 }}
+              >
+                {contractTypes.map((item) => {
+                  const label = getContractTypeName(item);
+                  return (
+                    <Option key={item.id} value={label}>
+                      {label}
+                    </Option>
+                  );
+                })}
+              </Select>
+            ),
+          },
         ]}
         tableProps={{
           rowClassName: (record) => (record.uuid === selectedContractUuid ? "ant-table-row-selected" : ""),

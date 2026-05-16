@@ -1,15 +1,21 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import dayjs from "dayjs";
 import { Button, DatePicker, Input, InputNumber, Select, message } from "antd";
-import { DeleteOutlined, DownloadOutlined, FilePdfOutlined, LinkOutlined, UploadOutlined } from "@ant-design/icons";
+import { DownloadOutlined, FilePdfOutlined, LinkOutlined } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getCurrentUser } from "../../api/auth";
+import BusinessAttachmentUpload from "../../components/Common/BusinessAttachmentUpload";
 import CRUDTable from "../../components/Common/CRUDTable";
-import { attachmentAPI, contractAPI, customerAPI, exportAPI, projectAPI } from "../../api/modules";
+import { contractAPI, customerAPI, exportAPI, projectAPI } from "../../api/modules";
 import { hasAnyAuthority } from "../../utils/authorities";
+import { uploadBusinessAttachments } from "../../utils/attachments";
 import { downloadApiFile, downloadExcel, resolveBlobErrorMessage } from "../../utils/exporters";
 
 const { Option } = Select;
+
+function getContractTypeName(item) {
+  return item?.typeName || item?.name || item?.code || String(item?.id ?? "");
+}
 
 function normalizeApiData(response) {
   return response?.data ?? response ?? [];
@@ -30,7 +36,7 @@ export default function ContractInfo() {
   const [contractTypes, setContractTypes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
-  const [pendingContractAttachmentFile, setPendingContractAttachmentFile] = useState(null);
+  const [pendingContractAttachmentFiles, setPendingContractAttachmentFiles] = useState([]);
   const contractAttachmentInputRef = useRef(null);
   const canAccessAttachments = hasAnyAuthority(currentUser, ["attachment.access"]);
   const canManageAttachments = hasAnyAuthority(currentUser, ["attachment.manage"]);
@@ -48,7 +54,7 @@ export default function ContractInfo() {
     [contacts]
   );
   const contractTypeMap = useMemo(
-    () => Object.fromEntries(contractTypes.map((item) => [item.id, item.typeName])),
+    () => Object.fromEntries(contractTypes.map((item) => [item.id, getContractTypeName(item)])),
     [contractTypes]
   );
 
@@ -113,7 +119,7 @@ export default function ContractInfo() {
   }, []);
 
   const resetPendingContractAttachment = () => {
-    setPendingContractAttachmentFile(null);
+    setPendingContractAttachmentFiles([]);
     if (contractAttachmentInputRef.current) {
       contractAttachmentInputRef.current.value = "";
     }
@@ -122,12 +128,8 @@ export default function ContractInfo() {
   const handleCreate = async (values) => {
     const createdResponse = await contractAPI.createContract(values);
     const createdContract = normalizeApiEntity(createdResponse);
-    if (pendingContractAttachmentFile && createdContract?.uuid) {
-      const formData = new FormData();
-      formData.append("file", pendingContractAttachmentFile);
-      formData.append("businessType", "contracts");
-      formData.append("businessUuid", createdContract.uuid);
-      await attachmentAPI.uploadAttachment(formData);
+    if (pendingContractAttachmentFiles.length && createdContract?.uuid) {
+      await uploadBusinessAttachments("contracts", createdContract.uuid, pendingContractAttachmentFiles);
     }
     await fetchContracts();
     return createdContract;
@@ -135,12 +137,8 @@ export default function ContractInfo() {
 
   const handleUpdate = async (uuid, values) => {
     const updatedResponse = await contractAPI.updateContract(uuid, values);
-    if (pendingContractAttachmentFile) {
-      const formData = new FormData();
-      formData.append("file", pendingContractAttachmentFile);
-      formData.append("businessType", "contracts");
-      formData.append("businessUuid", uuid);
-      await attachmentAPI.uploadAttachment(formData);
+    if (pendingContractAttachmentFiles.length) {
+      await uploadBusinessAttachments("contracts", uuid, pendingContractAttachmentFiles);
     }
     await fetchContracts();
     return normalizeApiEntity(updatedResponse);
@@ -285,6 +283,28 @@ export default function ContractInfo() {
       )}
       searchFields={[
         { name: "contractNumber", label: "合同编号" },
+        {
+          name: "contractTypeLabel",
+          label: "合同类型",
+          component: (
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="children"
+              placeholder="请选择合同类型"
+              style={{ width: 180 }}
+            >
+              {contractTypes.map((item) => {
+                const label = getContractTypeName(item);
+                return (
+                  <Option key={item.id} value={label}>
+                    {label}
+                  </Option>
+                );
+              })}
+            </Select>
+          ),
+        },
         { name: "customerLabel", label: "客户" },
         { name: "projectLabel", label: "项目" },
       ]}
@@ -312,7 +332,7 @@ export default function ContractInfo() {
             <Select placeholder="请选择合同类型">
               {contractTypes.map((item) => (
                 <Option key={item.id} value={item.id}>
-                  {item.typeName}
+                  {getContractTypeName(item)}
                 </Option>
               ))}
             </Select>
@@ -376,48 +396,21 @@ export default function ContractInfo() {
         {
           key: "contract-attachment-upload",
           renderOnly: true,
-          render: () => (
-            <div style={{ marginBottom: 24 }}>
-              <div style={{ marginBottom: 8, fontWeight: 500 }}>合同附件</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {pendingContractAttachmentFile ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <span>{pendingContractAttachmentFile.name}</span>
-                    <Button
-                      type="link"
-                      size="small"
-                      danger
-                      icon={<DeleteOutlined />}
-                      onClick={resetPendingContractAttachment}
-                    >
-                      移除
-                    </Button>
-                  </div>
-                ) : null}
-                <input
-                  ref={contractAttachmentInputRef}
-                  type="file"
-                  accept="application/pdf,.pdf"
-                  style={{ display: "none" }}
-                  onChange={(event) => setPendingContractAttachmentFile(event.target.files?.[0] || null)}
-                />
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <Button
-                    icon={<UploadOutlined />}
-                    disabled={!canManageAttachments}
-                    onClick={() => contractAttachmentInputRef.current?.click()}
-                  >
-                    选择 PDF 附件
-                  </Button>
-                  <span style={{ color: "#8c8c8c", fontSize: 12 }}>保存合同时会自动上传并关联当前附件。</span>
-                </div>
-                {!canManageAttachments ? (
-                  <div style={{ color: "#d4380d", fontSize: 12 }}>
-                    当前账号没有附件上传权限，无法在这里上传合同附件。
-                  </div>
-                ) : null}
-              </div>
-            </div>
+          render: ({ editingRecord }) => (
+            <BusinessAttachmentUpload
+              title="合同附件"
+              businessType="contracts"
+              businessUuid={editingRecord?.uuid}
+              pendingFiles={pendingContractAttachmentFiles}
+              onPendingFilesChange={setPendingContractAttachmentFiles}
+              inputRef={contractAttachmentInputRef}
+              canAccess={canAccessAttachments}
+              canManage={canManageAttachments}
+              chooseText={editingRecord ? "继续添加 PDF 附件" : "选择 PDF 附件"}
+              helpText="保存合同时会自动上传并关联当前合同，可一次选择多个文件。"
+              noManageText="当前账号没有附件上传权限，无法在这里上传合同附件。"
+              onOpenAttachments={editingRecord ? () => openAttachments(editingRecord.uuid) : undefined}
+            />
           ),
         },
       ]}

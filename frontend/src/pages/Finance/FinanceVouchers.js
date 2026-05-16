@@ -23,20 +23,20 @@ import {
   BankOutlined,
   ClockCircleOutlined,
   CreditCardOutlined,
-  DeleteOutlined,
   DownloadOutlined,
   ExclamationCircleOutlined,
   FilePdfOutlined,
   FileTextOutlined,
   LinkOutlined,
-  UploadOutlined,
   WalletOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getCurrentUser } from "../../api/auth";
+import BusinessAttachmentUpload from "../../components/Common/BusinessAttachmentUpload";
 import CRUDTable from "../../components/Common/CRUDTable";
-import { attachmentAPI, customerAPI, exportAPI, financeAPI, projectAPI } from "../../api/modules";
+import { customerAPI, exportAPI, financeAPI, projectAPI } from "../../api/modules";
 import { hasAnyAuthority } from "../../utils/authorities";
+import { uploadBusinessAttachments } from "../../utils/attachments";
 import { downloadApiFile, downloadExcel, resolveBlobErrorMessage } from "../../utils/exporters";
 
 const { Option } = Select;
@@ -450,7 +450,7 @@ export default function FinanceVouchers() {
   const [taxRates, setTaxRates] = useState([]);
   const [loading, setLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
-  const [pendingVoucherAttachmentFile, setPendingVoucherAttachmentFile] = useState(null);
+  const [pendingVoucherAttachmentFiles, setPendingVoucherAttachmentFiles] = useState([]);
   const [filteredVisibleVouchers, setFilteredVisibleVouchers] = useState([]);
   const voucherAttachmentInputRef = useRef(null);
   const canAccessAttachments = hasAnyAuthority(currentUser, ["attachment.access"]);
@@ -680,7 +680,7 @@ export default function FinanceVouchers() {
   }, []);
 
   const resetPendingVoucherAttachment = () => {
-    setPendingVoucherAttachmentFile(null);
+    setPendingVoucherAttachmentFiles([]);
     if (voucherAttachmentInputRef.current) {
       voucherAttachmentInputRef.current.value = "";
     }
@@ -689,12 +689,8 @@ export default function FinanceVouchers() {
   const handleCreate = async (values) => {
     const createdResponse = await financeAPI.createFinanceVoucher(values);
     const createdVoucher = normalizeApiEntity(createdResponse);
-    if (pendingVoucherAttachmentFile && createdVoucher?.uuid) {
-      const formData = new FormData();
-      formData.append("file", pendingVoucherAttachmentFile);
-      formData.append("businessType", "finance-vouchers");
-      formData.append("businessUuid", createdVoucher.uuid);
-      await attachmentAPI.uploadAttachment(formData);
+    if (pendingVoucherAttachmentFiles.length && createdVoucher?.uuid) {
+      await uploadBusinessAttachments("finance-vouchers", createdVoucher.uuid, pendingVoucherAttachmentFiles);
     }
     await fetchVouchers();
     return createdVoucher;
@@ -702,12 +698,8 @@ export default function FinanceVouchers() {
 
   const handleUpdate = async (uuid, values) => {
     const updatedResponse = await financeAPI.updateFinanceVoucher(uuid, values);
-    if (pendingVoucherAttachmentFile) {
-      const formData = new FormData();
-      formData.append("file", pendingVoucherAttachmentFile);
-      formData.append("businessType", "finance-vouchers");
-      formData.append("businessUuid", uuid);
-      await attachmentAPI.uploadAttachment(formData);
+    if (pendingVoucherAttachmentFiles.length) {
+      await uploadBusinessAttachments("finance-vouchers", uuid, pendingVoucherAttachmentFiles);
     }
     await fetchVouchers();
     return normalizeApiEntity(updatedResponse);
@@ -1388,48 +1380,21 @@ export default function FinanceVouchers() {
           {
             key: "voucher-attachment-upload",
             renderOnly: true,
-            render: () => (
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ marginBottom: 8, fontWeight: 500 }}>票据附件</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {pendingVoucherAttachmentFile ? (
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <span>{pendingVoucherAttachmentFile.name}</span>
-                      <Button
-                        type="link"
-                        size="small"
-                        danger
-                        icon={<DeleteOutlined />}
-                        onClick={resetPendingVoucherAttachment}
-                      >
-                        移除
-                      </Button>
-                    </div>
-                  ) : null}
-                  <input
-                    ref={voucherAttachmentInputRef}
-                    type="file"
-                    accept="application/pdf,.pdf"
-                    style={{ display: "none" }}
-                    onChange={(event) => setPendingVoucherAttachmentFile(event.target.files?.[0] || null)}
-                  />
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <Button
-                      icon={<UploadOutlined />}
-                      disabled={!canManageAttachments}
-                      onClick={() => voucherAttachmentInputRef.current?.click()}
-                    >
-                      选择票据附件
-                    </Button>
-                      <span style={{ color: "#8c8c8c", fontSize: 12 }}>保存财务凭证时会自动上传并关联当前票据附件。</span>
-                  </div>
-                  {!canManageAttachments ? (
-                    <div style={{ color: "#d4380d", fontSize: 12 }}>
-                      当前账号没有附件上传权限，无法在这里上传票据附件。
-                    </div>
-                  ) : null}
-                </div>
-              </div>
+            render: ({ editingRecord }) => (
+              <BusinessAttachmentUpload
+                title="票据附件"
+                businessType="finance-vouchers"
+                businessUuid={editingRecord?.uuid}
+                pendingFiles={pendingVoucherAttachmentFiles}
+                onPendingFilesChange={setPendingVoucherAttachmentFiles}
+                inputRef={voucherAttachmentInputRef}
+                canAccess={canAccessAttachments}
+                canManage={canManageAttachments}
+                chooseText={editingRecord ? "继续添加票据附件" : "选择票据附件"}
+                helpText="保存财务凭证时会自动上传并关联当前票据附件，可一次选择多个文件。"
+                noManageText="当前账号没有附件上传权限，无法在这里上传票据附件。"
+                onOpenAttachments={editingRecord ? () => openAttachments(editingRecord.uuid) : undefined}
+              />
             ),
           },
         ]}
