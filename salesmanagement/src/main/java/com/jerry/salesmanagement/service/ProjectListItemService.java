@@ -11,6 +11,7 @@ public interface ProjectListItemService {
     List<ProjectListItem> getByProjectListId(String projectListId);
     ProjectListItem create(ProjectListItem item);
     ProjectListItem update(ProjectListItem item);
+    ProjectListItem audit(String uuid);
     void delete(String uuid);
     void deleteByProjectListId(String projectListId);
     ExcelImportResult importFromExcel(String projectListId, MultipartFile file, boolean replaceExisting, String importMode);

@@ -67,6 +67,16 @@ public class ProjectListItemController {
         }
     }
 
+    @PostMapping("/{uuid}/audit")
+    @PreAuthorize("hasAnyAuthority('project.list.audit', 'project.manage')")
+    public ApiResponse<ProjectListItem> audit(@PathVariable String uuid) {
+        try {
+            return ApiResponse.success("Project list item audited successfully", service.audit(uuid));
+        } catch (Exception e) {
+            return ApiResponse.error("Failed to audit project list item: " + e.getMessage());
+        }
+    }
+
     @DeleteMapping("/{uuid}")
     @PreAuthorize("hasAnyAuthority('project.list.entry', 'project.manage')")
     public ApiResponse<Void> delete(@PathVariable String uuid) {

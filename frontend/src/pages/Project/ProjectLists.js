@@ -179,6 +179,11 @@ export default function ProjectLists() {
 
   const selectedList = useMemo(() => decoratedLists.find((item) => item.uuid === selectedListUuid) || null, [decoratedLists, selectedListUuid]);
   const selectedUnitPriceLabel = useMemo(() => getUnitPriceLabel(selectedList?.listType), [selectedList?.listType]);
+  const decoratedListItems = useMemo(() => listItems.map((item) => ({
+    ...item,
+    entryUserName: item.entryUserName || userMap[item.entryUser] || "",
+    auditorUserName: item.auditorUserName || userMap[item.auditorUser] || "",
+  })), [listItems, userMap]);
 
   const summary = useMemo(() => decoratedLists.reduce((acc, item) => {
     acc.total += 1;
@@ -188,11 +193,11 @@ export default function ProjectLists() {
     return acc;
   }, { total: 0, initial: 0, procurement: 0, change: 0 }), [decoratedLists]);
 
-  const itemSummary = useMemo(() => listItems.reduce((acc, item) => {
+  const itemSummary = useMemo(() => decoratedListItems.reduce((acc, item) => {
     acc.quantity += Number(item.quantity || 0);
     acc.amount += Number(item.totalAmount || 0);
     return acc;
-  }, { quantity: 0, amount: 0 }), [listItems]);
+  }, { quantity: 0, amount: 0 }), [decoratedListItems]);
 
   const selectedListAttachmentStatus = selectedList?.pdfAttachmentId ? "已上传 PDF 附件" : "未上传 PDF 附件";
 
@@ -416,6 +421,10 @@ export default function ProjectLists() {
         unitPrice: values.unitPrice == null ? null : Number(values.unitPrice),
         remark: values.remark || null,
       };
+      if (editingItem && canMaintainEntryAudit) {
+        payload.entryUser = values.entryUser ?? null;
+        payload.auditorUser = values.auditorUser ?? null;
+      }
       if (editingItem) {
         await projectAPI.updateProjectListItem(editingItem.uuid, payload);
         message.success("保存成功");
@@ -428,6 +437,16 @@ export default function ProjectLists() {
     } catch (error) {
       if (!error?.errorFields) message.error(error?.message || "保存清单明细失败");
     }
+  };
+
+  const auditItem = async (uuid) => {
+    if (!canAudit) {
+      message.error("没有审核项目清单明细的权限");
+      return;
+    }
+    await projectAPI.auditProjectListItem(uuid);
+    message.success("项目清单明细已审核");
+    await fetchItems(selectedListUuid);
   };
 
   const deleteItem = async (uuid) => {
@@ -470,7 +489,7 @@ export default function ProjectLists() {
 
   const exportExcel = () => {
     if (!selectedList) return message.warning("请先选择一个项目清单");
-    const rows = listItems.map((item) => [
+    const rows = decoratedListItems.map((item) => [
       item.materialCode || "",
       item.itemName || "",
       item.model || "",
@@ -480,19 +499,21 @@ export default function ProjectLists() {
       Number(item.unitPrice || 0),
       calculateItemAmount(item),
       item.remark || "",
+      item.entryUserName || "",
+      item.auditorUserName || "",
     ]);
     const totalAmount = rows.reduce((sum, row) => sum + Number(row[7] || 0), 0);
     downloadExcel(
       `${selectedList.projectLabel || "项目"}-${selectedList.listName || selectedList.listTypeLabel || "清单"}.xls`,
       "项目清单明细",
-      ["物料编码", "物料名称", "型号", "品牌", "单位", "数量", selectedUnitPriceLabel, "金额", "备注"],
-      [...rows, ["", "", "", "", "合计", "", "", Number(totalAmount.toFixed(2)), ""]]
+      ["物料编码", "物料名称", "型号", "品牌", "单位", "数量", selectedUnitPriceLabel, "金额", "备注", "录入人", "审核人"],
+      [...rows, ["", "", "", "", "合计", "", "", Number(totalAmount.toFixed(2)), "", "", ""]]
     );
   };
 
   const exportPdf = async () => {
     if (!selectedList) return message.warning("请先选择一个项目清单");
-    const totalAmount = listItems.reduce((sum, item) => sum + calculateItemAmount(item), 0);
+    const totalAmount = decoratedListItems.reduce((sum, item) => sum + calculateItemAmount(item), 0);
     const payload = {
       title: "项目清单明细",
       subtitle: `生成时间：${dayjs().format("YYYY-MM-DD HH:mm")}`,
@@ -508,17 +529,19 @@ export default function ProjectLists() {
       ],
       summaries: [{ label: "合计金额", value: formatAmount(totalAmount) }],
       columns: [
-        { header: "物料编码", width: 13 },
-        { header: "物料名称", width: 18 },
-        { header: "型号", width: 15 },
-        { header: "品牌", width: 10 },
-        { header: "单位", align: "center", width: 7 },
-        { header: "数量", align: "right", width: 8 },
-        { header: selectedUnitPriceLabel, align: "right", width: 10 },
-        { header: "金额", align: "right", width: 10 },
-        { header: "备注", width: 14 },
+        { header: "物料编码", width: 12 },
+        { header: "物料名称", width: 16 },
+        { header: "型号", width: 13 },
+        { header: "品牌", width: 9 },
+        { header: "单位", align: "center", width: 6 },
+        { header: "数量", align: "right", width: 7 },
+        { header: selectedUnitPriceLabel, align: "right", width: 9 },
+        { header: "金额", align: "right", width: 9 },
+        { header: "备注", width: 12 },
+        { header: "录入人", width: 8 },
+        { header: "审核人", width: 8 },
       ],
-      rows: listItems.map((item) => [
+      rows: decoratedListItems.map((item) => [
         item.materialCode || "",
         item.itemName || "",
         item.model || "",
@@ -528,6 +551,8 @@ export default function ProjectLists() {
         formatAmount(item.unitPrice),
         formatAmount(calculateItemAmount(item)),
         item.remark || "",
+        item.entryUserName || "",
+        item.auditorUserName || "",
       ]),
     };
     try {
@@ -608,7 +633,27 @@ export default function ProjectLists() {
   ];
 
   const itemColumns = [
-    { title: "操作", key: "action", width: 160, fixed: "left", render: (_, record) => <Space><Button type="link" icon={<EditOutlined />} disabled={!canManage} onClick={() => openItemModal(record)}>编辑</Button><Popconfirm title="确定删除这条清单明细吗？" onConfirm={() => deleteItem(record.uuid)} okText="确定" cancelText="取消"><Button type="link" danger disabled={!canManage} icon={<DeleteOutlined />}>删除</Button></Popconfirm></Space> },
+    {
+      title: "操作",
+      key: "action",
+      width: 260,
+      fixed: "left",
+      render: (_, record) => (
+        <Space wrap>
+          <Button type="link" icon={<EditOutlined />} disabled={!canManage} onClick={() => openItemModal(record)}>
+            编辑
+          </Button>
+          <Button type="link" icon={<CheckCircleOutlined />} disabled={!canAudit || Boolean(record.auditorUser)} onClick={() => auditItem(record.uuid)}>
+            审核
+          </Button>
+          <Popconfirm title="确定删除这条清单明细吗？" onConfirm={() => deleteItem(record.uuid)} okText="确定" cancelText="取消">
+            <Button type="link" danger disabled={!canManage} icon={<DeleteOutlined />}>
+              删除
+            </Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
     { title: "物料编码", dataIndex: "materialCode", key: "materialCode", width: 140 },
     { title: "物料名称", dataIndex: "itemName", key: "itemName", width: 220 },
     { title: "型号", dataIndex: "model", key: "model", width: 180 },
@@ -618,6 +663,8 @@ export default function ProjectLists() {
     { title: selectedUnitPriceLabel, dataIndex: "unitPrice", key: "unitPrice", width: 120, render: formatAmount },
     { title: "金额", dataIndex: "totalAmount", key: "totalAmount", width: 120, render: formatAmount },
     { title: "备注", dataIndex: "remark", key: "remark", width: 220 },
+    { title: "录入人", dataIndex: "entryUserName", key: "entryUserName", width: 120, render: (value) => value || "-" },
+    { title: "审核人", dataIndex: "auditorUserName", key: "auditorUserName", width: 120, render: (value) => value || "-" },
   ];
 
   return (
@@ -719,10 +766,10 @@ export default function ProjectLists() {
                 <Descriptions.Item label="审核人">{selectedList?.auditorUserName || "-"}</Descriptions.Item>
                 <Descriptions.Item label="客户">{selectedList?.customerName || "-"}</Descriptions.Item>
                 <Descriptions.Item label="附件状态">{selectedListAttachmentStatus}</Descriptions.Item>
-                <Descriptions.Item label="当前明细数">{listItems.length}</Descriptions.Item>
+                <Descriptions.Item label="当前明细数">{decoratedListItems.length}</Descriptions.Item>
                 <Descriptions.Item label="当前选择状态">已选中，可继续维护明细与附件</Descriptions.Item>
               </Descriptions>
-              <Table rowKey="uuid" loading={itemsLoading} dataSource={listItems} columns={itemColumns} pagination={false} scroll={{ x: "max-content" }} />
+              <Table rowKey="uuid" loading={itemsLoading} dataSource={decoratedListItems} columns={itemColumns} pagination={false} scroll={{ x: "max-content" }} />
             </Space>
           ) : (
             <Empty description={projectUuidFilter ? "当前项目下还没有选中清单，请先在上方列表选择一张清单。" : "请先选择一个项目清单，再查看对应明细。"} />
@@ -797,6 +844,24 @@ export default function ProjectLists() {
               <Col span={8}><Form.Item name="unitPrice" label={selectedUnitPriceLabel}><InputNumber min={0} precision={2} style={{ width: "100%" }} /></Form.Item></Col>
               <Col span={8}><Form.Item name="remark" label="备注"><Input placeholder="请输入备注" /></Form.Item></Col>
             </Row>
+            {editingItem && canMaintainEntryAudit ? (
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item name="entryUser" label="录入人">
+                    <Select placeholder="请选择录入人" allowClear showSearch optionFilterProp="children">
+                      {userOptions}
+                    </Select>
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item name="auditorUser" label="审核人">
+                    <Select placeholder="请选择审核人" allowClear showSearch optionFilterProp="children">
+                      {userOptions}
+                    </Select>
+                  </Form.Item>
+                </Col>
+              </Row>
+            ) : null}
             <Form.Item name="materialCode" hidden><Input /></Form.Item>
             <Form.Item name="itemName" hidden><Input /></Form.Item>
             <Form.Item name="model" hidden><Input /></Form.Item>

@@ -381,6 +381,10 @@ export default function ProjectListDashboard() {
       { title: "金额", dataIndex: "totalAmount", key: "totalAmount", width: 120, render: formatAmount },
       ...(aggregate ? [{ title: "来源清单数", dataIndex: "sourceListCount", key: "sourceListCount", width: 120 }] : []),
       { title: "备注", dataIndex: "remark", key: "remark", width: 220 },
+      ...(aggregate ? [] : [
+        { title: "录入人", dataIndex: "entryUserName", key: "entryUserName", width: 120, render: (value) => value || "-" },
+        { title: "审核人", dataIndex: "auditorUserName", key: "auditorUserName", width: 120, render: (value) => value || "-" },
+      ]),
     ];
   };
 
@@ -478,6 +482,8 @@ export default function ProjectListDashboard() {
             item.unitPrice == null ? "" : Number(item.unitPrice),
             calculateItemAmount(item),
             item.remark || "",
+            item.entryUserName || "",
+            item.auditorUserName || "",
           ]
     );
     const totalAmount = rows.reduce((sum, row) => sum + Number(row[7] || 0), 0);
@@ -486,8 +492,8 @@ export default function ProjectListDashboard() {
       isAggregateView ? "最终清单明细" : "项目清单明细",
       isAggregateView
         ? ["物料编码", "物料名称", "型号", "品牌", "单位", "数量", unitPriceLabel, "金额", "来源清单数"]
-        : ["物料编码", "物料名称", "型号", "品牌", "单位", "数量", unitPriceLabel, "金额", "备注"],
-      [...rows, ["", "", "", "", "合计", "", "", Number(totalAmount.toFixed(2)), ""]]
+        : ["物料编码", "物料名称", "型号", "品牌", "单位", "数量", unitPriceLabel, "金额", "备注", "录入人", "审核人"],
+      [...rows, isAggregateView ? ["", "", "", "", "合计", "", "", Number(totalAmount.toFixed(2)), ""] : ["", "", "", "", "合计", "", "", Number(totalAmount.toFixed(2)), "", "", ""]]
     );
   };
 
@@ -640,15 +646,17 @@ export default function ProjectListDashboard() {
             { header: "来源清单数", align: "right", width: 10 },
           ]
         : [
-            { header: "物料编码", width: 13 },
-            { header: "物料名称", width: 18 },
-            { header: "型号", width: 15 },
-            { header: "品牌", width: 10 },
-            { header: "单位", align: "center", width: 7 },
-            { header: "数量", align: "right", width: 8 },
-            { header: unitPriceLabel, align: "right", width: 10 },
-            { header: "金额", align: "right", width: 10 },
-            { header: "备注", width: 14 },
+            { header: "物料编码", width: 12 },
+            { header: "物料名称", width: 16 },
+            { header: "型号", width: 13 },
+            { header: "品牌", width: 9 },
+            { header: "单位", align: "center", width: 6 },
+            { header: "数量", align: "right", width: 7 },
+            { header: unitPriceLabel, align: "right", width: 9 },
+            { header: "金额", align: "right", width: 9 },
+            { header: "备注", width: 12 },
+            { header: "录入人", width: 8 },
+            { header: "审核人", width: 8 },
           ],
       rows: isCombinedAggregateView
         ? combinedPdfRows
@@ -675,6 +683,8 @@ export default function ProjectListDashboard() {
                   formatAmount(item.unitPrice),
                   formatAmount(calculateItemAmount(item)),
                   item.remark || "",
+                  item.entryUserName || "",
+                  item.auditorUserName || "",
                 ]
           ),
       extraSections: isAggregateView

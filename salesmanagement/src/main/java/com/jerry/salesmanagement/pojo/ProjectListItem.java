@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.util.Date;
 
 @Data
-public class ProjectListItem {
+public class ProjectListItem implements EntryAuditable {
     private Long id;
     private String uuid;
     private String projectListId;
@@ -21,6 +21,10 @@ public class ProjectListItem {
     private BigDecimal totalAmount;
     private String sourceType;
     private String remark;
+    private Long entryUser;
+    private String entryUserName;
+    private Long auditorUser;
+    private String auditorUserName;
     private Date createTime;
     private Long createUser;
     private Date updateTime;

@@ -12,7 +12,9 @@ import com.jerry.salesmanagement.pojo.ProjectList;
 import com.jerry.salesmanagement.pojo.ProjectListItem;
 import com.jerry.salesmanagement.pojo.dto.ExcelImportError;
 import com.jerry.salesmanagement.pojo.dto.ExcelImportResult;
+import com.jerry.salesmanagement.service.CurrentUserService;
 import com.jerry.salesmanagement.service.CustomerService;
+import com.jerry.salesmanagement.service.EntryAuditService;
 import com.jerry.salesmanagement.service.ProjectListItemService;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
@@ -102,6 +104,12 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
     @Autowired
     private CustomerService customerService;
 
+    @Autowired
+    private CurrentUserService currentUserService;
+
+    @Autowired
+    private EntryAuditService entryAuditService;
+
     @Override
     public ProjectListItem getByUuid(String uuid) {
         return mapper.selectByUuid(uuid);
@@ -120,19 +128,42 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
             item.setUuid(UUID.randomUUID().toString());
         }
         item.setTotalAmount(calculateTotalAmount(item));
+        Long currentUserId = currentUserService.requireCurrentUserId();
+        entryAuditService.applyCreate(item);
+        item.setCreateUser(currentUserId);
         mapper.insert(item);
         touchProjectListCustomer(projectList);
-        return item;
+        return mapper.selectByUuid(item.getUuid());
     }
 
     @Override
     @Transactional
     public ProjectListItem update(ProjectListItem item) {
+        ProjectListItem existing = mapper.selectByUuid(item.getUuid());
+        if (existing == null) {
+            throw new IllegalArgumentException("Project list item does not exist");
+        }
         ProjectList projectList = validateItem(item);
         item.setTotalAmount(calculateTotalAmount(item));
+        Long currentUserId = currentUserService.requireCurrentUserId();
+        entryAuditService.applyUpdate(item, existing);
+        item.setUpdateUser(currentUserId);
         mapper.updateByUuid(item);
         touchProjectListCustomer(projectList);
-        return item;
+        return mapper.selectByUuid(item.getUuid());
+    }
+
+    @Override
+    @Transactional
+    public ProjectListItem audit(String uuid) {
+        ProjectListItem existing = mapper.selectByUuid(uuid);
+        if (existing == null) {
+            throw new IllegalArgumentException("Project list item does not exist");
+        }
+        entryAuditService.applyAudit(existing);
+        Long currentUserId = currentUserService.requireCurrentUserId();
+        mapper.updateAuditorByUuid(uuid, existing.getAuditorUser(), currentUserId);
+        return mapper.selectByUuid(uuid);
     }
 
     @Override

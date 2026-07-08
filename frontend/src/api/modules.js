@@ -76,6 +76,7 @@ export const projectAPI = {
   getProjectListItems: (projectListId) => api.get(`/project-list-items/byList/${projectListId}`),
   createProjectListItem: (data) => api.post("/project-list-items", data),
   updateProjectListItem: (uuid, data) => api.put(`/project-list-items/${uuid}`, data),
+  auditProjectListItem: (uuid) => api.post(`/project-list-items/${uuid}/audit`),
   deleteProjectListItem: (uuid) => api.delete(`/project-list-items/${uuid}`),
   downloadProjectListItemsImportTemplate: () =>
     api.get("/project-list-items/import-template", {

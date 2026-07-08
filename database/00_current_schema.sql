@@ -781,6 +781,8 @@ CREATE TABLE `project_list_item` (
   `total_amount` decimal(18,2) DEFAULT NULL,
   `source_type` varchar(64) DEFAULT NULL,
   `remark` text,
+  `entry_user` bigint(20) DEFAULT NULL,
+  `auditor_user` bigint(20) DEFAULT NULL,
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `create_user` bigint(20) DEFAULT NULL,
   `update_time` datetime DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
@@ -788,7 +790,9 @@ CREATE TABLE `project_list_item` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_project_list_item_uuid` (`uuid`),
   KEY `idx_project_list_item_list_id` (`project_list_id`),
-  KEY `idx_project_list_item_material_id` (`material_id`)
+  KEY `idx_project_list_item_material_id` (`material_id`),
+  KEY `idx_project_list_item_entry_user` (`entry_user`),
+  KEY `idx_project_list_item_auditor_user` (`auditor_user`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

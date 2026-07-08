@@ -6,51 +6,63 @@
 
     <select id="selectByUuid" parameterType="string" resultType="com.jerry.salesmanagement.pojo.ProjectListItem">
         SELECT
-            id,
-            uuid,
-            project_list_id AS projectListId,
-            material_id AS materialId,
-            material_code AS materialCode,
-            item_name AS itemName,
-            model,
-            brand,
-            unit,
-            quantity,
-            unit_price AS unitPrice,
-            total_amount AS totalAmount,
-            source_type AS sourceType,
-            remark,
-            create_time AS createTime,
-            create_user AS createUser,
-            update_time AS updateTime,
-            update_user AS updateUser
-        FROM project_list_item
-        WHERE uuid = #{uuid}
+            pli.id,
+            pli.uuid,
+            pli.project_list_id AS projectListId,
+            pli.material_id AS materialId,
+            pli.material_code AS materialCode,
+            pli.item_name AS itemName,
+            pli.model,
+            pli.brand,
+            pli.unit,
+            pli.quantity,
+            pli.unit_price AS unitPrice,
+            pli.total_amount AS totalAmount,
+            pli.source_type AS sourceType,
+            pli.remark,
+            pli.entry_user AS entryUser,
+            COALESCE(NULLIF(eu.real_name, ''), eu.username) AS entryUserName,
+            pli.auditor_user AS auditorUser,
+            COALESCE(NULLIF(au.real_name, ''), au.username) AS auditorUserName,
+            pli.create_time AS createTime,
+            pli.create_user AS createUser,
+            pli.update_time AS updateTime,
+            pli.update_user AS updateUser
+        FROM project_list_item pli
+        LEFT JOIN sys_user eu ON pli.entry_user = eu.id
+        LEFT JOIN sys_user au ON pli.auditor_user = au.id
+        WHERE pli.uuid = #{uuid}
     </select>
 
     <select id="selectByProjectListId" parameterType="string" resultType="com.jerry.salesmanagement.pojo.ProjectListItem">
         SELECT
-            id,
-            uuid,
-            project_list_id AS projectListId,
-            material_id AS materialId,
-            material_code AS materialCode,
-            item_name AS itemName,
-            model,
-            brand,
-            unit,
-            quantity,
-            unit_price AS unitPrice,
-            total_amount AS totalAmount,
-            source_type AS sourceType,
-            remark,
-            create_time AS createTime,
-            create_user AS createUser,
-            update_time AS updateTime,
-            update_user AS updateUser
-        FROM project_list_item
-        WHERE project_list_id = #{projectListId}
-        ORDER BY id ASC
+            pli.id,
+            pli.uuid,
+            pli.project_list_id AS projectListId,
+            pli.material_id AS materialId,
+            pli.material_code AS materialCode,
+            pli.item_name AS itemName,
+            pli.model,
+            pli.brand,
+            pli.unit,
+            pli.quantity,
+            pli.unit_price AS unitPrice,
+            pli.total_amount AS totalAmount,
+            pli.source_type AS sourceType,
+            pli.remark,
+            pli.entry_user AS entryUser,
+            COALESCE(NULLIF(eu.real_name, ''), eu.username) AS entryUserName,
+            pli.auditor_user AS auditorUser,
+            COALESCE(NULLIF(au.real_name, ''), au.username) AS auditorUserName,
+            pli.create_time AS createTime,
+            pli.create_user AS createUser,
+            pli.update_time AS updateTime,
+            pli.update_user AS updateUser
+        FROM project_list_item pli
+        LEFT JOIN sys_user eu ON pli.entry_user = eu.id
+        LEFT JOIN sys_user au ON pli.auditor_user = au.id
+        WHERE pli.project_list_id = #{projectListId}
+        ORDER BY pli.id ASC
     </select>
 
     <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.ProjectListItem">
@@ -68,6 +80,8 @@
             total_amount,
             source_type,
             remark,
+            entry_user,
+            auditor_user,
             create_time,
             create_user
         ) VALUES (
@@ -84,6 +98,8 @@
             #{totalAmount},
             #{sourceType},
             #{remark},
+            #{entryUser},
+            #{auditorUser},
             NOW(),
             #{createUser}
         )
@@ -104,9 +120,20 @@
             <if test="totalAmount != null">total_amount = #{totalAmount},</if>
             <if test="sourceType != null">source_type = #{sourceType},</if>
             <if test="remark != null">remark = #{remark},</if>
+            entry_user = #{entryUser},
+            auditor_user = #{auditorUser},
             update_time = NOW(),
             update_user = #{updateUser}
         </set>
+        WHERE uuid = #{uuid}
+    </update>
+
+    <update id="updateAuditorByUuid">
+        UPDATE project_list_item
+        SET
+            auditor_user = #{auditorUser},
+            update_time = NOW(),
+            update_user = #{updateUser}
         WHERE uuid = #{uuid}
     </update>
 

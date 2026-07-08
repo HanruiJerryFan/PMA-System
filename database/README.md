@@ -35,6 +35,10 @@
   - 现有数据库补丁脚本
   - 为项目清单、出入库单、财务凭证补齐通用“录入人/审核人”字段和颗粒度权限
 
+- `08_project_list_item_entry_audit.sql`
+  - 现有数据库补丁脚本
+  - 为项目清单明细增加逐条“录入人/审核人”字段
+
 ## 推荐使用顺序
 
 ### 初始化空库
@@ -53,6 +57,7 @@
 1. 执行 `05_code_sequence.sql`
 2. 执行 `06_project_list_entry_auditor.sql`
 3. 执行 `07_entry_audit_documents.sql`
+4. 执行 `08_project_list_item_entry_audit.sql`
 
 ## 历史脚本
 

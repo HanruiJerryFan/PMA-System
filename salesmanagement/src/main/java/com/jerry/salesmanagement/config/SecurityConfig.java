@@ -190,6 +190,8 @@ public class SecurityConfig {
                         .hasAnyAuthority("project.list.entry", "project.manage")
                         .requestMatchers(HttpMethod.DELETE, "/api/project-lists/**")
                         .hasAnyAuthority("project.list.entry", "project.manage")
+                        .requestMatchers(HttpMethod.POST, "/api/project-list-items/*/audit")
+                        .hasAnyAuthority("project.list.audit", "project.manage")
                         .requestMatchers(HttpMethod.POST, "/api/project-list-items/**")
                         .hasAnyAuthority("project.list.entry", "project.manage")
                         .requestMatchers(HttpMethod.PUT, "/api/project-list-items/**")
