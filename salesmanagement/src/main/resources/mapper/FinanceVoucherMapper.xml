@@ -6,93 +6,111 @@
 
     <select id="selectByUuid" parameterType="string" resultType="com.jerry.salesmanagement.pojo.FinanceVoucher">
         SELECT
-            id,
-            uuid,
-            voucher_no AS voucherNo,
-            occurred_on AS occurredOn,
-            project_id AS projectId,
-            level_1_subject AS level1Subject,
-            level_2_subject AS level2Subject,
-            summary,
-            transaction_direction AS transactionDirection,
-            tax_rate AS taxRate,
-            counterparty_customer_id AS counterpartyCustomerId,
-            counterparty_name_snapshot AS counterpartyNameSnapshot,
-            invoice_status AS invoiceStatus,
-            invoice_no AS invoiceNo,
-            invoice_amount AS invoiceAmount,
-            actual_income_amount AS actualIncomeAmount,
-            actual_expense_amount AS actualExpenseAmount,
-            booked_amount AS bookedAmount,
-            is_completed AS isCompleted,
-            remark,
-            created_at AS createdAt,
-            created_by AS createdBy,
-            updated_at AS updatedAt,
-            updated_by AS updatedBy
-        FROM finance_voucher
-        WHERE uuid = #{uuid}
+            fv.id,
+            fv.uuid,
+            fv.voucher_no AS voucherNo,
+            fv.occurred_on AS occurredOn,
+            fv.project_id AS projectId,
+            fv.level_1_subject AS level1Subject,
+            fv.level_2_subject AS level2Subject,
+            fv.summary,
+            fv.transaction_direction AS transactionDirection,
+            fv.tax_rate AS taxRate,
+            fv.counterparty_customer_id AS counterpartyCustomerId,
+            fv.counterparty_name_snapshot AS counterpartyNameSnapshot,
+            fv.invoice_status AS invoiceStatus,
+            fv.invoice_no AS invoiceNo,
+            fv.invoice_amount AS invoiceAmount,
+            fv.actual_income_amount AS actualIncomeAmount,
+            fv.actual_expense_amount AS actualExpenseAmount,
+            fv.booked_amount AS bookedAmount,
+            fv.is_completed AS isCompleted,
+            fv.entry_user AS entryUser,
+            COALESCE(NULLIF(eu.real_name, ''), eu.username) AS entryUserName,
+            fv.auditor_user AS auditorUser,
+            COALESCE(NULLIF(au.real_name, ''), au.username) AS auditorUserName,
+            fv.remark,
+            fv.created_at AS createdAt,
+            fv.created_by AS createdBy,
+            fv.updated_at AS updatedAt,
+            fv.updated_by AS updatedBy
+        FROM finance_voucher fv
+        LEFT JOIN sys_user eu ON fv.entry_user = eu.id
+        LEFT JOIN sys_user au ON fv.auditor_user = au.id
+        WHERE fv.uuid = #{uuid}
     </select>
 
     <select id="selectByVoucherNo" parameterType="string" resultType="com.jerry.salesmanagement.pojo.FinanceVoucher">
         SELECT
-            id,
-            uuid,
-            voucher_no AS voucherNo,
-            occurred_on AS occurredOn,
-            project_id AS projectId,
-            level_1_subject AS level1Subject,
-            level_2_subject AS level2Subject,
-            summary,
-            transaction_direction AS transactionDirection,
-            tax_rate AS taxRate,
-            counterparty_customer_id AS counterpartyCustomerId,
-            counterparty_name_snapshot AS counterpartyNameSnapshot,
-            invoice_status AS invoiceStatus,
-            invoice_no AS invoiceNo,
-            invoice_amount AS invoiceAmount,
-            actual_income_amount AS actualIncomeAmount,
-            actual_expense_amount AS actualExpenseAmount,
-            booked_amount AS bookedAmount,
-            is_completed AS isCompleted,
-            remark,
-            created_at AS createdAt,
-            created_by AS createdBy,
-            updated_at AS updatedAt,
-            updated_by AS updatedBy
-        FROM finance_voucher
-        WHERE voucher_no = #{voucherNo}
+            fv.id,
+            fv.uuid,
+            fv.voucher_no AS voucherNo,
+            fv.occurred_on AS occurredOn,
+            fv.project_id AS projectId,
+            fv.level_1_subject AS level1Subject,
+            fv.level_2_subject AS level2Subject,
+            fv.summary,
+            fv.transaction_direction AS transactionDirection,
+            fv.tax_rate AS taxRate,
+            fv.counterparty_customer_id AS counterpartyCustomerId,
+            fv.counterparty_name_snapshot AS counterpartyNameSnapshot,
+            fv.invoice_status AS invoiceStatus,
+            fv.invoice_no AS invoiceNo,
+            fv.invoice_amount AS invoiceAmount,
+            fv.actual_income_amount AS actualIncomeAmount,
+            fv.actual_expense_amount AS actualExpenseAmount,
+            fv.booked_amount AS bookedAmount,
+            fv.is_completed AS isCompleted,
+            fv.entry_user AS entryUser,
+            COALESCE(NULLIF(eu.real_name, ''), eu.username) AS entryUserName,
+            fv.auditor_user AS auditorUser,
+            COALESCE(NULLIF(au.real_name, ''), au.username) AS auditorUserName,
+            fv.remark,
+            fv.created_at AS createdAt,
+            fv.created_by AS createdBy,
+            fv.updated_at AS updatedAt,
+            fv.updated_by AS updatedBy
+        FROM finance_voucher fv
+        LEFT JOIN sys_user eu ON fv.entry_user = eu.id
+        LEFT JOIN sys_user au ON fv.auditor_user = au.id
+        WHERE fv.voucher_no = #{voucherNo}
         LIMIT 1
     </select>
 
     <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.FinanceVoucher">
         SELECT
-            id,
-            uuid,
-            voucher_no AS voucherNo,
-            occurred_on AS occurredOn,
-            project_id AS projectId,
-            level_1_subject AS level1Subject,
-            level_2_subject AS level2Subject,
-            summary,
-            transaction_direction AS transactionDirection,
-            tax_rate AS taxRate,
-            counterparty_customer_id AS counterpartyCustomerId,
-            counterparty_name_snapshot AS counterpartyNameSnapshot,
-            invoice_status AS invoiceStatus,
-            invoice_no AS invoiceNo,
-            invoice_amount AS invoiceAmount,
-            actual_income_amount AS actualIncomeAmount,
-            actual_expense_amount AS actualExpenseAmount,
-            booked_amount AS bookedAmount,
-            is_completed AS isCompleted,
-            remark,
-            created_at AS createdAt,
-            created_by AS createdBy,
-            updated_at AS updatedAt,
-            updated_by AS updatedBy
-        FROM finance_voucher
-        ORDER BY occurred_on DESC, voucher_no DESC
+            fv.id,
+            fv.uuid,
+            fv.voucher_no AS voucherNo,
+            fv.occurred_on AS occurredOn,
+            fv.project_id AS projectId,
+            fv.level_1_subject AS level1Subject,
+            fv.level_2_subject AS level2Subject,
+            fv.summary,
+            fv.transaction_direction AS transactionDirection,
+            fv.tax_rate AS taxRate,
+            fv.counterparty_customer_id AS counterpartyCustomerId,
+            fv.counterparty_name_snapshot AS counterpartyNameSnapshot,
+            fv.invoice_status AS invoiceStatus,
+            fv.invoice_no AS invoiceNo,
+            fv.invoice_amount AS invoiceAmount,
+            fv.actual_income_amount AS actualIncomeAmount,
+            fv.actual_expense_amount AS actualExpenseAmount,
+            fv.booked_amount AS bookedAmount,
+            fv.is_completed AS isCompleted,
+            fv.entry_user AS entryUser,
+            COALESCE(NULLIF(eu.real_name, ''), eu.username) AS entryUserName,
+            fv.auditor_user AS auditorUser,
+            COALESCE(NULLIF(au.real_name, ''), au.username) AS auditorUserName,
+            fv.remark,
+            fv.created_at AS createdAt,
+            fv.created_by AS createdBy,
+            fv.updated_at AS updatedAt,
+            fv.updated_by AS updatedBy
+        FROM finance_voucher fv
+        LEFT JOIN sys_user eu ON fv.entry_user = eu.id
+        LEFT JOIN sys_user au ON fv.auditor_user = au.id
+        ORDER BY fv.occurred_on DESC, fv.voucher_no DESC
     </select>
 
     <select id="selectMaxVoucherSequenceByMonthPrefix" parameterType="string" resultType="int">
@@ -121,6 +139,8 @@
             actual_expense_amount,
             booked_amount,
             is_completed,
+            entry_user,
+            auditor_user,
             remark,
             created_at,
             created_by
@@ -143,6 +163,8 @@
             #{actualExpenseAmount},
             #{bookedAmount},
             #{isCompleted},
+            #{entryUser},
+            #{auditorUser},
             #{remark},
             NOW(),
             #{createdBy}
@@ -169,10 +191,21 @@
             <if test="actualExpenseAmount != null">actual_expense_amount = #{actualExpenseAmount},</if>
             <if test="bookedAmount != null">booked_amount = #{bookedAmount},</if>
             <if test="isCompleted != null">is_completed = #{isCompleted},</if>
+            entry_user = #{entryUser},
+            auditor_user = #{auditorUser},
             <if test="remark != null">remark = #{remark},</if>
             updated_at = NOW(),
             updated_by = #{updatedBy}
         </set>
+        WHERE uuid = #{uuid}
+    </update>
+
+    <update id="updateAuditorByUuid">
+        UPDATE finance_voucher
+        SET
+            auditor_user = #{auditorUser},
+            updated_at = NOW(),
+            updated_by = #{updatedBy}
         WHERE uuid = #{uuid}
     </update>
 

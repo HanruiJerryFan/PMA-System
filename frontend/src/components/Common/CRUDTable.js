@@ -33,6 +33,13 @@ function hasSearchValue(value) {
   return value !== undefined && value !== null && value !== "";
 }
 
+function isFieldVisible(field, context) {
+  if (typeof field.visible === "function") {
+    return field.visible(context) !== false;
+  }
+  return field.visible !== false;
+}
+
 export default function CRUDTable({
   title,
   columns,
@@ -343,6 +350,10 @@ export default function CRUDTable({
   );
 
   const finalColumns = actionColumn ? [actionColumn, ...sortableColumns] : sortableColumns;
+  const visibleFormFields = useMemo(
+    () => formFields.filter((field) => isFieldVisible(field, { form, editingRecord, currentUser })),
+    [currentUser, editingRecord, form, formFields]
+  );
   const renderedExtraActions =
     typeof extraActions === "function"
       ? extraActions({
@@ -464,7 +475,7 @@ export default function CRUDTable({
           ].filter(Boolean)}
         >
           <Form form={form} layout="vertical" preserve={false}>
-            {formFields.map((field) =>
+            {visibleFormFields.map((field) =>
               field.renderOnly ? (
                 <React.Fragment key={field.name || field.key || Math.random()}>
                   {field.render?.({ form, editingRecord })}

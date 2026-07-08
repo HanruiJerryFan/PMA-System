@@ -24,6 +24,7 @@ import {
 import { DatePicker } from "antd";
 import {
   ArrowLeftOutlined,
+  CheckCircleOutlined,
   DeleteOutlined,
   DownloadOutlined,
   EditOutlined,
@@ -38,6 +39,7 @@ import BusinessAttachmentUpload from "../../components/Common/BusinessAttachment
 import { exportAPI, permissionAPI, productAPI, projectAPI } from "../../api/modules";
 import { hasAnyAuthority } from "../../utils/authorities";
 import { resolvePagePermissions } from "../../utils/pagePermissions";
+import { canMaintainEntryAuditUsers } from "../../utils/entryAudit";
 import { uploadBusinessAttachments } from "../../utils/attachments";
 import { downloadApiFile, downloadExcel, resolveBlobErrorMessage } from "../../utils/exporters";
 
@@ -120,7 +122,9 @@ export default function ProjectLists() {
   const listAttachmentInputRef = useRef(null);
 
   const pagePermissions = useMemo(() => resolvePagePermissions("/project/lists"), []);
-  const canManage = hasAnyAuthority(currentUser, pagePermissions.manageAuthorities);
+  const canManage = hasAnyAuthority(currentUser, ["project.list.entry", ...pagePermissions.manageAuthorities]);
+  const canAudit = hasAnyAuthority(currentUser, ["project.list.audit", ...pagePermissions.manageAuthorities]);
+  const canMaintainEntryAudit = canMaintainEntryAuditUsers(currentUser);
   const canExport = hasAnyAuthority(currentUser, pagePermissions.exportAuthorities);
   const canAccessAttachments = hasAnyAuthority(currentUser, ["attachment.access"]);
   const canManageAttachments = hasAnyAuthority(currentUser, ["attachment.manage"]);
@@ -257,8 +261,8 @@ export default function ProjectLists() {
       listName: record?.listName || "",
       listType: record?.listType || "INITIAL_SALES",
       entryDate: record?.entryDate ? dayjs(record.entryDate) : null,
-      entryUser: record ? record.entryUser || undefined : currentUser?.id || undefined,
-      auditorUser: record ? record.auditorUser || undefined : undefined,
+      entryUser: record?.entryUser || undefined,
+      auditorUser: record?.auditorUser || undefined,
     });
     setListModalVisible(true);
   };
@@ -288,10 +292,12 @@ export default function ProjectLists() {
         listName: values.listName,
         listType: values.listType,
         entryDate: values.entryDate ? values.entryDate.format("YYYY-MM-DD") : null,
-        entryUser: values.entryUser ?? null,
-        auditorUser: values.auditorUser ?? null,
         pdfAttachmentId: editingList?.pdfAttachmentId || null,
       };
+      if (editingList && canMaintainEntryAudit) {
+        payload.entryUser = values.entryUser ?? null;
+        payload.auditorUser = values.auditorUser ?? null;
+      }
       if (editingList) {
         let nextPayload = payload;
         const uploadedAttachments = await uploadProjectListAttachments(editingList.uuid);
@@ -316,6 +322,16 @@ export default function ProjectLists() {
     } catch (error) {
       if (!error?.errorFields) message.error(error?.message || "保存项目清单失败");
     }
+  };
+
+  const auditList = async (uuid) => {
+    if (!canAudit) {
+      message.error("没有审核项目清单的权限");
+      return;
+    }
+    await projectAPI.auditProjectList(uuid);
+    message.success("项目清单已审核");
+    await fetchProjectLists();
   };
 
   const deleteList = async (uuid) => {
@@ -525,7 +541,7 @@ export default function ProjectLists() {
     {
       title: "操作",
       key: "action",
-      width: 220,
+      width: 300,
       fixed: "left",
       render: (_, record) => (
         <Space wrap>
@@ -549,6 +565,17 @@ export default function ProjectLists() {
             }}
           >
             编辑
+          </Button>
+          <Button
+            type="link"
+            icon={<CheckCircleOutlined />}
+            disabled={!canAudit || Boolean(record.auditorUser)}
+            onClick={(event) => {
+              event.stopPropagation();
+              auditList(record.uuid);
+            }}
+          >
+            审核
           </Button>
           <Popconfirm title="确定删除这个项目清单吗？" onConfirm={() => deleteList(record.uuid)} okText="确定" cancelText="取消">
             <Button
@@ -714,16 +741,20 @@ export default function ProjectLists() {
               <Select>{LIST_TYPE_OPTIONS.map((item) => <Option key={item.value} value={item.value}>{item.label}</Option>)}</Select>
             </Form.Item>
             <Form.Item name="entryDate" label="录入日期"><DatePicker style={{ width: "100%" }} /></Form.Item>
-            <Form.Item name="entryUser" label="录入人">
-              <Select placeholder="请选择录入人" allowClear showSearch optionFilterProp="children">
-                {userOptions}
-              </Select>
-            </Form.Item>
-            <Form.Item name="auditorUser" label="审核人">
-              <Select placeholder="请选择审核人" allowClear showSearch optionFilterProp="children">
-                {userOptions}
-              </Select>
-            </Form.Item>
+            {editingList && canMaintainEntryAudit ? (
+              <>
+                <Form.Item name="entryUser" label="录入人">
+                  <Select placeholder="请选择录入人" allowClear showSearch optionFilterProp="children">
+                    {userOptions}
+                  </Select>
+                </Form.Item>
+                <Form.Item name="auditorUser" label="审核人">
+                  <Select placeholder="请选择审核人" allowClear showSearch optionFilterProp="children">
+                    {userOptions}
+                  </Select>
+                </Form.Item>
+              </>
+            ) : null}
             <Form.Item label="PDF附件">
               <BusinessAttachmentUpload
                 title="PDF附件"

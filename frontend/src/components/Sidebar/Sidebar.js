@@ -117,7 +117,7 @@ export default function Sidebar() {
         children: [
           { key: "/project/info", label: "项目信息", onClick: () => navigate("/project/info"), requiredAuthorities: ["project.access"] },
           { key: "/project/status-history", label: "项目记录", onClick: () => navigate("/project/status-history"), requiredAuthorities: ["project.manage"] },
-          { key: "/project/lists", label: "项目清单", onClick: () => navigate("/project/lists"), requiredAuthorities: ["project.access"] },
+          { key: "/project/lists", label: "项目清单", onClick: () => navigate("/project/lists"), requiredAuthorities: ["project.access", "project.list.entry", "project.list.audit"] },
           { key: "/project/types", label: "项目类型", onClick: () => navigate("/project/types"), requiredAuthorities: ["project.manage"] },
           { key: "/project/stages", label: "项目阶段", onClick: () => navigate("/project/stages"), requiredAuthorities: ["project.manage"] },
         ],
@@ -155,7 +155,7 @@ export default function Sidebar() {
           { key: "/inventory/warehouses", label: "仓库管理", onClick: () => navigate("/inventory/warehouses"), requiredAuthorities: ["inventory.manage"] },
           { key: "/inventory/stock", label: "库存汇总", onClick: () => navigate("/inventory/stock"), requiredAuthorities: ["inventory.access"] },
           { key: "/inventory/transactions", label: "库存流水", onClick: () => navigate("/inventory/transactions"), requiredAuthorities: ["inventory.access"] },
-          { key: "/inventory/warehouse", label: "出入库单", onClick: () => navigate("/inventory/warehouse"), requiredAuthorities: ["inventory.access"] },
+          { key: "/inventory/warehouse", label: "出入库单", onClick: () => navigate("/inventory/warehouse"), requiredAuthorities: ["inventory.access", "inventory.warehouse-doc.entry", "inventory.warehouse-doc.audit"] },
         ],
       },
       {
@@ -164,7 +164,7 @@ export default function Sidebar() {
         label: "财务管理",
         requiredAuthorities: ["finance.access"],
         children: [
-          { key: "/finance/vouchers", label: "财务凭证", onClick: () => navigate("/finance/vouchers"), requiredAuthorities: ["finance.access"] },
+          { key: "/finance/vouchers", label: "财务凭证", onClick: () => navigate("/finance/vouchers"), requiredAuthorities: ["finance.access", "finance.voucher.entry", "finance.voucher.audit"] },
           { key: "/finance/tax-rates", label: "税率字典", onClick: () => navigate("/finance/tax-rates"), requiredAuthorities: ["finance.manage"] },
         ],
       },

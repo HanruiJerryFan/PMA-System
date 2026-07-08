@@ -6,6 +6,7 @@ import com.jerry.salesmanagement.pojo.dto.ProjectListAggregateView;
 import com.jerry.salesmanagement.service.AuditTrailService;
 import com.jerry.salesmanagement.service.ProjectListService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -71,6 +72,7 @@ public class ProjectListController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyAuthority('project.list.entry', 'project.manage')")
     public ApiResponse<ProjectList> create(@RequestBody ProjectList projectList) {
         try {
             ProjectList created = service.create(projectList);
@@ -82,6 +84,7 @@ public class ProjectListController {
     }
 
     @PutMapping("/{uuid}")
+    @PreAuthorize("hasAnyAuthority('project.list.entry', 'project.manage')")
     public ApiResponse<ProjectList> update(@PathVariable String uuid, @RequestBody ProjectList projectList) {
         try {
             projectList.setUuid(uuid);
@@ -93,7 +96,20 @@ public class ProjectListController {
         }
     }
 
+    @PostMapping("/{uuid}/audit")
+    @PreAuthorize("hasAnyAuthority('project.list.audit', 'project.manage')")
+    public ApiResponse<ProjectList> audit(@PathVariable String uuid) {
+        try {
+            ProjectList audited = service.audit(uuid);
+            auditTrailService.record("project-lists", "AUDIT", "project-lists", uuid, "Audited project list");
+            return ApiResponse.success("Project list audited", audited);
+        } catch (Exception e) {
+            return ApiResponse.error("Failed to audit project list: " + e.getMessage());
+        }
+    }
+
     @DeleteMapping("/{uuid}")
+    @PreAuthorize("hasAnyAuthority('project.list.entry', 'project.manage')")
     public ApiResponse<Void> delete(@PathVariable String uuid) {
         try {
             service.delete(uuid);

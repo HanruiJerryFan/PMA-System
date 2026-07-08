@@ -70,6 +70,7 @@ export const projectAPI = {
     api.get(`/project-lists/aggregate/${projectId}`, { params: { aggregateType } }),
   createProjectList: (data) => api.post("/project-lists", data),
   updateProjectList: (uuid, data) => api.put(`/project-lists/${uuid}`, data),
+  auditProjectList: (uuid) => api.post(`/project-lists/${uuid}/audit`),
   deleteProjectList: (uuid) => api.delete(`/project-lists/${uuid}`),
 
   getProjectListItems: (projectListId) => api.get(`/project-list-items/byList/${projectListId}`),
@@ -188,6 +189,7 @@ export const inventoryAPI = {
   getWarehouseDocCustomerOptions: () => api.get("/warehouse-documents/customer-options"),
   createWarehouseDoc: (data) => api.post("/warehouse-documents", data),
   updateWarehouseDoc: (docNumber, data) => api.put(`/warehouse-documents/${docNumber}`, data),
+  auditWarehouseDoc: (docNumber) => api.post(`/warehouse-documents/${docNumber}/audit`),
   deleteWarehouseDoc: (docNumber) => api.delete(`/warehouse-documents/${docNumber}`),
   downloadWarehouseDocPdf: (docNumber) =>
     api.get(`/warehouse-documents/${docNumber}/export-pdf`, {
@@ -201,6 +203,7 @@ export const financeAPI = {
   getFinanceVoucher: (uuid) => api.get(`/finance-vouchers/${uuid}`),
   createFinanceVoucher: (data) => api.post("/finance-vouchers", data),
   updateFinanceVoucher: (uuid, data) => api.put(`/finance-vouchers/${uuid}`, data),
+  auditFinanceVoucher: (uuid) => api.post(`/finance-vouchers/${uuid}/audit`),
   deleteFinanceVoucher: (uuid) => api.delete(`/finance-vouchers/${uuid}`),
   getTaxRateDicts: () => api.get("/tax-rate-dicts"),
   createTaxRateDict: (data) => api.post("/tax-rate-dicts", data),

@@ -12,5 +12,6 @@ public interface ProjectListService {
     ProjectListAggregateView getAggregateView(String projectId, String aggregateType);
     ProjectList create(ProjectList projectList);
     ProjectList update(ProjectList projectList);
+    ProjectList audit(String uuid);
     void delete(String uuid);
 }

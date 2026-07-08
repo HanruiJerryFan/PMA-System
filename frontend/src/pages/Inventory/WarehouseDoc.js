@@ -14,12 +14,13 @@ import {
   Tag,
   message,
 } from "antd";
-import { DeleteOutlined, DownloadOutlined, EditOutlined, FilePdfOutlined, PlusOutlined } from "@ant-design/icons";
+import { CheckCircleOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, FilePdfOutlined, PlusOutlined } from "@ant-design/icons";
 import { getCurrentUser } from "../../api/auth";
-import { inventoryAPI } from "../../api/modules";
+import { inventoryAPI, permissionAPI } from "../../api/modules";
 import { downloadApiFile, downloadHtmlExcel, resolveBlobErrorMessage } from "../../utils/exporters";
 import { hasAnyAuthority } from "../../utils/authorities";
 import { resolvePagePermissions } from "../../utils/pagePermissions";
+import { canMaintainEntryAuditUsers, getUserLabel } from "../../utils/entryAudit";
 import WarehouseDocumentModal from "./WarehouseDocumentModal";
 import {
   categoryLabel,
@@ -37,6 +38,7 @@ export default function WarehouseDoc() {
   const [warehouses, setWarehouses] = useState([]);
   const [materials, setMaterials] = useState([]);
   const [customerOptions, setCustomerOptions] = useState([]);
+  const [users, setUsers] = useState([]);
   const [selectedDocNumber, setSelectedDocNumber] = useState(null);
   const [editingDoc, setEditingDoc] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
@@ -44,7 +46,10 @@ export default function WarehouseDoc() {
   const [saving, setSaving] = useState(false);
 
   const pagePermissions = useMemo(() => resolvePagePermissions("/inventory/warehouse"), []);
-  const canManage = hasAnyAuthority(currentUser, pagePermissions.manageAuthorities);
+  const canManage = hasAnyAuthority(currentUser, ["inventory.warehouse-doc.entry", ...pagePermissions.manageAuthorities]);
+  const canAudit = hasAnyAuthority(currentUser, ["inventory.warehouse-doc.audit", ...pagePermissions.manageAuthorities]);
+  const canMaintainEntryAudit = canMaintainEntryAuditUsers(currentUser);
+  const userMap = useMemo(() => Object.fromEntries(users.map((item) => [item.id, getUserLabel(item)])), [users]);
   const projectMap = useMemo(
     () =>
       Object.fromEntries(
@@ -69,9 +74,11 @@ export default function WarehouseDoc() {
         projectLabel: item.projectId ? projectMap[item.projectId] || item.projectId : "-",
         warehouseLabel:
           item.warehouseId != null ? warehouseMap[String(item.warehouseId)] || item.warehouseId : "-",
+        entryUserName: item.entryUserName || userMap[item.entryUser] || "",
+        auditorUserName: item.auditorUserName || userMap[item.auditorUser] || "",
         itemCount: item.items?.length || 0,
       })),
-    [documents, projectMap, warehouseMap],
+    [documents, projectMap, userMap, warehouseMap],
   );
   const selectedDoc = useMemo(
     () => decoratedDocs.find((item) => item.docNumber === selectedDocNumber) || null,
@@ -99,13 +106,14 @@ export default function WarehouseDoc() {
     setLoading(true);
     try {
       const user = await getCurrentUser().catch(() => null);
-      const [docResponse, projectResponse, warehouseResponse, materialResponse, customerResponse] =
+      const [docResponse, projectResponse, warehouseResponse, materialResponse, customerResponse, userResponse] =
         await Promise.all([
           inventoryAPI.getWarehouseDocs(),
           inventoryAPI.getWarehouseDocProjectOptions(),
           inventoryAPI.getWarehouses(),
           inventoryAPI.getWarehouseDocMaterialOptions(),
           inventoryAPI.getWarehouseDocCustomerOptions(),
+          permissionAPI.getUserOptions().catch(() => []),
         ]);
       const docData = normalize(docResponse);
       setCurrentUser(user);
@@ -114,6 +122,7 @@ export default function WarehouseDoc() {
       setWarehouses(normalize(warehouseResponse));
       setMaterials(normalize(materialResponse));
       setCustomerOptions(normalize(customerResponse));
+      setUsers(Array.isArray(userResponse) ? userResponse : normalize(userResponse));
       setSelectedDocNumber((current) =>
         current && docData.some((item) => item.docNumber === current)
           ? current
@@ -170,6 +179,16 @@ export default function WarehouseDoc() {
     }
     await inventoryAPI.deleteWarehouseDoc(docNumber);
     message.success("删除成功");
+    await fetchData();
+  };
+
+  const auditDocument = async (docNumber) => {
+    if (!canAudit) {
+      message.error("没有审核出入库单的权限");
+      return;
+    }
+    await inventoryAPI.auditWarehouseDoc(docNumber);
+    message.success("出入库单已审核");
     await fetchData();
   };
 
@@ -230,10 +249,12 @@ export default function WarehouseDoc() {
     },
     { title: "总金额", dataIndex: "totalAmount", key: "totalAmount", width: 120, render: formatAmount },
     { title: "明细数", dataIndex: "itemCount", key: "itemCount", width: 100 },
+    { title: "录入人", dataIndex: "entryUserName", key: "entryUserName", width: 120, render: (value) => value || "-" },
+    { title: "审核人", dataIndex: "auditorUserName", key: "auditorUserName", width: 120, render: (value) => value || "-" },
     {
       title: "操作",
       key: "action",
-      width: 220,
+      width: 300,
       render: (_, record) => (
         <Space size="small">
           <Button type="link" icon={<FilePdfOutlined />} onClick={() => printDocument(record)}>
@@ -246,6 +267,14 @@ export default function WarehouseDoc() {
             onClick={() => openModal(record)}
           >
             编辑
+          </Button>
+          <Button
+            type="link"
+            icon={<CheckCircleOutlined />}
+            disabled={!canAudit || Boolean(record.auditorUser)}
+            onClick={() => auditDocument(record.docNumber)}
+          >
+            审核
           </Button>
           <Popconfirm
             title="确定删除这张出入库单吗？"
@@ -422,7 +451,8 @@ export default function WarehouseDoc() {
         warehouses={warehouses}
         materials={materials}
         customerOptions={customerOptions}
-        currentUserId={currentUser?.id || null}
+        users={users}
+        canMaintainEntryAudit={canMaintainEntryAudit}
         saving={saving}
         onCancel={closeModal}
         onSubmit={submitDocument}

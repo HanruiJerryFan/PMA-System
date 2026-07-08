@@ -125,6 +125,15 @@
         WHERE uuid = #{uuid}
     </update>
 
+    <update id="updateAuditorByUuid">
+        UPDATE project_list
+        SET
+            auditor_user = #{auditorUser},
+            update_time = NOW(),
+            update_user = #{updateUser}
+        WHERE uuid = #{uuid}
+    </update>
+
     <delete id="deleteByUuid" parameterType="string">
         DELETE FROM project_list
         WHERE uuid = #{uuid}

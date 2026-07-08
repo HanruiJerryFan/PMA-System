@@ -19,6 +19,7 @@ import com.jerry.salesmanagement.service.WarehouseDocumentService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -182,6 +183,7 @@ public class WarehouseDocumentController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyAuthority('inventory.warehouse-doc.entry', 'inventory.manage')")
     public ApiResponse<WarehouseDocument> create(@RequestBody WarehouseDocument warehouseDocument) {
         try {
             return ApiResponse.success(warehouseDocumentService.create(warehouseDocument));
@@ -191,6 +193,7 @@ public class WarehouseDocumentController {
     }
 
     @PutMapping("/{docNumber}")
+    @PreAuthorize("hasAnyAuthority('inventory.warehouse-doc.entry', 'inventory.manage')")
     public ApiResponse<WarehouseDocument> update(
             @PathVariable String docNumber,
             @RequestBody WarehouseDocument warehouseDocument
@@ -203,7 +206,18 @@ public class WarehouseDocumentController {
         }
     }
 
+    @PostMapping("/{docNumber}/audit")
+    @PreAuthorize("hasAnyAuthority('inventory.warehouse-doc.audit', 'inventory.manage')")
+    public ApiResponse<WarehouseDocument> audit(@PathVariable String docNumber) {
+        try {
+            return ApiResponse.success("Warehouse document audited", warehouseDocumentService.audit(docNumber));
+        } catch (Exception e) {
+            return ApiResponse.error("Failed to audit warehouse document: " + e.getMessage());
+        }
+    }
+
     @DeleteMapping("/{docNumber}")
+    @PreAuthorize("hasAnyAuthority('inventory.warehouse-doc.entry', 'inventory.manage')")
     public ApiResponse<Void> delete(@PathVariable String docNumber) {
         try {
             warehouseDocumentService.delete(docNumber);

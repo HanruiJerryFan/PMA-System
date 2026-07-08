@@ -2,6 +2,7 @@ package com.jerry.salesmanagement.mapper;
 
 import com.jerry.salesmanagement.pojo.FinanceVoucher;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 
@@ -13,5 +14,10 @@ public interface FinanceVoucherMapper {
     Integer selectMaxVoucherSequenceByMonthPrefix(String monthPrefix);
     void insert(FinanceVoucher voucher);
     void updateByUuid(FinanceVoucher voucher);
+    void updateAuditorByUuid(
+            @Param("uuid") String uuid,
+            @Param("auditorUser") Long auditorUser,
+            @Param("updatedBy") Long updatedBy
+    );
     void deleteByUuid(String uuid);
 }

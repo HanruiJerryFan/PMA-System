@@ -8,7 +8,9 @@ import com.jerry.salesmanagement.pojo.Customer;
 import com.jerry.salesmanagement.pojo.FinanceVoucher;
 import com.jerry.salesmanagement.pojo.TaxRateDict;
 import com.jerry.salesmanagement.service.CodeSequenceService;
+import com.jerry.salesmanagement.service.CurrentUserService;
 import com.jerry.salesmanagement.service.CustomerService;
+import com.jerry.salesmanagement.service.EntryAuditService;
 import com.jerry.salesmanagement.service.FinanceVoucherService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -72,6 +74,12 @@ public class FinanceVoucherServiceImpl implements FinanceVoucherService {
     @Autowired
     private CustomerService customerService;
 
+    @Autowired
+    private CurrentUserService currentUserService;
+
+    @Autowired
+    private EntryAuditService entryAuditService;
+
     @Override
     public FinanceVoucher getByUuid(String uuid) {
         return mapper.selectByUuid(uuid);
@@ -88,6 +96,9 @@ public class FinanceVoucherServiceImpl implements FinanceVoucherService {
         if (!StringUtils.hasText(voucher.getUuid())) {
             voucher.setUuid(UUID.randomUUID().toString());
         }
+        Long currentUserId = currentUserService.requireCurrentUserId();
+        entryAuditService.applyCreate(voucher);
+        voucher.setCreatedBy(currentUserId);
         if (!StringUtils.hasText(voucher.getVoucherNo())) {
             voucher.setVoucherNo(generateVoucherNo(voucher.getOccurredOn()));
         }
@@ -113,11 +124,25 @@ public class FinanceVoucherServiceImpl implements FinanceVoucherService {
         if (!StringUtils.hasText(voucher.getVoucherNo())) {
             voucher.setVoucherNo(existing.getVoucherNo());
         }
+        entryAuditService.applyUpdate(voucher, existing);
+        voucher.setUpdatedBy(currentUserService.requireCurrentUserId());
         validateVoucher(voucher);
         voucher.setBookedAmount(calculateBookedAmount(voucher));
         mapper.updateByUuid(voucher);
         customerService.touchActivity(voucher.getCounterpartyCustomerId());
-        return voucher;
+        return mapper.selectByUuid(voucher.getUuid());
+    }
+
+    @Override
+    @Transactional
+    public FinanceVoucher audit(String uuid) {
+        FinanceVoucher existing = mapper.selectByUuid(uuid);
+        if (existing == null) {
+            throw new IllegalArgumentException("Finance voucher does not exist");
+        }
+        entryAuditService.applyAudit(existing);
+        mapper.updateAuditorByUuid(uuid, existing.getAuditorUser(), currentUserService.requireCurrentUserId());
+        return mapper.selectByUuid(uuid);
     }
 
     @Override

@@ -7,7 +7,7 @@ import java.util.Date;
 import java.util.List;
 
 @Data
-public class WarehouseDocument {
+public class WarehouseDocument implements EntryAuditable {
     private String docNumber;
     private String docType;
     private String businessCategory;
@@ -20,6 +20,10 @@ public class WarehouseDocument {
     private String contractNumber;
     private Date docDate;
     private Double totalAmount;
+    private Long entryUser;
+    private String entryUserName;
+    private Long auditorUser;
+    private String auditorUserName;
     private String remark;
     private Date createTime;
     private Long createUser;

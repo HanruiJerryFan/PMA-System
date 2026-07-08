@@ -137,6 +137,8 @@ export function buildWarehouseDocumentFormValues(record, fallbackWarehouseId) {
     counterpartyContact: record?.counterpartyContact || "",
     contractNumber: record?.contractNumber || "",
     docDate: record?.docDate ? dayjs(record.docDate) : dayjs(),
+    entryUser: record?.entryUser || undefined,
+    auditorUser: record?.auditorUser || undefined,
     remark: record?.remark || "",
     items: record?.items?.length
       ? record.items.map((item) => ({

@@ -21,6 +21,7 @@ import {
   ArrowDownOutlined,
   ArrowUpOutlined,
   BankOutlined,
+  CheckCircleOutlined,
   ClockCircleOutlined,
   CreditCardOutlined,
   DownloadOutlined,
@@ -34,8 +35,9 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { getCurrentUser } from "../../api/auth";
 import BusinessAttachmentUpload from "../../components/Common/BusinessAttachmentUpload";
 import CRUDTable from "../../components/Common/CRUDTable";
-import { customerAPI, exportAPI, financeAPI, projectAPI } from "../../api/modules";
+import { customerAPI, exportAPI, financeAPI, permissionAPI, projectAPI } from "../../api/modules";
 import { hasAnyAuthority } from "../../utils/authorities";
+import { canMaintainEntryAuditUsers, getUserLabel } from "../../utils/entryAudit";
 import { uploadBusinessAttachments } from "../../utils/attachments";
 import { downloadApiFile, downloadExcel, resolveBlobErrorMessage } from "../../utils/exporters";
 
@@ -158,6 +160,8 @@ function buildVoucherSearchText(voucher) {
     voucher.actualExpenseAmount != null ? formatAmount(voucher.actualExpenseAmount) : "",
     voucher.bookedAmount != null ? formatAmount(voucher.bookedAmount) : "",
     voucher.isCompleted ? "是 已完成 完成" : "否 未完成 未完成",
+    voucher.entryUserName,
+    voucher.auditorUserName,
     voucher.remark,
   ];
 
@@ -487,6 +491,7 @@ export default function FinanceVouchers() {
   const [projects, setProjects] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [taxRates, setTaxRates] = useState([]);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [pendingVoucherAttachmentFiles, setPendingVoucherAttachmentFiles] = useState([]);
@@ -494,6 +499,8 @@ export default function FinanceVouchers() {
   const voucherAttachmentInputRef = useRef(null);
   const canAccessAttachments = hasAnyAuthority(currentUser, ["attachment.access"]);
   const canManageAttachments = hasAnyAuthority(currentUser, ["attachment.manage"]);
+  const canAuditVouchers = hasAnyAuthority(currentUser, ["finance.voucher.audit", "finance.manage"]);
+  const canMaintainEntryAudit = canMaintainEntryAuditUsers(currentUser);
 
   const projectMap = useMemo(
     () => Object.fromEntries(projects.map((item) => [item.uuid, formatProjectOptionLabel(item)])),
@@ -508,6 +515,17 @@ export default function FinanceVouchers() {
           .map((item) => [item.customerName, item.uuid])
       ),
     [customers]
+  );
+
+  const userMap = useMemo(() => Object.fromEntries(users.map((item) => [item.id, getUserLabel(item)])), [users]);
+  const userOptions = useMemo(
+    () =>
+      users.map((item) => (
+        <Option key={item.id} value={item.id}>
+          {getUserLabel(item)}
+        </Option>
+      )),
+    [users]
   );
 
   const activeTaxRates = useMemo(
@@ -558,6 +576,8 @@ export default function FinanceVouchers() {
         const actualExpenseAmountLabel = item.actualExpenseAmount == null ? "-" : formatAmount(item.actualExpenseAmount);
         const bookedAmountLabel = item.bookedAmount == null ? "-" : formatAmount(item.bookedAmount);
         const isCompletedLabel = item.isCompleted ? "已完成" : "未完成";
+        const entryUserName = item.entryUserName || userMap[item.entryUser] || "";
+        const auditorUserName = item.auditorUserName || userMap[item.auditorUser] || "";
 
         const decoratedItem = {
           ...item,
@@ -576,6 +596,8 @@ export default function FinanceVouchers() {
           actualExpenseAmountLabel,
           bookedAmountLabel,
           isCompletedLabel,
+          entryUserName,
+          auditorUserName,
         };
 
         return {
@@ -583,7 +605,7 @@ export default function FinanceVouchers() {
           searchText: buildVoucherSearchText(decoratedItem),
         };
       }),
-    [projectMap, taxRateLabelMap, vouchers]
+    [projectMap, taxRateLabelMap, userMap, vouchers]
   );
 
   const visibleVouchers = useMemo(
@@ -699,11 +721,17 @@ export default function FinanceVouchers() {
     setTaxRates(normalizeApiData(response));
   };
 
+  const fetchUsers = async () => {
+    const response = await permissionAPI.getUserOptions().catch(() => []);
+    setUsers(Array.isArray(response) ? response : normalizeApiData(response));
+  };
+
   useEffect(() => {
     fetchVouchers();
     fetchProjects();
     fetchCustomers();
     fetchTaxRates();
+    fetchUsers();
   }, []);
 
   useEffect(() => {
@@ -749,6 +777,16 @@ export default function FinanceVouchers() {
     await fetchVouchers();
   };
 
+  const handleAudit = async (uuid) => {
+    if (!canAuditVouchers) {
+      message.error("没有审核财务凭证的权限");
+      return;
+    }
+    await financeAPI.auditFinanceVoucher(uuid);
+    message.success("财务凭证已审核");
+    await fetchVouchers();
+  };
+
   const openAttachments = (uuid) => {
     navigate(`/attachment/center?businessType=finance-vouchers&businessUuid=${uuid}`);
   };
@@ -777,6 +815,8 @@ export default function FinanceVouchers() {
         "实际支出",
         "记账金额",
         "是否完成",
+        "录入人",
+        "审核人",
         "备注",
       ],
       exportRows.map((item) => [
@@ -798,6 +838,8 @@ export default function FinanceVouchers() {
         item.actualExpenseAmount ?? "",
         item.bookedAmount ?? "",
         item.isCompleted ? "是" : "否",
+        item.entryUserName || "",
+        item.auditorUserName || "",
         item.remark || "",
       ])
     );
@@ -871,6 +913,8 @@ export default function FinanceVouchers() {
         { header: "支出", align: "right", width: 7 },
         { header: "记账金额", align: "right", width: 7 },
         { header: "完成状态", align: "center", width: 6 },
+        { header: "录入人", align: "center", width: 6 },
+        { header: "审核人", align: "center", width: 6 },
       ],
       rows: exportRows.map((item, index) => [
         index + 1,
@@ -892,6 +936,8 @@ export default function FinanceVouchers() {
         item.actualExpenseAmount ?? "",
         item.bookedAmount ?? "",
         item.isCompleted ? "是" : "否",
+        item.entryUserName || "",
+        item.auditorUserName || "",
       ]),
     };
 
@@ -1021,6 +1067,8 @@ export default function FinanceVouchers() {
             width: 100,
             render: (value) => (value ? <Tag color="success">是</Tag> : <Tag color="warning">否</Tag>),
           },
+          { title: "录入人", dataIndex: "entryUserName", key: "entryUserName", width: 120, render: (value) => value || "-" },
+          { title: "审核人", dataIndex: "auditorUserName", key: "auditorUserName", width: 120, render: (value) => value || "-" },
           { title: "备注", dataIndex: "remark", key: "remark", width: 200 },
         ]}
         dataSource={visibleVouchers}
@@ -1031,14 +1079,27 @@ export default function FinanceVouchers() {
         onDelete={handleDelete}
         onModalCancel={resetPendingVoucherAttachment}
         onModalSuccess={resetPendingVoucherAttachment}
-        rowActions={({ record }) =>
+        rowActions={({ record }) => [
           canAccessAttachments ? (
-            <Button type="link" icon={<LinkOutlined />} onClick={() => openAttachments(record.uuid)} size="small">
+            <Button key="attachments" type="link" icon={<LinkOutlined />} onClick={() => openAttachments(record.uuid)} size="small">
               查看附件
             </Button>
-          ) : null
-        }
+          ) : null,
+          <Button
+            key="audit"
+            type="link"
+            icon={<CheckCircleOutlined />}
+            onClick={() => handleAudit(record.uuid)}
+            disabled={!canAuditVouchers || Boolean(record.auditorUser)}
+            size="small"
+          >
+            审核
+          </Button>,
+        ]}
         rowKey="uuid"
+        createAuthorities={["finance.voucher.entry", "finance.manage"]}
+        updateAuthorities={["finance.voucher.entry", "finance.manage"]}
+        deleteAuthorities={["finance.voucher.entry", "finance.manage"]}
         extraActions={({ filteredData, canExport }) => (
           <>
             <Button
@@ -1186,6 +1247,8 @@ export default function FinanceVouchers() {
           { name: "actualIncomeAmountLabel", label: "实际收入" },
           { name: "actualExpenseAmountLabel", label: "实际支出" },
           { name: "bookedAmountLabel", label: "记账金额" },
+          { name: "entryUserName", label: "录入人" },
+          { name: "auditorUserName", label: "审核人" },
           {
             name: "isCompletedLabel",
             label: "完成状态",
@@ -1220,6 +1283,8 @@ export default function FinanceVouchers() {
           { key: "actualExpenseAmount", label: "实际支出" },
           { key: "bookedAmount", label: "记账金额" },
           { key: "isCompleted", label: "完成状态" },
+          { key: "entryUserName", label: "录入人" },
+          { key: "auditorUserName", label: "审核人" },
           { key: "remark", label: "备注" },
         ]}
         mapRecordToFormValues={(record) => ({
@@ -1229,6 +1294,8 @@ export default function FinanceVouchers() {
             customerNameToUuidMap[record.counterpartyNameSnapshot] ||
             undefined,
           occurredOn: normalizeDateOnlyValue(record.occurredOn),
+          entryUser: record.entryUser || undefined,
+          auditorUser: record.auditorUser || undefined,
         })}
         transformValues={(values) => ({
           ...(() => {
@@ -1247,6 +1314,8 @@ export default function FinanceVouchers() {
             values.taxRate === undefined || values.taxRate === null || values.taxRate === ""
               ? null
               : Number(values.taxRate),
+          entryUser: values.entryUser ?? null,
+          auditorUser: values.auditorUser ?? null,
           ...normalizeDirectionalAmounts(values),
         })}
         formFields={[
@@ -1427,6 +1496,26 @@ export default function FinanceVouchers() {
             rules: [{ required: true, message: "请选择完成状态" }],
             valuePropName: "checked",
             component: <Switch checkedChildren="是" unCheckedChildren="否" />,
+          },
+          {
+            name: "entryUser",
+            label: "录入人",
+            visible: ({ editingRecord }) => Boolean(editingRecord) && canMaintainEntryAudit,
+            component: (
+              <Select placeholder="请选择录入人" allowClear showSearch optionFilterProp="children">
+                {userOptions}
+              </Select>
+            ),
+          },
+          {
+            name: "auditorUser",
+            label: "审核人",
+            visible: ({ editingRecord }) => Boolean(editingRecord) && canMaintainEntryAudit,
+            component: (
+              <Select placeholder="请选择审核人" allowClear showSearch optionFilterProp="children">
+                {userOptions}
+              </Select>
+            ),
           },
           { name: "remark", label: "备注", component: <Input.TextArea rows={3} placeholder="请输入备注" /> },
           {

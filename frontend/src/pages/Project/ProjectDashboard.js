@@ -439,10 +439,16 @@ export default function ProjectDashboard() {
   const listAttachmentInputRef = useRef(null);
 
   const canManageProject = hasAnyAuthority(currentUser, ["project.manage"]);
+  const canEnterProjectList = hasAnyAuthority(currentUser, ["project.list.entry", "project.manage"]);
   const canAccessContract = hasAnyAuthority(currentUser, ["contract.access"]);
   const canManageContract = hasAnyAuthority(currentUser, ["contract.manage"]);
-  const canAccessFinance = hasAnyAuthority(currentUser, ["finance.access"]);
-  const canManageFinance = hasAnyAuthority(currentUser, ["finance.manage"]);
+  const canAccessFinance = hasAnyAuthority(currentUser, [
+    "finance.access",
+    "finance.manage",
+    "finance.voucher.entry",
+    "finance.voucher.audit",
+  ]);
+  const canManageFinance = hasAnyAuthority(currentUser, ["finance.voucher.entry", "finance.manage"]);
   const canAccessAttachment = hasAnyAuthority(currentUser, ["attachment.access"]);
   const canManageAttachment = hasAnyAuthority(currentUser, ["attachment.manage"]);
 
@@ -554,7 +560,12 @@ export default function ProjectDashboard() {
     try {
       const user = await getCurrentUser().catch(() => null);
       const allowContract = hasAnyAuthority(user, ["contract.access"]);
-      const allowFinance = hasAnyAuthority(user, ["finance.access"]);
+      const allowFinance = hasAnyAuthority(user, [
+        "finance.access",
+        "finance.manage",
+        "finance.voucher.entry",
+        "finance.voucher.audit",
+      ]);
       const allowAttachment = hasAnyAuthority(user, ["attachment.access"]);
 
       const [
@@ -704,8 +715,6 @@ export default function ProjectDashboard() {
         listName: values.listName,
         listType: values.listType,
         entryDate: values.entryDate ? values.entryDate.format("YYYY-MM-DD") : null,
-        entryUser: values.entryUser ?? null,
-        auditorUser: values.auditorUser ?? null,
       };
       const created = normalizeResponseData(await projectAPI.createProjectList(listPayload));
       if (pendingListAttachmentFiles.length) {
@@ -1159,14 +1168,13 @@ export default function ProjectDashboard() {
             title="项目清单"
             extra={
               <Space>
-                {canManageProject ? (
+                {canEnterProjectList ? (
                   <Button
                     type="primary"
                     icon={<PlusOutlined />}
                     onClick={() => {
                       listForm.setFieldsValue({
                         listType: "INITIAL_SALES",
-                        entryUser: currentUser?.id || undefined,
                       });
                       setListVisible(true);
                     }}
@@ -1394,24 +1402,6 @@ export default function ProjectDashboard() {
           </Form.Item>
           <Form.Item name="entryDate" label="录入日期">
             <DatePicker style={{ width: "100%" }} />
-          </Form.Item>
-          <Form.Item name="entryUser" label="录入人">
-            <Select placeholder="请选择录入人" allowClear showSearch optionFilterProp="children">
-              {users.map((item) => (
-                <Option key={item.id} value={item.id}>
-                  {item.realName || item.username}
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item name="auditorUser" label="审核人">
-            <Select placeholder="请选择审核人" allowClear showSearch optionFilterProp="children">
-              {users.map((item) => (
-                <Option key={item.id} value={item.id}>
-                  {item.realName || item.username}
-                </Option>
-              ))}
-            </Select>
           </Form.Item>
           <Form.Item label="PDF附件">
             <BusinessAttachmentUpload

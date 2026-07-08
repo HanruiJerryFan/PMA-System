@@ -9,6 +9,7 @@ import com.jerry.salesmanagement.service.ProjectListItemService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -46,6 +47,7 @@ public class ProjectListItemController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyAuthority('project.list.entry', 'project.manage')")
     public ApiResponse<ProjectListItem> create(@RequestBody ProjectListItem item) {
         try {
             return ApiResponse.success("Project list item created successfully", service.create(item));
@@ -55,6 +57,7 @@ public class ProjectListItemController {
     }
 
     @PutMapping("/{uuid}")
+    @PreAuthorize("hasAnyAuthority('project.list.entry', 'project.manage')")
     public ApiResponse<ProjectListItem> update(@PathVariable String uuid, @RequestBody ProjectListItem item) {
         try {
             item.setUuid(uuid);
@@ -65,6 +68,7 @@ public class ProjectListItemController {
     }
 
     @DeleteMapping("/{uuid}")
+    @PreAuthorize("hasAnyAuthority('project.list.entry', 'project.manage')")
     public ApiResponse<Void> delete(@PathVariable String uuid) {
         try {
             service.delete(uuid);
@@ -75,6 +79,7 @@ public class ProjectListItemController {
     }
 
     @PostMapping("/import/{projectListId}")
+    @PreAuthorize("hasAnyAuthority('project.list.entry', 'project.manage')")
     public ApiResponse<ExcelImportResult> importExcel(
             @PathVariable String projectListId,
             @RequestParam("file") MultipartFile file,

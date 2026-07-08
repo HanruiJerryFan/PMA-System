@@ -8,7 +8,7 @@ import java.time.LocalDate;
 import java.util.Date;
 
 @Data
-public class FinanceVoucher {
+public class FinanceVoucher implements EntryAuditable {
     private Long id;
     private String uuid;
     private String voucherNo;
@@ -29,6 +29,10 @@ public class FinanceVoucher {
     private BigDecimal actualExpenseAmount;
     private BigDecimal bookedAmount;
     private Boolean isCompleted;
+    private Long entryUser;
+    private String entryUserName;
+    private Long auditorUser;
+    private String auditorUserName;
     private String remark;
     private Date createdAt;
     private Long createdBy;

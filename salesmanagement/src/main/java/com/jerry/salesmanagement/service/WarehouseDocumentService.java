@@ -13,5 +13,7 @@ public interface WarehouseDocumentService {
 
     WarehouseDocument update(WarehouseDocument warehouseDocument);
 
+    WarehouseDocument audit(String docNumber);
+
     void delete(String docNumber);
 }

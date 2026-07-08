@@ -348,6 +348,8 @@ CREATE TABLE `finance_voucher` (
   `actual_expense_amount` decimal(18,2) DEFAULT NULL,
   `booked_amount` decimal(18,2) NOT NULL,
   `is_completed` tinyint(1) NOT NULL DEFAULT '1',
+  `entry_user` bigint(20) DEFAULT NULL,
+  `auditor_user` bigint(20) DEFAULT NULL,
   `remark` text,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `created_by` bigint(20) DEFAULT NULL,
@@ -358,7 +360,9 @@ CREATE TABLE `finance_voucher` (
   UNIQUE KEY `voucher_no` (`voucher_no`),
   KEY `idx_finance_voucher_project_id` (`project_id`),
   KEY `idx_finance_voucher_counterparty_customer_id` (`counterparty_customer_id`),
-  KEY `idx_finance_voucher_invoice_status` (`invoice_status`)
+  KEY `idx_finance_voucher_invoice_status` (`invoice_status`),
+  KEY `idx_finance_voucher_entry_user` (`entry_user`),
+  KEY `idx_finance_voucher_auditor_user` (`auditor_user`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!50003 SET @saved_cs_client      = @@character_set_client */ ;
@@ -1026,12 +1030,16 @@ CREATE TABLE `warehouse_doc` (
   `handler_name` varchar(100) DEFAULT NULL,
   `source_ref_type` varchar(100) DEFAULT NULL,
   `source_ref_id` varchar(100) DEFAULT NULL,
+  `entry_user` bigint(20) DEFAULT NULL,
+  `auditor_user` bigint(20) DEFAULT NULL,
   `remark` text,
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `create_user` bigint(20) DEFAULT NULL,
   `update_time` datetime DEFAULT NULL,
   `update_user` bigint(20) DEFAULT NULL,
-  PRIMARY KEY (`doc_number`)
+  PRIMARY KEY (`doc_number`),
+  KEY `idx_warehouse_doc_entry_user` (`entry_user`),
+  KEY `idx_warehouse_doc_auditor_user` (`auditor_user`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

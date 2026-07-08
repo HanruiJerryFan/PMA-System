@@ -17,7 +17,9 @@ import com.jerry.salesmanagement.pojo.ProductBrand;
 import com.jerry.salesmanagement.pojo.WarehouseDocument;
 import com.jerry.salesmanagement.pojo.WarehouseDocumentItem;
 import com.jerry.salesmanagement.service.CodeSequenceService;
+import com.jerry.salesmanagement.service.CurrentUserService;
 import com.jerry.salesmanagement.service.CustomerService;
+import com.jerry.salesmanagement.service.EntryAuditService;
 import com.jerry.salesmanagement.service.InventoryTransactionService;
 import com.jerry.salesmanagement.service.WarehouseDocumentService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -83,6 +85,12 @@ public class WarehouseDocumentServiceImpl implements WarehouseDocumentService {
     @Autowired
     private CustomerService customerService;
 
+    @Autowired
+    private CurrentUserService currentUserService;
+
+    @Autowired
+    private EntryAuditService entryAuditService;
+
     @Override
     public List<WarehouseDocument> getAll() {
         List<WarehouseDocument> documents = warehouseDocumentMapper.selectAll();
@@ -100,6 +108,9 @@ public class WarehouseDocumentServiceImpl implements WarehouseDocumentService {
     @Override
     @Transactional
     public WarehouseDocument create(WarehouseDocument warehouseDocument) {
+        Long currentUserId = currentUserService.requireCurrentUserId();
+        entryAuditService.applyCreate(warehouseDocument);
+        warehouseDocument.setCreateUser(currentUserId);
         validateAndHydrate(warehouseDocument);
         warehouseDocumentMapper.insert(warehouseDocument);
         persistItemsAndTransactions(warehouseDocument);
@@ -110,9 +121,12 @@ public class WarehouseDocumentServiceImpl implements WarehouseDocumentService {
     @Override
     @Transactional
     public WarehouseDocument update(WarehouseDocument warehouseDocument) {
-        if (warehouseDocumentMapper.selectByDocNumber(warehouseDocument.getDocNumber()) == null) {
+        WarehouseDocument existing = warehouseDocumentMapper.selectByDocNumber(warehouseDocument.getDocNumber());
+        if (existing == null) {
             throw new IllegalArgumentException("Warehouse document does not exist");
         }
+        entryAuditService.applyUpdate(warehouseDocument, existing);
+        warehouseDocument.setUpdateUser(currentUserService.requireCurrentUserId());
         validateAndHydrate(warehouseDocument);
         warehouseDocumentMapper.update(warehouseDocument);
         warehouseDocumentItemMapper.deleteByDocNumber(warehouseDocument.getDocNumber());
@@ -120,6 +134,22 @@ public class WarehouseDocumentServiceImpl implements WarehouseDocumentService {
         persistItemsAndTransactions(warehouseDocument);
         customerService.touchActivity(warehouseDocument.getCounterpartyCustomerId());
         return getByDocNumber(warehouseDocument.getDocNumber());
+    }
+
+    @Override
+    @Transactional
+    public WarehouseDocument audit(String docNumber) {
+        WarehouseDocument existing = warehouseDocumentMapper.selectByDocNumber(docNumber);
+        if (existing == null) {
+            throw new IllegalArgumentException("Warehouse document does not exist");
+        }
+        entryAuditService.applyAudit(existing);
+        warehouseDocumentMapper.updateAuditorByDocNumber(
+                docNumber,
+                existing.getAuditorUser(),
+                currentUserService.requireCurrentUserId()
+        );
+        return getByDocNumber(docNumber);
     }
 
     @Override

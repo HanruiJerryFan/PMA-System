@@ -5,6 +5,7 @@ import com.jerry.salesmanagement.pojo.FinanceVoucher;
 import com.jerry.salesmanagement.service.AuditTrailService;
 import com.jerry.salesmanagement.service.FinanceVoucherService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -49,6 +50,7 @@ public class FinanceVoucherController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyAuthority('finance.voucher.entry', 'finance.manage')")
     public ApiResponse<FinanceVoucher> create(@RequestBody FinanceVoucher voucher) {
         try {
             FinanceVoucher created = service.create(voucher);
@@ -60,6 +62,7 @@ public class FinanceVoucherController {
     }
 
     @PutMapping("/{uuid}")
+    @PreAuthorize("hasAnyAuthority('finance.voucher.entry', 'finance.manage')")
     public ApiResponse<FinanceVoucher> update(@PathVariable String uuid, @RequestBody FinanceVoucher voucher) {
         try {
             voucher.setUuid(uuid);
@@ -71,7 +74,20 @@ public class FinanceVoucherController {
         }
     }
 
+    @PostMapping("/{uuid}/audit")
+    @PreAuthorize("hasAnyAuthority('finance.voucher.audit', 'finance.manage')")
+    public ApiResponse<FinanceVoucher> audit(@PathVariable String uuid) {
+        try {
+            FinanceVoucher audited = service.audit(uuid);
+            auditTrailService.record("finance-vouchers", "AUDIT", "finance-vouchers", uuid, "Audited finance voucher");
+            return ApiResponse.success("Finance voucher audited", audited);
+        } catch (Exception e) {
+            return ApiResponse.error("Failed to audit finance voucher: " + e.getMessage());
+        }
+    }
+
     @DeleteMapping("/{uuid}")
+    @PreAuthorize("hasAnyAuthority('finance.voucher.entry', 'finance.manage')")
     public ApiResponse<Void> delete(@PathVariable String uuid) {
         try {
             service.delete(uuid);

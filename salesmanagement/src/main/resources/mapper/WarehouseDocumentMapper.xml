@@ -6,49 +6,61 @@
 
     <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.WarehouseDocument">
         SELECT
-            doc_number AS docNumber,
-            doc_type AS docType,
-            business_category AS businessCategory,
-            project_id AS projectId,
-            warehouse_id AS warehouseId,
-            counterparty_customer_id AS counterpartyCustomerId,
-            counterparty_name AS counterpartyName,
-            counterparty_address AS counterpartyAddress,
-            counterparty_contact AS counterpartyContact,
-            contract_number AS contractNumber,
-            doc_date AS docDate,
-            total_amount AS totalAmount,
-            remark,
-            create_time AS createTime,
-            create_user AS createUser,
-            update_time AS updateTime,
-            update_user AS updateUser
-        FROM warehouse_doc
-        ORDER BY doc_date DESC, doc_number DESC
+            wd.doc_number AS docNumber,
+            wd.doc_type AS docType,
+            wd.business_category AS businessCategory,
+            wd.project_id AS projectId,
+            wd.warehouse_id AS warehouseId,
+            wd.counterparty_customer_id AS counterpartyCustomerId,
+            wd.counterparty_name AS counterpartyName,
+            wd.counterparty_address AS counterpartyAddress,
+            wd.counterparty_contact AS counterpartyContact,
+            wd.contract_number AS contractNumber,
+            wd.doc_date AS docDate,
+            wd.total_amount AS totalAmount,
+            wd.entry_user AS entryUser,
+            COALESCE(NULLIF(eu.real_name, ''), eu.username) AS entryUserName,
+            wd.auditor_user AS auditorUser,
+            COALESCE(NULLIF(au.real_name, ''), au.username) AS auditorUserName,
+            wd.remark,
+            wd.create_time AS createTime,
+            wd.create_user AS createUser,
+            wd.update_time AS updateTime,
+            wd.update_user AS updateUser
+        FROM warehouse_doc wd
+        LEFT JOIN sys_user eu ON wd.entry_user = eu.id
+        LEFT JOIN sys_user au ON wd.auditor_user = au.id
+        ORDER BY wd.doc_date DESC, wd.doc_number DESC
     </select>
 
     <select id="selectByDocNumber" parameterType="string"
             resultType="com.jerry.salesmanagement.pojo.WarehouseDocument">
         SELECT
-            doc_number AS docNumber,
-            doc_type AS docType,
-            business_category AS businessCategory,
-            project_id AS projectId,
-            warehouse_id AS warehouseId,
-            counterparty_customer_id AS counterpartyCustomerId,
-            counterparty_name AS counterpartyName,
-            counterparty_address AS counterpartyAddress,
-            counterparty_contact AS counterpartyContact,
-            contract_number AS contractNumber,
-            doc_date AS docDate,
-            total_amount AS totalAmount,
-            remark,
-            create_time AS createTime,
-            create_user AS createUser,
-            update_time AS updateTime,
-            update_user AS updateUser
-        FROM warehouse_doc
-        WHERE doc_number = #{docNumber}
+            wd.doc_number AS docNumber,
+            wd.doc_type AS docType,
+            wd.business_category AS businessCategory,
+            wd.project_id AS projectId,
+            wd.warehouse_id AS warehouseId,
+            wd.counterparty_customer_id AS counterpartyCustomerId,
+            wd.counterparty_name AS counterpartyName,
+            wd.counterparty_address AS counterpartyAddress,
+            wd.counterparty_contact AS counterpartyContact,
+            wd.contract_number AS contractNumber,
+            wd.doc_date AS docDate,
+            wd.total_amount AS totalAmount,
+            wd.entry_user AS entryUser,
+            COALESCE(NULLIF(eu.real_name, ''), eu.username) AS entryUserName,
+            wd.auditor_user AS auditorUser,
+            COALESCE(NULLIF(au.real_name, ''), au.username) AS auditorUserName,
+            wd.remark,
+            wd.create_time AS createTime,
+            wd.create_user AS createUser,
+            wd.update_time AS updateTime,
+            wd.update_user AS updateUser
+        FROM warehouse_doc wd
+        LEFT JOIN sys_user eu ON wd.entry_user = eu.id
+        LEFT JOIN sys_user au ON wd.auditor_user = au.id
+        WHERE wd.doc_number = #{docNumber}
     </select>
 
     <select id="selectMaxAnnualSequence" parameterType="string" resultType="java.lang.Integer">
@@ -71,6 +83,8 @@
             contract_number,
             doc_date,
             total_amount,
+            entry_user,
+            auditor_user,
             remark,
             create_time,
             create_user
@@ -87,6 +101,8 @@
             #{contractNumber},
             #{docDate},
             #{totalAmount},
+            #{entryUser},
+            #{auditorUser},
             #{remark},
             NOW(),
             #{createUser}
@@ -107,10 +123,21 @@
             contract_number = #{contractNumber},
             doc_date = #{docDate},
             total_amount = #{totalAmount},
+            entry_user = #{entryUser},
+            auditor_user = #{auditorUser},
             remark = #{remark},
             update_time = NOW(),
             update_user = #{updateUser}
         </set>
+        WHERE doc_number = #{docNumber}
+    </update>
+
+    <update id="updateAuditorByDocNumber">
+        UPDATE warehouse_doc
+        SET
+            auditor_user = #{auditorUser},
+            update_time = NOW(),
+            update_user = #{updateUser}
         WHERE doc_number = #{docNumber}
     </update>
 

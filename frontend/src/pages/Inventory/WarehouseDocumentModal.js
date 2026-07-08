@@ -26,6 +26,7 @@ import {
   formatAmount,
   materialBrand,
 } from "./warehouseDocumentUtils";
+import { getUserLabel } from "../../utils/entryAudit";
 
 const { Text } = Typography;
 
@@ -179,7 +180,8 @@ export default function WarehouseDocumentModal({
   warehouses,
   materials,
   customerOptions,
-  currentUserId,
+  users = [],
+  canMaintainEntryAudit = false,
   saving,
   onCancel,
   onSubmit,
@@ -249,6 +251,15 @@ export default function WarehouseDocumentModal({
         })),
     [materials],
   );
+  const userOptions = useMemo(
+    () =>
+      users.map((item) => (
+        <Select.Option key={item.id} value={item.id}>
+          {getUserLabel(item)}
+        </Select.Option>
+      )),
+    [users],
+  );
   const totals = useMemo(
     () =>
       (watchedItems ?? []).reduce(
@@ -309,8 +320,6 @@ export default function WarehouseDocumentModal({
       contractNumber: values.contractNumber || null,
       docDate: values.docDate ? values.docDate.toISOString() : null,
       remark: values.remark || null,
-      createUser: initialDocument?.createUser || currentUserId || null,
-      updateUser: currentUserId || null,
       items: (values.items || [])
         .filter((item) => item?.materialId && item?.quantity)
         .map((item) => ({
@@ -323,6 +332,10 @@ export default function WarehouseDocumentModal({
           remark: item.remark || null,
         })),
     };
+    if (initialDocument && canMaintainEntryAudit) {
+      payload.entryUser = values.entryUser ?? null;
+      payload.auditorUser = values.auditorUser ?? null;
+    }
     await onSubmit(payload, initialDocument);
   };
 
@@ -487,6 +500,24 @@ export default function WarehouseDocumentModal({
               <DatePicker style={{ width: "100%" }} />
             </Form.Item>
           </Col>
+          {initialDocument && canMaintainEntryAudit ? (
+            <>
+              <Col xs={24} md={8}>
+                <Form.Item name="entryUser" label="录入人">
+                  <Select placeholder="请选择录入人" allowClear showSearch optionFilterProp="children">
+                    {userOptions}
+                  </Select>
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={8}>
+                <Form.Item name="auditorUser" label="审核人">
+                  <Select placeholder="请选择审核人" allowClear showSearch optionFilterProp="children">
+                    {userOptions}
+                  </Select>
+                </Form.Item>
+              </Col>
+            </>
+          ) : null}
           <Col xs={24} md={8}>
             <Form.Item name="remark" label="整单备注">
               <Input placeholder="请输入整单备注" />

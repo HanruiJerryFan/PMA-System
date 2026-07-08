@@ -9,5 +9,6 @@ public interface FinanceVoucherService {
     List<FinanceVoucher> getAll();
     FinanceVoucher create(FinanceVoucher voucher);
     FinanceVoucher update(FinanceVoucher voucher);
+    FinanceVoucher audit(String uuid);
     void delete(String uuid);
 }

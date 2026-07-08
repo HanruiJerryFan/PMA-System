@@ -5,7 +5,7 @@ import lombok.Data;
 import java.util.Date;
 
 @Data
-public class ProjectList {
+public class ProjectList implements EntryAuditable {
     private Long id;
     private String uuid;
     private String projectId;
