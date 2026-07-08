@@ -1,4 +1,6 @@
 -- Add shared entry/auditor support for project lists, warehouse documents, and finance vouchers.
+SET NAMES utf8mb4;
+
 SET @schema_name = DATABASE();
 
 SET @project_list_entry_column_exists = (
