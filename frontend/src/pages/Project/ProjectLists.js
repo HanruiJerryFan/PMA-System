@@ -35,7 +35,7 @@ import {
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getCurrentUser } from "../../api/auth";
 import BusinessAttachmentUpload from "../../components/Common/BusinessAttachmentUpload";
-import { exportAPI, productAPI, projectAPI } from "../../api/modules";
+import { exportAPI, permissionAPI, productAPI, projectAPI } from "../../api/modules";
 import { hasAnyAuthority } from "../../utils/authorities";
 import { resolvePagePermissions } from "../../utils/pagePermissions";
 import { uploadBusinessAttachments } from "../../utils/attachments";
@@ -70,6 +70,10 @@ function getUnitPriceLabel(listType) {
   return isProcurementListType(listType) ? "采购价格" : "销售价格";
 }
 
+function getUserLabel(user) {
+  return user?.realName || user?.username || (user?.id ? `用户${user.id}` : "");
+}
+
 function formatAmount(value) {
   if (value == null || value === "") return "-";
   return Number(value).toFixed(2);
@@ -96,6 +100,7 @@ export default function ProjectLists() {
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
   const [brands, setBrands] = useState([]);
+  const [users, setUsers] = useState([]);
   const [selectedListUuid, setSelectedListUuid] = useState(null);
   const [loading, setLoading] = useState(false);
   const [itemsLoading, setItemsLoading] = useState(false);
@@ -131,6 +136,16 @@ export default function ProjectLists() {
   const projectMap = useMemo(() => Object.fromEntries(projects.map((item) => [item.uuid, item])), [projects]);
   const productMap = useMemo(() => Object.fromEntries(products.map((item) => [item.uuid, item])), [products]);
   const brandMap = useMemo(() => Object.fromEntries(brands.map((item) => [item.id, item.name])), [brands]);
+  const userMap = useMemo(() => Object.fromEntries(users.map((item) => [item.id, getUserLabel(item)])), [users]);
+  const userOptions = useMemo(
+    () =>
+      users.map((item) => (
+        <Option key={item.id} value={item.id}>
+          {getUserLabel(item)}
+        </Option>
+      )),
+    [users]
+  );
   const activeCategories = useMemo(() => categories.filter((item) => item.isActive !== false), [categories]);
   const activeSubcategories = useMemo(() => subcategories.filter((item) => item.isActive !== false), [subcategories]);
   const currentProject = useMemo(() => (projectUuidFilter ? projectMap[projectUuidFilter] || null : null), [projectMap, projectUuidFilter]);
@@ -154,7 +169,9 @@ export default function ProjectLists() {
     ...item,
     projectLabel: projectMap[item.projectId]?.projectName || item.projectId,
     listTypeLabel: getListTypeLabel(item.listType),
-  })), [projectLists, projectMap]);
+    entryUserName: item.entryUserName || userMap[item.entryUser] || "",
+    auditorUserName: item.auditorUserName || userMap[item.auditorUser] || "",
+  })), [projectLists, projectMap, userMap]);
 
   const selectedList = useMemo(() => decoratedLists.find((item) => item.uuid === selectedListUuid) || null, [decoratedLists, selectedListUuid]);
   const selectedUnitPriceLabel = useMemo(() => getUnitPriceLabel(selectedList?.listType), [selectedList?.listType]);
@@ -188,18 +205,20 @@ export default function ProjectLists() {
   }, [projectUuidFilter]);
 
   const fetchOptions = useCallback(async () => {
-    const [projectResponse, productResponse, categoryResponse, subcategoryResponse, brandResponse] = await Promise.all([
+    const [projectResponse, productResponse, categoryResponse, subcategoryResponse, brandResponse, userResponse] = await Promise.all([
       projectAPI.getProjectOptions(),
       productAPI.getProductOptions(),
       productAPI.getProductCategoryOptions(),
       productAPI.getProductSubcategoryOptions(),
       productAPI.getProductBrandOptions(),
+      permissionAPI.getUserOptions().catch(() => []),
     ]);
     setProjects(normalizeResponseData(projectResponse));
     setProducts(normalizeResponseData(productResponse));
     setCategories(normalizeResponseData(categoryResponse));
     setSubcategories(normalizeResponseData(subcategoryResponse));
     setBrands(normalizeResponseData(brandResponse));
+    setUsers(Array.isArray(userResponse) ? userResponse : normalizeResponseData(userResponse));
   }, []);
 
   const fetchItems = useCallback(async (projectListId) => {
@@ -238,6 +257,8 @@ export default function ProjectLists() {
       listName: record?.listName || "",
       listType: record?.listType || "INITIAL_SALES",
       entryDate: record?.entryDate ? dayjs(record.entryDate) : null,
+      entryUser: record ? record.entryUser || undefined : currentUser?.id || undefined,
+      auditorUser: record ? record.auditorUser || undefined : undefined,
     });
     setListModalVisible(true);
   };
@@ -267,6 +288,8 @@ export default function ProjectLists() {
         listName: values.listName,
         listType: values.listType,
         entryDate: values.entryDate ? values.entryDate.format("YYYY-MM-DD") : null,
+        entryUser: values.entryUser ?? null,
+        auditorUser: values.auditorUser ?? null,
         pdfAttachmentId: editingList?.pdfAttachmentId || null,
       };
       if (editingList) {
@@ -464,6 +487,8 @@ export default function ProjectLists() {
         { label: "客户", value: selectedList.customerName || "-" },
         { label: "清单类型", value: selectedList.listTypeLabel || "-" },
         { label: "录入日期", value: selectedList.entryDate ? dayjs(selectedList.entryDate).format("YYYY-MM-DD") : "-" },
+        { label: "录入人", value: selectedList.entryUserName || "-" },
+        { label: "审核人", value: selectedList.auditorUserName || "-" },
       ],
       summaries: [{ label: "合计金额", value: formatAmount(totalAmount) }],
       columns: [
@@ -544,6 +569,8 @@ export default function ProjectLists() {
     { title: "清单类型", dataIndex: "listTypeLabel", key: "listTypeLabel", width: 140, render: (value, record) => <Tag color={record.listType === "INITIAL_SALES" ? "blue" : record.listType === "PROCUREMENT" ? "green" : "orange"}>{value}</Tag> },
     { title: "客户", dataIndex: "customerName", key: "customerName", width: 220 },
     { title: "录入日期", dataIndex: "entryDate", key: "entryDate", width: 120, render: (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "-") },
+    { title: "录入人", dataIndex: "entryUserName", key: "entryUserName", width: 120, render: (value) => value || "-" },
+    { title: "审核人", dataIndex: "auditorUserName", key: "auditorUserName", width: 120, render: (value) => value || "-" },
     {
       title: "PDF附件",
       dataIndex: "pdfAttachmentId",
@@ -661,6 +688,8 @@ export default function ProjectLists() {
                 <Descriptions.Item label="清单名称">{selectedList?.listName || "-"}</Descriptions.Item>
                 <Descriptions.Item label="清单类型">{selectedList?.listTypeLabel || "-"}</Descriptions.Item>
                 <Descriptions.Item label="录入日期">{selectedList?.entryDate ? dayjs(selectedList.entryDate).format("YYYY-MM-DD") : "-"}</Descriptions.Item>
+                <Descriptions.Item label="录入人">{selectedList?.entryUserName || "-"}</Descriptions.Item>
+                <Descriptions.Item label="审核人">{selectedList?.auditorUserName || "-"}</Descriptions.Item>
                 <Descriptions.Item label="客户">{selectedList?.customerName || "-"}</Descriptions.Item>
                 <Descriptions.Item label="附件状态">{selectedListAttachmentStatus}</Descriptions.Item>
                 <Descriptions.Item label="当前明细数">{listItems.length}</Descriptions.Item>
@@ -685,6 +714,16 @@ export default function ProjectLists() {
               <Select>{LIST_TYPE_OPTIONS.map((item) => <Option key={item.value} value={item.value}>{item.label}</Option>)}</Select>
             </Form.Item>
             <Form.Item name="entryDate" label="录入日期"><DatePicker style={{ width: "100%" }} /></Form.Item>
+            <Form.Item name="entryUser" label="录入人">
+              <Select placeholder="请选择录入人" allowClear showSearch optionFilterProp="children">
+                {userOptions}
+              </Select>
+            </Form.Item>
+            <Form.Item name="auditorUser" label="审核人">
+              <Select placeholder="请选择审核人" allowClear showSearch optionFilterProp="children">
+                {userOptions}
+              </Select>
+            </Form.Item>
             <Form.Item label="PDF附件">
               <BusinessAttachmentUpload
                 title="PDF附件"

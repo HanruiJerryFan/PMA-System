@@ -13,6 +13,10 @@
             pl.list_type AS listType,
             c.customer_name AS customerName,
             pl.entry_date AS entryDate,
+            pl.entry_user AS entryUser,
+            COALESCE(NULLIF(eu.real_name, ''), eu.username) AS entryUserName,
+            pl.auditor_user AS auditorUser,
+            COALESCE(NULLIF(au.real_name, ''), au.username) AS auditorUserName,
             pl.pdf_attachment_id AS pdfAttachmentId,
             pl.create_time AS createTime,
             pl.create_user AS createUser,
@@ -21,6 +25,8 @@
         FROM project_list pl
         LEFT JOIN project_basic_info p ON pl.project_id = p.uuid
         LEFT JOIN customer_info c ON p.customer_id = c.uuid
+        LEFT JOIN sys_user eu ON pl.entry_user = eu.id
+        LEFT JOIN sys_user au ON pl.auditor_user = au.id
         WHERE pl.uuid = #{uuid}
     </select>
 
@@ -33,6 +39,10 @@
             pl.list_type AS listType,
             c.customer_name AS customerName,
             pl.entry_date AS entryDate,
+            pl.entry_user AS entryUser,
+            COALESCE(NULLIF(eu.real_name, ''), eu.username) AS entryUserName,
+            pl.auditor_user AS auditorUser,
+            COALESCE(NULLIF(au.real_name, ''), au.username) AS auditorUserName,
             pl.pdf_attachment_id AS pdfAttachmentId,
             pl.create_time AS createTime,
             pl.create_user AS createUser,
@@ -41,6 +51,8 @@
         FROM project_list pl
         LEFT JOIN project_basic_info p ON pl.project_id = p.uuid
         LEFT JOIN customer_info c ON p.customer_id = c.uuid
+        LEFT JOIN sys_user eu ON pl.entry_user = eu.id
+        LEFT JOIN sys_user au ON pl.auditor_user = au.id
         ORDER BY pl.entry_date DESC, pl.update_time DESC, pl.create_time DESC
     </select>
 
@@ -53,6 +65,10 @@
             pl.list_type AS listType,
             c.customer_name AS customerName,
             pl.entry_date AS entryDate,
+            pl.entry_user AS entryUser,
+            COALESCE(NULLIF(eu.real_name, ''), eu.username) AS entryUserName,
+            pl.auditor_user AS auditorUser,
+            COALESCE(NULLIF(au.real_name, ''), au.username) AS auditorUserName,
             pl.pdf_attachment_id AS pdfAttachmentId,
             pl.create_time AS createTime,
             pl.create_user AS createUser,
@@ -61,6 +77,8 @@
         FROM project_list pl
         LEFT JOIN project_basic_info p ON pl.project_id = p.uuid
         LEFT JOIN customer_info c ON p.customer_id = c.uuid
+        LEFT JOIN sys_user eu ON pl.entry_user = eu.id
+        LEFT JOIN sys_user au ON pl.auditor_user = au.id
         WHERE pl.project_id = #{projectId}
         ORDER BY pl.entry_date DESC, pl.update_time DESC, pl.create_time DESC
     </select>
@@ -72,6 +90,8 @@
             list_name,
             list_type,
             entry_date,
+            entry_user,
+            auditor_user,
             pdf_attachment_id,
             create_time,
             create_user
@@ -81,6 +101,8 @@
             #{listName},
             #{listType},
             #{entryDate},
+            #{entryUser},
+            #{auditorUser},
             #{pdfAttachmentId},
             NOW(),
             #{createUser}
@@ -94,6 +116,8 @@
             <if test="listName != null">list_name = #{listName},</if>
             <if test="listType != null">list_type = #{listType},</if>
             entry_date = #{entryDate},
+            entry_user = #{entryUser},
+            auditor_user = #{auditorUser},
             <if test="pdfAttachmentId != null">pdf_attachment_id = #{pdfAttachmentId},</if>
             update_time = NOW(),
             update_user = #{updateUser}

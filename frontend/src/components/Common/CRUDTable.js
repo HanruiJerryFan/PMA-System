@@ -26,6 +26,13 @@ function resolveDefaultFormValues(formFields, editingRecord) {
   }, {});
 }
 
+function hasSearchValue(value) {
+  if (Array.isArray(value)) {
+    return value.some((item) => item !== undefined && item !== null && item !== "");
+  }
+  return value !== undefined && value !== null && value !== "";
+}
+
 export default function CRUDTable({
   title,
   columns,
@@ -197,10 +204,15 @@ export default function CRUDTable({
   };
 
   const handleSearch = (values) => {
+    const searchFieldMap = Object.fromEntries(normalizedSearchFields.map((field) => [field.name, field]));
     const filtered = dataSource.filter((item) =>
       Object.entries(values).every(([key, value]) => {
-        if (!value) {
+        if (!hasSearchValue(value)) {
           return true;
+        }
+        const searchField = searchFieldMap[key];
+        if (typeof searchField?.filter === "function") {
+          return searchField.filter(item, value, values);
         }
         return String(item?.[key] ?? "")
           .toLowerCase()

@@ -7,8 +7,11 @@
 .classpath
 .settings/
 
-# Root gradle
+# Gradle / build output
 .gradle-user/
+.gradle/
+**/.gradle/
+salesmanagement/build/
 
 # OS
 .DS_Store

@@ -94,6 +94,10 @@ public class ProjectListServiceImpl implements ProjectListService {
             source.setListName(list.getListName());
             source.setListType(list.getListType());
             source.setEntryDate(list.getEntryDate());
+            source.setEntryUser(list.getEntryUser());
+            source.setEntryUserName(list.getEntryUserName());
+            source.setAuditorUser(list.getAuditorUser());
+            source.setAuditorUserName(list.getAuditorUserName());
             view.getSourceLists().add(source);
         }
 

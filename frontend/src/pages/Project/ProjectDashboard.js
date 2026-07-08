@@ -486,7 +486,17 @@ export default function ProjectDashboard() {
   );
 
 
-  const visibleLists = useMemo(() => projectLists.filter((item) => item.projectId === projectUuid), [projectLists, projectUuid]);
+  const visibleLists = useMemo(
+    () =>
+      projectLists
+        .filter((item) => item.projectId === projectUuid)
+        .map((item) => ({
+          ...item,
+          entryUserName: item.entryUserName || userMap[item.entryUser] || "",
+          auditorUserName: item.auditorUserName || userMap[item.auditorUser] || "",
+        })),
+    [projectLists, projectUuid, userMap]
+  );
   const visibleContracts = useMemo(() => contracts.filter((item) => item.projectBasicInfoId === projectUuid), [contracts, projectUuid]);
   const visibleVouchers = useMemo(
     () =>
@@ -694,6 +704,8 @@ export default function ProjectDashboard() {
         listName: values.listName,
         listType: values.listType,
         entryDate: values.entryDate ? values.entryDate.format("YYYY-MM-DD") : null,
+        entryUser: values.entryUser ?? null,
+        auditorUser: values.auditorUser ?? null,
       };
       const created = normalizeResponseData(await projectAPI.createProjectList(listPayload));
       if (pendingListAttachmentFiles.length) {
@@ -789,10 +801,12 @@ export default function ProjectDashboard() {
   };
 
   const listColumns = [
-    { title: "清单名称", dataIndex: "listName", key: "listName" },
-    { title: "清单类型", dataIndex: "listType", key: "listType", render: getListTypeLabel },
-    { title: "录入日期", dataIndex: "entryDate", key: "entryDate", render: (value) => formatDate(value) },
-    { title: "创建时间", dataIndex: "createTime", key: "createTime", render: (value) => formatDate(value, "YYYY-MM-DD HH:mm") },
+    { title: "清单名称", dataIndex: "listName", key: "listName", width: 160 },
+    { title: "清单类型", dataIndex: "listType", key: "listType", width: 120, render: getListTypeLabel },
+    { title: "录入日期", dataIndex: "entryDate", key: "entryDate", width: 120, render: (value) => formatDate(value) },
+    { title: "录入人", dataIndex: "entryUserName", key: "entryUserName", width: 120, render: (value) => value || "-" },
+    { title: "审核人", dataIndex: "auditorUserName", key: "auditorUserName", width: 120, render: (value) => value || "-" },
+    { title: "创建时间", dataIndex: "createTime", key: "createTime", width: 160, render: (value) => formatDate(value, "YYYY-MM-DD HH:mm") },
   ];
 
   const contractColumns = [
@@ -1146,7 +1160,17 @@ export default function ProjectDashboard() {
             extra={
               <Space>
                 {canManageProject ? (
-                  <Button type="primary" icon={<PlusOutlined />} onClick={() => setListVisible(true)}>
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => {
+                      listForm.setFieldsValue({
+                        listType: "INITIAL_SALES",
+                        entryUser: currentUser?.id || undefined,
+                      });
+                      setListVisible(true);
+                    }}
+                  >
                     快速新增
                   </Button>
                 ) : null}
@@ -1166,6 +1190,7 @@ export default function ProjectDashboard() {
               columns={listColumns}
               dataSource={visibleLists.slice(0, 5)}
               locale={{ emptyText: "暂无项目清单" }}
+              scroll={{ x: "max-content" }}
               onRow={(record) => ({
                 onClick: () => openProjectListDashboard(record),
                 style: { cursor: "pointer" },
@@ -1369,6 +1394,24 @@ export default function ProjectDashboard() {
           </Form.Item>
           <Form.Item name="entryDate" label="录入日期">
             <DatePicker style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item name="entryUser" label="录入人">
+            <Select placeholder="请选择录入人" allowClear showSearch optionFilterProp="children">
+              {users.map((item) => (
+                <Option key={item.id} value={item.id}>
+                  {item.realName || item.username}
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+          <Form.Item name="auditorUser" label="审核人">
+            <Select placeholder="请选择审核人" allowClear showSearch optionFilterProp="children">
+              {users.map((item) => (
+                <Option key={item.id} value={item.id}>
+                  {item.realName || item.username}
+                </Option>
+              ))}
+            </Select>
           </Form.Item>
           <Form.Item label="PDF附件">
             <BusinessAttachmentUpload

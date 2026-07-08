@@ -10,4 +10,8 @@ public class ProjectListAggregateSource {
     private String listName;
     private String listType;
     private Date entryDate;
+    private Long entryUser;
+    private String entryUserName;
+    private Long auditorUser;
+    private String auditorUserName;
 }

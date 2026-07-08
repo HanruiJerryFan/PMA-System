@@ -739,6 +739,8 @@ CREATE TABLE `project_list` (
   `list_name` varchar(128) NOT NULL DEFAULT '',
   `list_type` varchar(32) NOT NULL,
   `entry_date` date DEFAULT NULL,
+  `entry_user` bigint(20) DEFAULT NULL,
+  `auditor_user` bigint(20) DEFAULT NULL,
   `pdf_attachment_id` varchar(36) DEFAULT NULL,
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `create_user` bigint(20) DEFAULT NULL,
@@ -747,7 +749,9 @@ CREATE TABLE `project_list` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_project_list_uuid` (`uuid`),
   KEY `idx_project_list_type` (`list_type`),
-  KEY `idx_project_list_project_id` (`project_id`)
+  KEY `idx_project_list_project_id` (`project_id`),
+  KEY `idx_project_list_entry_user` (`entry_user`),
+  KEY `idx_project_list_auditor_user` (`auditor_user`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

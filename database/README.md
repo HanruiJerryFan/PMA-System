@@ -27,6 +27,10 @@
   - 现有数据库补丁脚本
   - 增加并发安全的业务编号序列表 `code_sequence`
 
+- `06_project_list_entry_auditor.sql`
+  - 现有数据库补丁脚本
+  - 为项目清单增加业务“录入人”和“审核人”字段
+
 ## 推荐使用顺序
 
 ### 初始化空库
@@ -43,6 +47,7 @@
 ### 现有库增量补丁
 
 1. 执行 `05_code_sequence.sql`
+2. 执行 `06_project_list_entry_auditor.sql`
 
 ## 历史脚本
 

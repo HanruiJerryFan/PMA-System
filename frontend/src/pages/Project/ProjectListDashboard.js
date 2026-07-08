@@ -394,6 +394,8 @@ export default function ProjectListDashboard() {
     { title: "清单名称", dataIndex: "listName", key: "listName", width: 220 },
     { title: "清单类型", dataIndex: "listType", key: "listType", width: 140, render: (value) => getListTypeMeta(value).label },
     { title: "录入日期", dataIndex: "entryDate", key: "entryDate", width: 140, render: (value) => value ? dayjs(value).format("YYYY-MM-DD") : "-" },
+    { title: "录入人", dataIndex: "entryUserName", key: "entryUserName", width: 120, render: (value) => value || "-" },
+    { title: "审核人", dataIndex: "auditorUserName", key: "auditorUserName", width: 120, render: (value) => value || "-" },
   ];
 
   const finalListColumns = [
@@ -554,11 +556,15 @@ export default function ProjectListDashboard() {
             { header: "清单名称", width: 40 },
             { header: "清单类型", width: 20 },
             { header: "录入日期", align: "center", width: 20 },
+            { header: "录入人", width: 18 },
+            { header: "审核人", width: 18 },
           ],
           rows: (section.sourceLists || []).map((item) => [
             item.listName || "",
             getListTypeMeta(item.listType).label,
             item.entryDate ? dayjs(item.entryDate).format("YYYY-MM-DD") : "",
+            item.entryUserName || "",
+            item.auditorUserName || "",
           ]),
         },
       ],
@@ -609,6 +615,8 @@ export default function ProjectListDashboard() {
         { label: "清单名称", value: aggregateView?.listName || projectList?.listName || "-" },
         { label: "客户", value: aggregateView?.customerName || projectList?.customerName || "-" },
         { label: "清单类型", value: listTypeMeta.label },
+        { label: "录入人", value: isAggregateView ? "-" : projectList?.entryUserName || "-" },
+        { label: "审核人", value: isAggregateView ? "-" : projectList?.auditorUserName || "-" },
       ],
       summaries: isCombinedAggregateView
         ? [
@@ -678,6 +686,8 @@ export default function ProjectListDashboard() {
                 { header: "清单名称", width: 40 },
                 { header: "清单类型", width: 20 },
                 { header: "录入日期", align: "center", width: 20 },
+                { header: "录入人", width: 18 },
+                { header: "审核人", width: 18 },
               ],
               rows: (aggregateView?.sourceLists || []).map((item) =>
                 isCombinedAggregateView
@@ -686,11 +696,15 @@ export default function ProjectListDashboard() {
                       item.listName || "",
                       getListTypeMeta(item.listType).label,
                       item.entryDate ? dayjs(item.entryDate).format("YYYY-MM-DD") : "",
+                      item.entryUserName || "",
+                      item.auditorUserName || "",
                     ]
                   : [
                       item.listName || "",
                       getListTypeMeta(item.listType).label,
                       item.entryDate ? dayjs(item.entryDate).format("YYYY-MM-DD") : "",
+                      item.entryUserName || "",
+                      item.auditorUserName || "",
                     ]
               ),
             },
@@ -826,6 +840,8 @@ export default function ProjectListDashboard() {
           <Descriptions.Item label="录入日期">
             {isAggregateView ? "-" : projectList?.entryDate ? dayjs(projectList.entryDate).format("YYYY-MM-DD") : "-"}
           </Descriptions.Item>
+          <Descriptions.Item label="录入人">{isAggregateView ? "-" : projectList?.entryUserName || "-"}</Descriptions.Item>
+          <Descriptions.Item label="审核人">{isAggregateView ? "-" : projectList?.auditorUserName || "-"}</Descriptions.Item>
           <Descriptions.Item label="创建时间">
             {isAggregateView ? "-" : projectList?.createTime ? dayjs(projectList.createTime).format("YYYY-MM-DD HH:mm") : "-"}
           </Descriptions.Item>

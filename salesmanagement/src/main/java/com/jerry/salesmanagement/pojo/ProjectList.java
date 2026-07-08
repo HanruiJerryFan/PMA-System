@@ -13,6 +13,10 @@ public class ProjectList {
     private String listType;
     private String customerName;
     private Date entryDate;
+    private Long entryUser;
+    private String entryUserName;
+    private Long auditorUser;
+    private String auditorUserName;
     private String pdfAttachmentId;
     private Date createTime;
     private Long createUser;

@@ -99,6 +99,45 @@ function normalizeDateOnlyValue(value) {
   return dayjs(value);
 }
 
+function dateSortValue(value) {
+  if (!value) {
+    return Number.POSITIVE_INFINITY;
+  }
+  const parsed = dayjs(value);
+  return parsed.isValid() ? parsed.valueOf() : Number.POSITIVE_INFINITY;
+}
+
+function sortVouchersAscending(rows = []) {
+  return [...rows].sort((left, right) => {
+    const dateDiff = dateSortValue(left.occurredOn) - dateSortValue(right.occurredOn);
+    if (dateDiff !== 0) {
+      return dateDiff;
+    }
+
+    const voucherNoDiff = String(left.voucherNo || "").localeCompare(
+      String(right.voucherNo || ""),
+      "zh-CN",
+      { numeric: true }
+    );
+    if (voucherNoDiff !== 0) {
+      return voucherNoDiff;
+    }
+
+    return Number(left.id || 0) - Number(right.id || 0);
+  });
+}
+
+function isDateInInclusiveRange(value, range) {
+  if (!Array.isArray(range) || range.length !== 2 || !range[0] || !range[1]) {
+    return true;
+  }
+  if (!value) {
+    return false;
+  }
+  const date = dayjs(value);
+  return date.isValid() && !date.isBefore(range[0], "day") && !date.isAfter(range[1], "day");
+}
+
 function buildVoucherSearchText(voucher) {
   const values = [
     voucher.voucherNo,
@@ -715,6 +754,7 @@ export default function FinanceVouchers() {
   };
 
   const handleExportExcel = (rows = decoratedVouchers) => {
+    const exportRows = sortVouchersAscending(rows);
     downloadExcel(
       `finance-vouchers-${new Date().toISOString().slice(0, 10)}.xls`,
       "财务凭证",
@@ -739,7 +779,7 @@ export default function FinanceVouchers() {
         "是否完成",
         "备注",
       ],
-      rows.map((item) => [
+      exportRows.map((item) => [
         item.voucherNo || "",
         item.occurredOn ? dayjs(item.occurredOn).format("YYYY-MM-DD") : "",
         item.projectLabel || "",
@@ -764,31 +804,32 @@ export default function FinanceVouchers() {
   };
 
   const handleExportPdf = async (rows = decoratedVouchers) => {
-    if (!rows.length) {
+    const exportRows = sortVouchersAscending(rows);
+    if (!exportRows.length) {
       return;
     }
 
-    const incomeTotal = rows.reduce((sum, item) => sum + Number(item.actualIncomeAmount || 0), 0);
-    const expenseTotal = rows.reduce((sum, item) => sum + Number(item.actualExpenseAmount || 0), 0);
-    const incomeBookedTotal = rows.reduce(
+    const incomeTotal = exportRows.reduce((sum, item) => sum + Number(item.actualIncomeAmount || 0), 0);
+    const expenseTotal = exportRows.reduce((sum, item) => sum + Number(item.actualExpenseAmount || 0), 0);
+    const incomeBookedTotal = exportRows.reduce(
       (sum, item) => sum + (item.transactionDirection === "RECEIVE" ? Number(item.bookedAmount || 0) : 0),
       0
     );
-    const expenseBookedTotal = rows.reduce(
+    const expenseBookedTotal = exportRows.reduce(
       (sum, item) => sum + (item.transactionDirection === "PAY" ? Math.abs(Number(item.bookedAmount || 0)) : 0),
       0
     );
-    const payableAmountTotal = rows.reduce((sum, item) => sum + calculatePayableAmount(item), 0);
-    const missingInvoiceAmountTotal = rows.reduce(
+    const payableAmountTotal = exportRows.reduce((sum, item) => sum + calculatePayableAmount(item), 0);
+    const missingInvoiceAmountTotal = exportRows.reduce(
       (sum, item) => sum + (item.receivablePayableType === "缺票" ? Number(item.receivablePayableAmount || 0) : 0),
       0
     );
-    const payableCount = rows.reduce((sum, item) => sum + (item.receivablePayableType === "应付" ? 1 : 0), 0);
-    const receivableAmountTotal = rows.reduce(
+    const payableCount = exportRows.reduce((sum, item) => sum + (item.receivablePayableType === "应付" ? 1 : 0), 0);
+    const receivableAmountTotal = exportRows.reduce(
       (sum, item) => sum + (item.receivablePayableType === "应收" ? Number(item.receivablePayableAmount || 0) : 0),
       0
     );
-    const pendingInvoiceAmountTotal = rows.reduce(
+    const pendingInvoiceAmountTotal = exportRows.reduce(
       (sum, item) => sum + (item.receivablePayableType === "待开票" ? Number(item.receivablePayableAmount || 0) : 0),
       0
     );
@@ -798,7 +839,7 @@ export default function FinanceVouchers() {
       subtitle: `生成时间：${dayjs().format("YYYY-MM-DD HH:mm")}`,
       fileName: `finance-vouchers-${new Date().toISOString().slice(0, 10)}.pdf`,
       summaries: [
-        { label: "记录数", value: String(rows.length) },
+        { label: "记录数", value: String(exportRows.length) },
         { label: "收入合计", value: incomeTotal.toFixed(2) },
         { label: "支出合计", value: expenseTotal.toFixed(2) },
         { label: "支出记账合计", value: expenseBookedTotal.toFixed(2) },
@@ -831,7 +872,7 @@ export default function FinanceVouchers() {
         { header: "记账金额", align: "right", width: 7 },
         { header: "完成状态", align: "center", width: 6 },
       ],
-      rows: rows.map((item, index) => [
+      rows: exportRows.map((item, index) => [
         index + 1,
         item.voucherNo || "",
         item.occurredOn ? dayjs(item.occurredOn).format("YYYY-MM-DD") : "",
@@ -1020,6 +1061,12 @@ export default function FinanceVouchers() {
           { name: "searchText", label: "关键字", placeholder: "搜索所有列" },
           { name: "voucherNo", label: "凭证号" },
           { name: "occurredOnLabel", label: "发生日期", placeholder: "支持 2026 / 2026-03 / 2026-03-29" },
+          {
+            name: "occurredOnRange",
+            label: "发生日期范围",
+            component: <DatePicker.RangePicker allowClear style={{ width: 240 }} />,
+            filter: (item, value) => isDateInInclusiveRange(item.occurredOn, value),
+          },
           {
             name: "projectLabel",
             label: "项目",
