@@ -1060,11 +1060,16 @@ export default function FinanceVouchers() {
         searchFields={[
           { name: "searchText", label: "关键字", placeholder: "搜索所有列" },
           { name: "voucherNo", label: "凭证号" },
-          { name: "occurredOnLabel", label: "发生日期", placeholder: "支持 2026 / 2026-03 / 2026-03-29" },
           {
             name: "occurredOnRange",
-            label: "发生日期范围",
-            component: <DatePicker.RangePicker allowClear style={{ width: 240 }} />,
+            label: "发生日期",
+            component: (
+              <DatePicker.RangePicker
+                allowClear
+                placeholder={["开始日期", "结束日期"]}
+                style={{ width: 240 }}
+              />
+            ),
             filter: (item, value) => isDateInInclusiveRange(item.occurredOn, value),
           },
           {
