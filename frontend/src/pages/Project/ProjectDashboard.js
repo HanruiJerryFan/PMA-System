@@ -223,6 +223,10 @@ function calculateBookedAmountPreview(values) {
 }
 
 function calculateReceivablePayableInfo(values) {
+  if (!["RECEIVE", "PAY"].includes(values.transactionDirection)) {
+    return { type: null, amount: null };
+  }
+
   const actualAmount =
     values.transactionDirection === "RECEIVE"
       ? Number(values.actualIncomeAmount || 0)
@@ -230,12 +234,22 @@ function calculateReceivablePayableInfo(values) {
         ? Number(values.actualExpenseAmount || 0)
         : 0;
 
+  if (!values.isCompleted) {
+    if (!(actualAmount > 0)) {
+      return { type: null, amount: null };
+    }
+    return {
+      type: values.transactionDirection === "RECEIVE" ? "应收" : "应付",
+      amount: Number(actualAmount.toFixed(2)),
+    };
+  }
+
   const invoiceAmount =
     values.invoiceAmount === undefined || values.invoiceAmount === null || values.invoiceAmount === ""
       ? null
       : Number(values.invoiceAmount);
 
-  if (!(actualAmount > 0) || invoiceAmount == null) {
+  if (invoiceAmount == null) {
     return { type: null, amount: null };
   }
 
@@ -255,16 +269,10 @@ function calculateReceivablePayableInfo(values) {
   }
 
   if (values.transactionDirection === "PAY") {
-    if (actualAmount < invoiceAmount && values.isCompleted) {
+    if (actualAmount < invoiceAmount) {
       return {
         type: "应付",
         amount: Number((invoiceAmount - actualAmount).toFixed(2)),
-      };
-    }
-    if (actualAmount === invoiceAmount && !values.isCompleted) {
-      return {
-        type: "应付",
-        amount: Number(invoiceAmount.toFixed(2)),
       };
     }
     if (actualAmount > invoiceAmount) {
@@ -319,6 +327,7 @@ function ReceivablePayableAmountPreview({ form }) {
   const income = Form.useWatch("actualIncomeAmount", form);
   const expense = Form.useWatch("actualExpenseAmount", form);
   const invoiceAmount = Form.useWatch("invoiceAmount", form);
+  const isCompleted = Form.useWatch("isCompleted", form);
 
   const info = useMemo(
     () =>
@@ -327,8 +336,9 @@ function ReceivablePayableAmountPreview({ form }) {
         actualIncomeAmount: income,
         actualExpenseAmount: expense,
         invoiceAmount,
+        isCompleted,
       }),
-    [direction, expense, income, invoiceAmount]
+    [direction, expense, income, invoiceAmount, isCompleted]
   );
 
   const hasGap = info.amount != null && info.amount !== 0;
@@ -350,6 +360,7 @@ function ReceivablePayableTypePreview({ form }) {
   const income = Form.useWatch("actualIncomeAmount", form);
   const expense = Form.useWatch("actualExpenseAmount", form);
   const invoiceAmount = Form.useWatch("invoiceAmount", form);
+  const isCompleted = Form.useWatch("isCompleted", form);
 
   const info = useMemo(
     () =>
@@ -358,8 +369,9 @@ function ReceivablePayableTypePreview({ form }) {
         actualIncomeAmount: income,
         actualExpenseAmount: expense,
         invoiceAmount,
+        isCompleted,
       }),
-    [direction, expense, income, invoiceAmount]
+    [direction, expense, income, invoiceAmount, isCompleted]
   );
 
   return (
