@@ -32,6 +32,7 @@ public class FinanceVoucherServiceImpl implements FinanceVoucherService {
     private static final Set<String> LEVEL_1_SUBJECTS = Set.of("NON_PROJECT", "PROJECT");
     private static final Set<String> TRANSACTION_DIRECTIONS = Set.of("RECEIVE", "PAY");
     private static final Set<String> INVOICE_STATUSES = Set.of("NOT_INVOICED", "INVOICED");
+    private static final Set<String> INVOICE_TYPES = Set.of("VAT_ORDINARY", "VAT_SPECIAL");
     private static final Set<String> LEVEL_2_SUBJECTS = Set.of(
             "EQUIPMENT_PURCHASE",
             "AUXILIARY_MATERIAL_PURCHASE",
@@ -50,8 +51,9 @@ public class FinanceVoucherServiceImpl implements FinanceVoucherService {
             "OTHER"
     );
     private static final BigDecimal THIRTEEN_PERCENT = new BigDecimal("0.13");
-    private static final BigDecimal ZERO_TAX_EFFECTIVE_RATE = new BigDecimal("-0.05");
-    private static final String SALARY_SUBJECT = "SALARY";
+    private static final BigDecimal EIGHTEEN_PERCENT = new BigDecimal("0.18");
+    private static final BigDecimal ELEVEN_POINT_FIVE_PERCENT = new BigDecimal("0.115");
+    private static final Set<String> FIXED_THIRTEEN_PERCENT_EXPENSE_SUBJECTS = Set.of("SALARY", "TRAVEL");
     private static final Pattern VOUCHER_NO_PATTERN = Pattern.compile("^\\d{10}$");
     private static final DateTimeFormatter VOUCHER_DAY_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd");
     private static final DateTimeFormatter VOUCHER_MONTH_FORMATTER = DateTimeFormatter.ofPattern("yyyyMM");
@@ -205,6 +207,13 @@ public class FinanceVoucherServiceImpl implements FinanceVoucherService {
         if (!INVOICE_STATUSES.contains(voucher.getInvoiceStatus())) {
             throw new IllegalArgumentException("Invoice status is invalid");
         }
+        if ("INVOICED".equals(voucher.getInvoiceStatus())) {
+            if (!StringUtils.hasText(voucher.getInvoiceType()) || !INVOICE_TYPES.contains(voucher.getInvoiceType())) {
+                throw new IllegalArgumentException("Invoice type is required for invoiced vouchers");
+            }
+        } else {
+            voucher.setInvoiceType(null);
+        }
         if (StringUtils.hasText(voucher.getInvoiceNo())) {
             voucher.setInvoiceNo(voucher.getInvoiceNo().trim());
         } else {
@@ -255,9 +264,7 @@ public class FinanceVoucherServiceImpl implements FinanceVoucherService {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
 
-        BigDecimal normalizedTaxRate = voucher.getTaxRate().setScale(2, RoundingMode.HALF_UP);
-        BigDecimal rateGap = THIRTEEN_PERCENT.subtract(normalizedTaxRate);
-        BigDecimal denominator = BigDecimal.ONE.subtract(rateGap);
+        BigDecimal denominator = calculateBookkeepingDenominator(voucher);
         if (denominator.compareTo(BigDecimal.ZERO) == 0) {
             throw new IllegalArgumentException("Invalid tax rate denominator");
         }
@@ -271,17 +278,7 @@ public class FinanceVoucherServiceImpl implements FinanceVoucherService {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
 
-        BigDecimal denominator;
-        if (SALARY_SUBJECT.equals(voucher.getLevel2Subject())) {
-            denominator = BigDecimal.ONE.subtract(THIRTEEN_PERCENT);
-        } else {
-            BigDecimal selectedTaxRate = voucher.getTaxRate().setScale(2, RoundingMode.HALF_UP);
-            BigDecimal effectiveTaxRate =
-                    selectedTaxRate.compareTo(BigDecimal.ZERO) == 0 ? ZERO_TAX_EFFECTIVE_RATE : selectedTaxRate;
-            BigDecimal rateGap = THIRTEEN_PERCENT.subtract(effectiveTaxRate);
-            denominator = BigDecimal.ONE.subtract(rateGap);
-        }
-
+        BigDecimal denominator = calculateBookkeepingDenominator(voucher);
         if (denominator.compareTo(BigDecimal.ZERO) == 0) {
             throw new IllegalArgumentException("Invalid tax rate denominator");
         }
@@ -291,6 +288,24 @@ public class FinanceVoucherServiceImpl implements FinanceVoucherService {
             bookedAmount = bookedAmount.negate();
         }
         return bookedAmount;
+    }
+
+    private BigDecimal calculateBookkeepingDenominator(FinanceVoucher voucher) {
+        if ("PAY".equals(voucher.getTransactionDirection())
+                && FIXED_THIRTEEN_PERCENT_EXPENSE_SUBJECTS.contains(voucher.getLevel2Subject())) {
+            return BigDecimal.ONE.subtract(THIRTEEN_PERCENT);
+        }
+
+        BigDecimal selectedTaxRate = voucher.getTaxRate().setScale(2, RoundingMode.HALF_UP);
+        if (selectedTaxRate.compareTo(BigDecimal.ZERO) == 0) {
+            BigDecimal deductionRate = "INVOICED".equals(voucher.getInvoiceStatus())
+                    ? ELEVEN_POINT_FIVE_PERCENT
+                    : EIGHTEEN_PERCENT;
+            return BigDecimal.ONE.subtract(deductionRate);
+        }
+
+        BigDecimal rateGap = THIRTEEN_PERCENT.subtract(selectedTaxRate);
+        return BigDecimal.ONE.subtract(rateGap);
     }
 
     private String generateVoucherNo(LocalDate occurredOn) {

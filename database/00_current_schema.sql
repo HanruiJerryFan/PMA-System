@@ -342,6 +342,7 @@ CREATE TABLE `finance_voucher` (
   `counterparty_customer_id` varchar(36) DEFAULT NULL,
   `counterparty_name_snapshot` varchar(255) NOT NULL,
   `invoice_status` varchar(32) NOT NULL DEFAULT 'NOT_INVOICED',
+  `invoice_type` varchar(32) DEFAULT NULL,
   `invoice_no` varchar(128) DEFAULT NULL,
   `invoice_amount` decimal(18,2) DEFAULT NULL,
   `actual_income_amount` decimal(18,2) DEFAULT NULL,

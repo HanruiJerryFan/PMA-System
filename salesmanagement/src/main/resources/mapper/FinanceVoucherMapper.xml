@@ -19,6 +19,7 @@
             fv.counterparty_customer_id AS counterpartyCustomerId,
             fv.counterparty_name_snapshot AS counterpartyNameSnapshot,
             fv.invoice_status AS invoiceStatus,
+            fv.invoice_type AS invoiceType,
             fv.invoice_no AS invoiceNo,
             fv.invoice_amount AS invoiceAmount,
             fv.actual_income_amount AS actualIncomeAmount,
@@ -55,6 +56,7 @@
             fv.counterparty_customer_id AS counterpartyCustomerId,
             fv.counterparty_name_snapshot AS counterpartyNameSnapshot,
             fv.invoice_status AS invoiceStatus,
+            fv.invoice_type AS invoiceType,
             fv.invoice_no AS invoiceNo,
             fv.invoice_amount AS invoiceAmount,
             fv.actual_income_amount AS actualIncomeAmount,
@@ -92,6 +94,7 @@
             fv.counterparty_customer_id AS counterpartyCustomerId,
             fv.counterparty_name_snapshot AS counterpartyNameSnapshot,
             fv.invoice_status AS invoiceStatus,
+            fv.invoice_type AS invoiceType,
             fv.invoice_no AS invoiceNo,
             fv.invoice_amount AS invoiceAmount,
             fv.actual_income_amount AS actualIncomeAmount,
@@ -133,6 +136,7 @@
             counterparty_customer_id,
             counterparty_name_snapshot,
             invoice_status,
+            invoice_type,
             invoice_no,
             invoice_amount,
             actual_income_amount,
@@ -157,6 +161,7 @@
             #{counterpartyCustomerId},
             #{counterpartyNameSnapshot},
             #{invoiceStatus},
+            #{invoiceType},
             #{invoiceNo},
             #{invoiceAmount},
             #{actualIncomeAmount},
@@ -185,6 +190,7 @@
             <if test="counterpartyCustomerId != null">counterparty_customer_id = #{counterpartyCustomerId},</if>
             <if test="counterpartyNameSnapshot != null">counterparty_name_snapshot = #{counterpartyNameSnapshot},</if>
             <if test="invoiceStatus != null">invoice_status = #{invoiceStatus},</if>
+            invoice_type = #{invoiceType},
             invoice_no = #{invoiceNo},
             invoice_amount = #{invoiceAmount},
             <if test="actualIncomeAmount != null">actual_income_amount = #{actualIncomeAmount},</if>

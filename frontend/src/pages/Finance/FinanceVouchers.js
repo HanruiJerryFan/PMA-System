@@ -76,6 +76,13 @@ const INVOICE_STATUS_OPTIONS = [
   { value: "INVOICED", label: "已开票" },
 ];
 
+const INVOICE_TYPE_OPTIONS = [
+  { value: "VAT_ORDINARY", label: "增值税普通发票" },
+  { value: "VAT_SPECIAL", label: "增值税专用发票" },
+];
+
+const FIXED_THIRTEEN_PERCENT_EXPENSE_SUBJECTS = ["SALARY", "TRAVEL"];
+
 function normalizeApiData(response) {
   return response?.data ?? response ?? [];
 }
@@ -152,6 +159,7 @@ function buildVoucherSearchText(voucher) {
     voucher.taxRateLabel,
     voucher.counterpartyNameSnapshot,
     voucher.invoiceStatusLabel,
+    voucher.invoiceTypeLabel,
     voucher.invoiceNo,
     voucher.invoiceAmount != null ? formatAmount(voucher.invoiceAmount) : "",
     voucher.receivablePayableType,
@@ -189,6 +197,37 @@ function VoucherDirectionSync({ form }) {
   }, [direction, form]);
 
   return null;
+}
+
+function InvoiceTypeField({ form }) {
+  const invoiceStatus = Form.useWatch("invoiceStatus", form);
+
+  useEffect(() => {
+    if (invoiceStatus !== "INVOICED") {
+      form.setFieldValue("invoiceType", null);
+    }
+  }, [form, invoiceStatus]);
+
+  if (invoiceStatus !== "INVOICED") {
+    return null;
+  }
+
+  return (
+    <Form.Item
+      name="invoiceType"
+      label="发票分类"
+      preserve={false}
+      rules={[{ required: true, message: "请选择发票分类" }]}
+    >
+      <Select placeholder="请选择发票分类">
+        {INVOICE_TYPE_OPTIONS.map((item) => (
+          <Option key={item.value} value={item.value}>
+            {item.label}
+          </Option>
+        ))}
+      </Select>
+    </Form.Item>
+  );
 }
 
 function DirectionalAmountField({ form, activeDirection, placeholder, ...inputProps }) {
@@ -254,7 +293,9 @@ function calculateBookedAmountPreview(values) {
     if (!(income > 0) || taxRate == null) {
       return null;
     }
-    const denominator = 1 - (0.13 - taxRate);
+    const denominator = taxRate === 0
+      ? 1 - (values.invoiceStatus === "INVOICED" ? 0.115 : 0.18)
+      : 1 - (0.13 - taxRate);
     if (!Number.isFinite(denominator) || denominator === 0) {
       return null;
     }
@@ -268,11 +309,12 @@ function calculateBookedAmountPreview(values) {
     }
 
     let denominator;
-    if (values.level2Subject === "SALARY") {
+    if (FIXED_THIRTEEN_PERCENT_EXPENSE_SUBJECTS.includes(values.level2Subject)) {
       denominator = 1 - 0.13;
+    } else if (taxRate === 0) {
+      denominator = 1 - (values.invoiceStatus === "INVOICED" ? 0.115 : 0.18);
     } else {
-      const effectiveTaxRate = taxRate === 0 ? -0.05 : taxRate;
-      denominator = 1 - (0.13 - effectiveTaxRate);
+      denominator = 1 - (0.13 - taxRate);
     }
     if (!Number.isFinite(denominator) || denominator === 0) {
       return null;
@@ -363,6 +405,7 @@ function BookedAmountPreview({ form }) {
   const expense = Form.useWatch("actualExpenseAmount", form);
   const taxRate = Form.useWatch("taxRate", form);
   const level2Subject = Form.useWatch("level2Subject", form);
+  const invoiceStatus = Form.useWatch("invoiceStatus", form);
   const storedBookedAmount = Form.useWatch("bookedAmount", form);
 
   const preview = useMemo(
@@ -373,8 +416,9 @@ function BookedAmountPreview({ form }) {
         actualExpenseAmount: expense,
         taxRate,
         level2Subject,
+        invoiceStatus,
       }),
-    [direction, expense, income, level2Subject, taxRate]
+    [direction, expense, income, invoiceStatus, level2Subject, taxRate]
   );
 
   const displayValue =
@@ -560,6 +604,8 @@ export default function FinanceVouchers() {
           item.transactionDirection;
         const invoiceStatusLabel =
           INVOICE_STATUS_OPTIONS.find((option) => option.value === item.invoiceStatus)?.label || item.invoiceStatus;
+        const invoiceTypeLabel =
+          INVOICE_TYPE_OPTIONS.find((option) => option.value === item.invoiceType)?.label || item.invoiceType;
         const taxRateLabel = taxRateLabelMap[Number(item.taxRate || 0).toFixed(2)] || item.taxRate;
         const receivablePayableInfo = calculateReceivablePayableInfo(item);
         const occurredOnLabel = item.occurredOn ? dayjs(item.occurredOn).format("YYYY-MM-DD") : "-";
@@ -580,6 +626,7 @@ export default function FinanceVouchers() {
           level2Label,
           directionLabel,
           invoiceStatusLabel,
+          invoiceTypeLabel,
           taxRateLabel,
           receivablePayableType: receivablePayableInfo.type,
           receivablePayableAmount: receivablePayableInfo.amount,
@@ -628,7 +675,10 @@ export default function FinanceVouchers() {
             accumulator.expenseBooked += Math.abs(bookedAmount);
           }
           accumulator.pending += item.isCompleted ? 0 : 1;
-          accumulator.notInvoiced += item.invoiceStatus === "NOT_INVOICED" ? 1 : 0;
+          const excludesNotInvoicedCount =
+            item.transactionDirection === "PAY"
+            && FIXED_THIRTEEN_PERCENT_EXPENSE_SUBJECTS.includes(item.level2Subject);
+          accumulator.notInvoiced += item.invoiceStatus === "NOT_INVOICED" && !excludesNotInvoicedCount ? 1 : 0;
           accumulator.payable += item.receivablePayableType === "应付" ? 1 : 0;
           accumulator.payableAmount += calculatePayableAmount(item);
           accumulator.missingInvoice += item.receivablePayableType === "缺票" ? 1 : 0;
@@ -801,6 +851,7 @@ export default function FinanceVouchers() {
         "税率",
         "对方单位",
         "开票状态",
+        "发票分类",
         "发票号码",
         "发票金额",
         "差额类型",
@@ -824,6 +875,7 @@ export default function FinanceVouchers() {
         item.taxRateLabel || "",
         item.counterpartyNameSnapshot || "",
         item.invoiceStatusLabel || "",
+        item.invoiceTypeLabel || "",
         item.invoiceNo || "",
         item.invoiceAmount ?? "",
         item.receivablePayableType || "",
@@ -899,6 +951,7 @@ export default function FinanceVouchers() {
         { header: "税率", align: "center", width: 5 },
         { header: "对方单位", width: 10 },
         { header: "开票状态", align: "center", width: 6 },
+        { header: "发票分类", align: "center", width: 9 },
         { header: "发票号码", width: 8 },
         { header: "发票金额", align: "right", width: 7 },
         { header: "差额类型", align: "center", width: 6 },
@@ -922,6 +975,7 @@ export default function FinanceVouchers() {
         item.taxRateLabel || "",
         item.counterpartyNameSnapshot || "",
         item.invoiceStatusLabel || "",
+        item.invoiceTypeLabel || "",
         item.invoiceNo || "",
         item.invoiceAmount ?? "",
         item.receivablePayableType || "",
@@ -1005,6 +1059,7 @@ export default function FinanceVouchers() {
           { title: "税率", dataIndex: "taxRateLabel", key: "taxRateLabel", width: 100 },
           { title: "对方单位", dataIndex: "counterpartyNameSnapshot", key: "counterpartyNameSnapshot", width: 180 },
           { title: "开票状态", dataIndex: "invoiceStatusLabel", key: "invoiceStatusLabel", width: 120 },
+          { title: "发票分类", dataIndex: "invoiceTypeLabel", key: "invoiceTypeLabel", width: 160, render: (value) => value || "-" },
           { title: "发票号码", dataIndex: "invoiceNo", key: "invoiceNo", width: 160 },
           {
             title: "发票金额",
@@ -1222,6 +1277,19 @@ export default function FinanceVouchers() {
               </Select>
             ),
           },
+          {
+            name: "invoiceTypeLabel",
+            label: "发票分类",
+            component: (
+              <Select placeholder="筛选发票分类" allowClear showSearch optionFilterProp="children">
+                {INVOICE_TYPE_OPTIONS.map((item) => (
+                  <Option key={item.value} value={item.label}>
+                    {item.label}
+                  </Option>
+                ))}
+              </Select>
+            ),
+          },
           { name: "invoiceNo", label: "发票号码" },
           { name: "invoiceAmountLabel", label: "发票金额" },
           {
@@ -1269,6 +1337,7 @@ export default function FinanceVouchers() {
           { key: "taxRateLabel", label: "税率" },
           { key: "counterpartyNameSnapshot", label: "对方单位" },
           { key: "invoiceStatusLabel", label: "开票状态" },
+          { key: "invoiceTypeLabel", label: "发票分类" },
           { key: "invoiceNo", label: "发票号码" },
           { key: "invoiceAmount", label: "发票金额" },
           { key: "receivablePayableType", label: "差额类型" },
@@ -1299,6 +1368,7 @@ export default function FinanceVouchers() {
           ...values,
           projectId: values.projectId || projectIdFilter || null,
           counterpartyNameSnapshot: undefined,
+          invoiceType: values.invoiceStatus === "INVOICED" ? values.invoiceType : null,
           invoiceAmount:
             values.invoiceAmount === undefined || values.invoiceAmount === null || values.invoiceAmount === ""
               ? null
@@ -1459,6 +1529,11 @@ export default function FinanceVouchers() {
                 ))}
               </Select>
             ),
+          },
+          {
+            key: "voucher-invoice-type",
+            renderOnly: true,
+            render: ({ form }) => <InvoiceTypeField form={form} />,
           },
           {
             name: "invoiceNo",

@@ -23,6 +23,7 @@ public class FinanceVoucher implements EntryAuditable {
     private String counterpartyCustomerId;
     private String counterpartyNameSnapshot;
     private String invoiceStatus;
+    private String invoiceType;
     private String invoiceNo;
     private BigDecimal invoiceAmount;
     private BigDecimal actualIncomeAmount;

@@ -39,6 +39,10 @@
   - 现有数据库补丁脚本
   - 为项目清单明细增加逐条“录入人/审核人”字段
 
+- `09_finance_voucher_invoice_type.sql`
+  - 现有数据库补丁脚本
+  - 为财务凭证增加发票分类字段
+
 ## 推荐使用顺序
 
 ### 初始化空库
@@ -58,6 +62,7 @@
 2. 执行 `06_project_list_entry_auditor.sql`
 3. 执行 `07_entry_audit_documents.sql`
 4. 执行 `08_project_list_item_entry_audit.sql`
+5. 执行 `09_finance_voucher_invoice_type.sql`
 
 ## 历史脚本
 

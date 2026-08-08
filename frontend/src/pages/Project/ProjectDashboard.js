@@ -90,6 +90,13 @@ const INVOICE_STATUS_OPTIONS = [
   { value: "INVOICED", label: "已开票" },
 ];
 
+const INVOICE_TYPE_OPTIONS = [
+  { value: "VAT_ORDINARY", label: "增值税普通发票" },
+  { value: "VAT_SPECIAL", label: "增值税专用发票" },
+];
+
+const FIXED_THIRTEEN_PERCENT_EXPENSE_SUBJECTS = ["SALARY", "TRAVEL"];
+
 function normalizeResponseData(response) {
   return response?.data ?? response ?? [];
 }
@@ -123,6 +130,37 @@ function VoucherDirectionSync({ form }) {
   }, [direction, form]);
 
   return null;
+}
+
+function InvoiceTypeField({ form }) {
+  const invoiceStatus = Form.useWatch("invoiceStatus", form);
+
+  useEffect(() => {
+    if (invoiceStatus !== "INVOICED") {
+      form.setFieldValue("invoiceType", null);
+    }
+  }, [form, invoiceStatus]);
+
+  if (invoiceStatus !== "INVOICED") {
+    return null;
+  }
+
+  return (
+    <Form.Item
+      name="invoiceType"
+      label="发票分类"
+      preserve={false}
+      rules={[{ required: true, message: "请选择发票分类" }]}
+    >
+      <Select placeholder="请选择发票分类">
+        {INVOICE_TYPE_OPTIONS.map((item) => (
+          <Option key={item.value} value={item.value}>
+            {item.label}
+          </Option>
+        ))}
+      </Select>
+    </Form.Item>
+  );
 }
 
 function DirectionalAmountField({ form, activeDirection, placeholder, ...inputProps }) {
@@ -188,7 +226,9 @@ function calculateBookedAmountPreview(values) {
     if (!(income > 0) || taxRate == null) {
       return null;
     }
-    const denominator = 1 - (0.13 - taxRate);
+    const denominator = taxRate === 0
+      ? 1 - (values.invoiceStatus === "INVOICED" ? 0.115 : 0.18)
+      : 1 - (0.13 - taxRate);
     if (!Number.isFinite(denominator) || denominator === 0) {
       return null;
     }
@@ -202,11 +242,12 @@ function calculateBookedAmountPreview(values) {
     }
 
     let denominator;
-    if (values.level2Subject === "SALARY") {
+    if (FIXED_THIRTEEN_PERCENT_EXPENSE_SUBJECTS.includes(values.level2Subject)) {
       denominator = 1 - 0.13;
+    } else if (taxRate === 0) {
+      denominator = 1 - (values.invoiceStatus === "INVOICED" ? 0.115 : 0.18);
     } else {
-      const effectiveTaxRate = taxRate === 0 ? -0.05 : taxRate;
-      denominator = 1 - (0.13 - effectiveTaxRate);
+      denominator = 1 - (0.13 - taxRate);
     }
     if (!Number.isFinite(denominator) || denominator === 0) {
       return null;
@@ -292,6 +333,7 @@ function BookedAmountPreview({ form }) {
   const expense = Form.useWatch("actualExpenseAmount", form);
   const taxRate = Form.useWatch("taxRate", form);
   const level2Subject = Form.useWatch("level2Subject", form);
+  const invoiceStatus = Form.useWatch("invoiceStatus", form);
   const storedBookedAmount = Form.useWatch("bookedAmount", form);
 
   const preview = useMemo(
@@ -302,8 +344,9 @@ function BookedAmountPreview({ form }) {
         actualExpenseAmount: expense,
         taxRate,
         level2Subject,
+        invoiceStatus,
       }),
-    [direction, expense, income, level2Subject, taxRate]
+    [direction, expense, income, invoiceStatus, level2Subject, taxRate]
   );
 
   const displayValue =
@@ -522,6 +565,8 @@ export default function ProjectDashboard() {
         .filter((item) => item.projectId === projectUuid)
         .map((item) => ({
           ...item,
+          invoiceTypeLabel:
+            INVOICE_TYPE_OPTIONS.find((option) => option.value === item.invoiceType)?.label || item.invoiceType,
           receivablePayableType: calculateReceivablePayableInfo(item).type,
           receivablePayableAmount: calculateReceivablePayableInfo(item).amount,
         })),
@@ -788,6 +833,7 @@ export default function ProjectDashboard() {
           taxRate: values.taxRate,
           counterpartyCustomerId: values.counterpartyCustomerId,
           invoiceStatus: values.invoiceStatus,
+          invoiceType: values.invoiceStatus === "INVOICED" ? values.invoiceType : null,
           invoiceNo: values.invoiceNo || null,
           invoiceAmount:
             values.invoiceAmount === undefined || values.invoiceAmount === null || values.invoiceAmount === ""
@@ -843,6 +889,7 @@ export default function ProjectDashboard() {
       { title: "项目", dataIndex: "projectId", key: "projectId", render: (value) => projectMap[value] || "-" },
       { title: "二级科目", dataIndex: "level2Subject", key: "level2Subject", render: (value) => LEVEL_2_OPTIONS.find((item) => item.value === value)?.label || value || "-" },
       { title: "开票状态", dataIndex: "invoiceStatus", key: "invoiceStatus", render: (value) => INVOICE_STATUS_OPTIONS.find((item) => item.value === value)?.label || value || "-" },
+      { title: "发票分类", dataIndex: "invoiceTypeLabel", key: "invoiceTypeLabel", render: (value) => value || "-" },
       { title: "记账金额", dataIndex: "bookedAmount", key: "bookedAmount", render: (value) => formatAmount(value) },
       { title: "差额类型", dataIndex: "receivablePayableType", key: "receivablePayableType", render: (value) => value || "-" },
       { title: "金额", dataIndex: "receivablePayableAmount", key: "receivablePayableAmount", render: (value) => formatAmount(value) },
@@ -1524,6 +1571,7 @@ export default function ProjectDashboard() {
               ))}
             </Select>
           </Form.Item>
+          <InvoiceTypeField form={voucherForm} />
           <Form.Item name="invoiceNo" label="发票号码">
             <Input />
           </Form.Item>
