@@ -141,15 +141,13 @@ function InvoiceTypeField({ form }) {
     }
   }, [form, invoiceStatus]);
 
-  if (invoiceStatus !== "INVOICED") {
-    return null;
-  }
-
   return (
     <Form.Item
       name="invoiceType"
       label="发票分类"
-      rules={[{ required: true, message: "请选择发票分类" }]}
+      hidden={invoiceStatus !== "INVOICED"}
+      preserve
+      rules={invoiceStatus === "INVOICED" ? [{ required: true, message: "请选择发票分类" }] : []}
     >
       <Select placeholder="请选择发票分类">
         {INVOICE_TYPE_OPTIONS.map((item) => (
