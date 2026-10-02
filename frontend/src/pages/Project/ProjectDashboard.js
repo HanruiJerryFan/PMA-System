@@ -136,7 +136,7 @@ function InvoiceTypeField({ form }) {
   const invoiceStatus = Form.useWatch("invoiceStatus", form);
 
   useEffect(() => {
-    if (invoiceStatus !== "INVOICED") {
+    if (invoiceStatus === "NOT_INVOICED") {
       form.setFieldValue("invoiceType", null);
     }
   }, [form, invoiceStatus]);
@@ -149,7 +149,6 @@ function InvoiceTypeField({ form }) {
     <Form.Item
       name="invoiceType"
       label="发票分类"
-      preserve={false}
       rules={[{ required: true, message: "请选择发票分类" }]}
     >
       <Select placeholder="请选择发票分类">
