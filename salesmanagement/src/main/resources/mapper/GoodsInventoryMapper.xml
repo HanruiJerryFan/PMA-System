@@ -6,17 +6,30 @@
 
     <sql id="balanceSelect">
         SELECT
-            COALESCE(material_id, material_code) AS uuid,
-            MAX(material_id) AS materialId,
-            MAX(material_code) AS materialCode,
-            MAX(material_name) AS materialName,
-            MAX(model) AS model,
-            MAX(brand) AS brand,
-            ROUND(SUM(CASE WHEN txn_type = 'IN' THEN quantity ELSE 0 END), 2) AS inboundQuantity,
-            ROUND(SUM(CASE WHEN txn_type = 'OUT' THEN quantity ELSE 0 END), 2) AS outboundQuantity,
-            ROUND(SUM(CASE WHEN txn_type = 'IN' THEN quantity ELSE -quantity END), 2) AS balanceQuantity
-        FROM goods_transaction_dynamic_info gtdi
-        GROUP BY COALESCE(material_id, material_code)
+            inventory_balance.*,
+            ROUND(purchaseAveragePrice * balanceQuantity, 2) AS inventoryAmount
+        FROM (
+            SELECT
+                COALESCE(MAX(material_id), MAX(material_code)) AS uuid,
+                MAX(material_id) AS materialId,
+                MAX(material_code) AS materialCode,
+                MAX(material_name) AS materialName,
+                MAX(model) AS model,
+                MAX(brand) AS brand,
+                ROUND(SUM(CASE WHEN txn_type = 'IN' THEN quantity ELSE 0 END), 2) AS inboundQuantity,
+                ROUND(SUM(CASE WHEN txn_type = 'OUT' THEN quantity ELSE 0 END), 2) AS outboundQuantity,
+                ROUND(SUM(CASE WHEN txn_type = 'IN' THEN quantity ELSE -quantity END), 2) AS balanceQuantity,
+                COALESCE(
+                    SUM(CASE
+                        WHEN txn_type = 'IN' AND category IN ('PROJECT_PURCHASE', 'CENTRALIZED_PURCHASE')
+                            THEN COALESCE(unit_price, 0) * quantity
+                        ELSE 0
+                    END) / NULLIF(SUM(CASE WHEN txn_type = 'IN' THEN quantity ELSE 0 END), 0),
+                    0
+                ) AS purchaseAveragePrice
+            FROM goods_transaction_dynamic_info
+            GROUP BY COALESCE(NULLIF(TRIM(material_code), ''), material_id)
+        ) inventory_balance
     </sql>
 
     <select id="selectByUuid" parameterType="string" resultType="com.jerry.salesmanagement.pojo.GoodsInventory">

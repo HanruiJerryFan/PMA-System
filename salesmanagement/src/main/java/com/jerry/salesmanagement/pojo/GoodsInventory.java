@@ -2,6 +2,7 @@ package com.jerry.salesmanagement.pojo;
 
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.util.Date;
 
 @Data
@@ -20,5 +21,7 @@ public class GoodsInventory {
     private Double inboundQuantity;
     private Double outboundQuantity;
     private Double balanceQuantity;
+    private BigDecimal purchaseAveragePrice;
+    private BigDecimal inventoryAmount;
     private Date lastTxnTime;
 }
