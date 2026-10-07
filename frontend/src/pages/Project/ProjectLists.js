@@ -43,6 +43,7 @@ import { canMaintainEntryAuditUsers } from "../../utils/entryAudit";
 import { uploadBusinessAttachments } from "../../utils/attachments";
 import { downloadApiFile, downloadExcel, resolveBlobErrorMessage } from "../../utils/exporters";
 import { sortSelectItems } from "../../utils/selectSorting";
+import { formatProjectOptionLabel } from "../../utils/projectLabels";
 
 const { Option } = Select;
 
@@ -172,7 +173,7 @@ export default function ProjectLists() {
 
   const decoratedLists = useMemo(() => projectLists.map((item) => ({
     ...item,
-    projectLabel: projectMap[item.projectId]?.projectName || item.projectId,
+    projectLabel: projectMap[item.projectId] ? formatProjectOptionLabel(projectMap[item.projectId]) : item.projectId,
     listTypeLabel: getListTypeLabel(item.listType),
     entryUserName: item.entryUserName || userMap[item.entryUser] || "",
     auditorUserName: item.auditorUserName || userMap[item.auditorUser] || "",
@@ -780,7 +781,7 @@ export default function ProjectLists() {
         <Modal title={editingList ? "编辑项目清单" : "新增项目清单"} open={listModalVisible} onOk={submitList} onCancel={closeListModal} okText="保存" cancelText="取消" destroyOnHidden>
           <Form form={listForm} layout="vertical">
             <Form.Item name="projectId" label="项目" rules={projectUuidFilter ? [] : [{ required: true, message: "请选择项目" }]}>
-              <Select placeholder="请选择项目" showSearch optionFilterProp="children" disabled={Boolean(projectUuidFilter)}>{sortSelectItems(projects, ["projectNumber"]).map((item) => <Option key={item.uuid} value={item.uuid}>{item.projectName}</Option>)}</Select>
+              <Select placeholder="请选择项目" showSearch optionFilterProp="children" disabled={Boolean(projectUuidFilter)}>{sortSelectItems(projects, ["projectNumber"]).map((item) => <Option key={item.uuid} value={item.uuid}>{formatProjectOptionLabel(item)}</Option>)}</Select>
             </Form.Item>
             <Form.Item name="listName" label="清单名称" rules={[{ required: true, message: "请输入清单名称" }]}>
               <Input maxLength={128} placeholder="例如：一期采购清单" />

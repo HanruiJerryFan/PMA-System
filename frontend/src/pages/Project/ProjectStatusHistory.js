@@ -5,6 +5,7 @@ import { useSearchParams } from "react-router-dom";
 import CRUDTable from "../../components/Common/CRUDTable";
 import { permissionAPI, projectAPI } from "../../api/modules";
 import { sortSelectItems } from "../../utils/selectSorting";
+import { formatProjectOptionLabel } from "../../utils/projectLabels";
 
 const { Option } = Select;
 
@@ -18,7 +19,7 @@ export default function ProjectStatusHistory() {
   const [loading, setLoading] = useState(false);
 
   const projectMap = useMemo(
-    () => Object.fromEntries(projects.map((item) => [item.uuid, `${item.projectNumber || ""} ${item.projectName || ""}`.trim()])),
+    () => Object.fromEntries(projects.map((item) => [item.uuid, formatProjectOptionLabel(item)])),
     [projects]
   );
   const stageMap = useMemo(() => Object.fromEntries(stages.map((item) => [item.id, item.description])), [stages]);
@@ -120,7 +121,7 @@ export default function ProjectStatusHistory() {
             >
               {sortSelectItems(projects, ["projectNumber"]).map((item) => (
                 <Option key={item.uuid} value={item.uuid}>
-                  {`${item.projectNumber || ""} ${item.projectName || ""}`.trim()}
+                  {formatProjectOptionLabel(item)}
                 </Option>
               ))}
             </Select>

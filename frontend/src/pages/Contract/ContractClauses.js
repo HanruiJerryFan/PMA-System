@@ -9,6 +9,7 @@ import { hasAnyAuthority } from "../../utils/authorities";
 import { resolvePagePermissions } from "../../utils/pagePermissions";
 import { downloadApiFile, downloadExcel, resolveBlobErrorMessage } from "../../utils/exporters";
 import { sortSelectItems } from "../../utils/selectSorting";
+import { formatProjectOptionLabel } from "../../utils/projectLabels";
 
 const { Option } = Select;
 
@@ -36,7 +37,7 @@ export default function ContractClauses() {
   );
 
   const projectMap = useMemo(
-    () => Object.fromEntries(projects.map((item) => [item.uuid, item.projectName])),
+    () => Object.fromEntries(projects.map((item) => [item.uuid, formatProjectOptionLabel(item)])),
     [projects]
   );
 

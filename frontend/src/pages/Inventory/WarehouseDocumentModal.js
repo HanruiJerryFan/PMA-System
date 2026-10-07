@@ -28,6 +28,7 @@ import {
 } from "./warehouseDocumentUtils";
 import { getUserLabel } from "../../utils/entryAudit";
 import { sortSelectItems } from "../../utils/selectSorting";
+import { formatProjectOptionLabel } from "../../utils/projectLabels";
 
 const { Text } = Typography;
 
@@ -418,7 +419,7 @@ export default function WarehouseDocumentModal({
                 }
                 options={sortSelectItems(projects, ["projectNumber"]).map((item) => ({
                   value: item.uuid,
-                  label: item.projectName || "-",
+                  label: formatProjectOptionLabel(item),
                   searchText: [item.projectName, item.projectNumber]
                     .filter(Boolean)
                     .join(" ")

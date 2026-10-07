@@ -9,6 +9,7 @@ import { hasAnyAuthority } from "../../utils/authorities";
 import { downloadApiFile, resolveBlobErrorMessage } from "../../utils/exporters";
 import { resolvePagePermissions } from "../../utils/pagePermissions";
 import { sortSelectItems } from "../../utils/selectSorting";
+import { formatProjectOptionLabel } from "../../utils/projectLabels";
 
 const { Option } = Select;
 
@@ -91,7 +92,7 @@ function buildBusinessOptionLabel(type, item) {
     return "-";
   }
   if (type === "projects") {
-    return item.projectNumber || "未编号项目";
+    return formatProjectOptionLabel(item);
   }
   if (type === "project-lists") {
     return item.listName || "未命名清单";

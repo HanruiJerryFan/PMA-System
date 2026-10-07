@@ -42,6 +42,7 @@ import { uploadBusinessAttachments } from "../../utils/attachments";
 import { downloadApiFile, downloadExcel, resolveBlobErrorMessage } from "../../utils/exporters";
 import { getFinanceSubjectOptions } from "../../utils/financeSubjects";
 import { sortSelectItems } from "../../utils/selectSorting";
+import { formatProjectOptionLabel } from "../../utils/projectLabels";
 
 const { Option } = Select;
 
@@ -489,15 +490,6 @@ function VoucherAmountFields({ form, incomeLabel, expenseLabel }) {
   );
 }
 
-function formatProjectOptionLabel(project) {
-  if (!project) {
-    return "";
-  }
-  if (project.projectNumber && project.projectName) {
-    return `${project.projectNumber} - ${project.projectName}`;
-  }
-  return project.projectName || project.projectNumber || project.uuid || "";
-}
 
 export default function FinanceVouchers() {
   const navigate = useNavigate();

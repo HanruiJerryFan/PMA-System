@@ -11,6 +11,7 @@ import { hasAnyAuthority } from "../../utils/authorities";
 import { uploadBusinessAttachments } from "../../utils/attachments";
 import { downloadApiFile, downloadExcel, resolveBlobErrorMessage } from "../../utils/exporters";
 import { sortSelectItems } from "../../utils/selectSorting";
+import { formatProjectOptionLabel } from "../../utils/projectLabels";
 
 const { Option } = Select;
 
@@ -47,7 +48,7 @@ export default function ContractInfo() {
     [customers]
   );
   const projectMap = useMemo(
-    () => Object.fromEntries(projects.map((item) => [item.uuid, item.projectName])),
+    () => Object.fromEntries(projects.map((item) => [item.uuid, formatProjectOptionLabel(item)])),
     [projects]
   );
   const contactMap = useMemo(
@@ -366,7 +367,7 @@ export default function ContractInfo() {
             >
               {sortSelectItems(projects, ["projectNumber"]).map((item) => (
                 <Option key={item.uuid} value={item.uuid}>
-                  {item.projectName}
+                  {formatProjectOptionLabel(item)}
                 </Option>
               ))}
             </Select>

@@ -50,6 +50,7 @@ import { uploadBusinessAttachments } from "../../utils/attachments";
 import { buildRegionOptions, buildRegionPath, formatRegionLabel } from "../../utils/regions";
 import { getFinanceSubjectOptions } from "../../utils/financeSubjects";
 import { sortSelectItems } from "../../utils/selectSorting";
+import { formatProjectOptionLabel } from "../../utils/projectLabels";
 
 const { Option } = Select;
 
@@ -421,15 +422,6 @@ function VoucherAmountFields({ form, incomeLabel, expenseLabel }) {
   );
 }
 
-function formatProjectOptionLabel(project) {
-  if (!project) {
-    return "";
-  }
-  if (project.projectNumber && project.projectName) {
-    return `${project.projectNumber} - ${project.projectName}`;
-  }
-  return project.projectName || project.projectNumber || project.uuid || "";
-}
 
 function getListTypeLabel(value) {
   return LIST_TYPE_OPTIONS.find((item) => item.value === value)?.label || value || "-";
