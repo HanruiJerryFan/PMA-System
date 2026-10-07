@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "classpath://org/mybatis/mybatis-3-mapper.dtd">
+<mapper namespace="com.jerry.salesmanagement.mapper.FinanceSubjectMapper">
+    <sql id="columns">
+        id, subject_level AS subjectLevel, subject_code AS subjectCode,
+        subject_name AS subjectName, sort_order AS sortOrder
+    </sql>
+    <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.FinanceSubject">
+        SELECT <include refid="columns"/> FROM finance_subject
+        ORDER BY subject_level, sort_order, id
+    </select>
+    <select id="selectById" resultType="com.jerry.salesmanagement.pojo.FinanceSubject">
+        SELECT <include refid="columns"/> FROM finance_subject WHERE id = #{id}
+    </select>
+    <select id="selectByCode" resultType="com.jerry.salesmanagement.pojo.FinanceSubject">
+        SELECT <include refid="columns"/> FROM finance_subject
+        WHERE subject_level = #{subjectLevel} AND subject_code = #{subjectCode}
+    </select>
+    <select id="selectByName" resultType="com.jerry.salesmanagement.pojo.FinanceSubject">
+        SELECT <include refid="columns"/> FROM finance_subject
+        WHERE subject_level = #{subjectLevel} AND subject_name = #{subjectName}
+    </select>
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO finance_subject (subject_level, subject_code, subject_name, sort_order)
+        VALUES (#{subjectLevel}, #{subjectCode}, #{subjectName}, #{sortOrder})
+    </insert>
+    <update id="update">
+        UPDATE finance_subject SET subject_name = #{subjectName}, sort_order = #{sortOrder}
+        WHERE id = #{id}
+    </update>
+</mapper>

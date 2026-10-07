@@ -199,6 +199,10 @@ export const inventoryAPI = {
 };
 
 export const financeAPI = {
+  getFinanceSubjects: () => api.get("/finance-subjects"),
+  createFinanceSubject: (data) => api.post("/finance-subjects", data),
+  updateFinanceSubject: (id, data) => api.put(`/finance-subjects/${id}`, data),
+
   getFinanceVouchers: () => api.get("/finance-vouchers"),
   getFinanceVoucherOptions: () => api.get("/finance-vouchers/options"),
   getFinanceVoucher: (uuid) => api.get(`/finance-vouchers/${uuid}`),

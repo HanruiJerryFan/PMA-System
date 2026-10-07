@@ -6,12 +6,14 @@ import com.jerry.salesmanagement.mapper.ProjectMapper;
 import com.jerry.salesmanagement.mapper.TaxRateDictMapper;
 import com.jerry.salesmanagement.pojo.Customer;
 import com.jerry.salesmanagement.pojo.FinanceVoucher;
+import com.jerry.salesmanagement.pojo.FinanceSubject;
 import com.jerry.salesmanagement.pojo.TaxRateDict;
 import com.jerry.salesmanagement.service.CodeSequenceService;
 import com.jerry.salesmanagement.service.CurrentUserService;
 import com.jerry.salesmanagement.service.CustomerService;
 import com.jerry.salesmanagement.service.EntryAuditService;
 import com.jerry.salesmanagement.service.FinanceVoucherService;
+import com.jerry.salesmanagement.service.FinanceSubjectService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,27 +31,9 @@ import java.util.regex.Pattern;
 @Service
 public class FinanceVoucherServiceImpl implements FinanceVoucherService {
 
-    private static final Set<String> LEVEL_1_SUBJECTS = Set.of("NON_PROJECT", "PROJECT");
     private static final Set<String> TRANSACTION_DIRECTIONS = Set.of("RECEIVE", "PAY");
     private static final Set<String> INVOICE_STATUSES = Set.of("NOT_INVOICED", "INVOICED");
     private static final Set<String> INVOICE_TYPES = Set.of("VAT_ORDINARY", "VAT_SPECIAL");
-    private static final Set<String> LEVEL_2_SUBJECTS = Set.of(
-            "EQUIPMENT_PURCHASE",
-            "AUXILIARY_MATERIAL_PURCHASE",
-            "CONSTRUCTION_FEE",
-            "SALES_EXPENSE",
-            "MISCELLANEOUS",
-            "AMORTIZATION",
-            "PROJECT_RECEIPT",
-            "WAREHOUSE_TRANSFER_IN",
-            "PROJECT_TRANSFER_OUT",
-            "SALARY",
-            "TRAVEL",
-            "ENTERTAINMENT",
-            "CONFERENCE",
-            "VEHICLE",
-            "OTHER"
-    );
     private static final BigDecimal THIRTEEN_PERCENT = new BigDecimal("0.13");
     private static final BigDecimal EIGHTEEN_PERCENT = new BigDecimal("0.18");
     private static final BigDecimal ELEVEN_POINT_FIVE_PERCENT = new BigDecimal("0.115");
@@ -81,6 +65,9 @@ public class FinanceVoucherServiceImpl implements FinanceVoucherService {
 
     @Autowired
     private EntryAuditService entryAuditService;
+
+    @Autowired
+    private FinanceSubjectService financeSubjectService;
 
     @Override
     public FinanceVoucher getByUuid(String uuid) {
@@ -163,18 +150,17 @@ public class FinanceVoucherServiceImpl implements FinanceVoucherService {
         if (existingByVoucherNo != null && !sameVoucher(existingByVoucherNo, voucher)) {
             throw new IllegalArgumentException("Voucher number already exists");
         }
-        if (!StringUtils.hasText(voucher.getLevel1Subject()) || !LEVEL_1_SUBJECTS.contains(voucher.getLevel1Subject())) {
-            throw new IllegalArgumentException("Level 1 subject is invalid");
-        }
+        FinanceSubject level1 = financeSubjectService.validateSubject(1, voucher.getLevel1SubjectId());
+        voucher.setLevel1SubjectName(level1.getSubjectName());
         if (!StringUtils.hasText(voucher.getProjectId())) {
             throw new IllegalArgumentException("Project is required");
         }
         if (projectMapper.selectByUuid(voucher.getProjectId()) == null) {
             throw new IllegalArgumentException("Project does not exist");
         }
-        if (!StringUtils.hasText(voucher.getLevel2Subject()) || !LEVEL_2_SUBJECTS.contains(voucher.getLevel2Subject())) {
-            throw new IllegalArgumentException("Level 2 subject is invalid");
-        }
+        FinanceSubject level2 = financeSubjectService.validateSubject(2, voucher.getLevel2SubjectId());
+        voucher.setLevel2SubjectName(level2.getSubjectName());
+        voucher.setLevel2SubjectCode(level2.getSubjectCode());
         if (!StringUtils.hasText(voucher.getSummary())) {
             throw new IllegalArgumentException("Summary is required");
         }
@@ -284,7 +270,7 @@ public class FinanceVoucherServiceImpl implements FinanceVoucherService {
         }
 
         BigDecimal bookedAmount = baseAmount.divide(denominator, 2, RoundingMode.HALF_UP);
-        if ("PROJECT_TRANSFER_OUT".equals(voucher.getLevel2Subject())) {
+        if ("PROJECT_TRANSFER_OUT".equals(voucher.getLevel2SubjectCode())) {
             bookedAmount = bookedAmount.negate();
         }
         return bookedAmount;
@@ -292,7 +278,7 @@ public class FinanceVoucherServiceImpl implements FinanceVoucherService {
 
     private BigDecimal calculateBookkeepingDenominator(FinanceVoucher voucher) {
         if ("PAY".equals(voucher.getTransactionDirection())
-                && FIXED_THIRTEEN_PERCENT_EXPENSE_SUBJECTS.contains(voucher.getLevel2Subject())) {
+                && FIXED_THIRTEEN_PERCENT_EXPENSE_SUBJECTS.contains(voucher.getLevel2SubjectCode())) {
             return BigDecimal.ONE.subtract(THIRTEEN_PERCENT);
         }
 

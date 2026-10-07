@@ -11,8 +11,11 @@
             fv.voucher_no AS voucherNo,
             fv.occurred_on AS occurredOn,
             fv.project_id AS projectId,
-            fv.level_1_subject AS level1Subject,
-            fv.level_2_subject AS level2Subject,
+            fv.level_1_subject_id AS level1SubjectId,
+            fv.level_2_subject_id AS level2SubjectId,
+            s1.subject_name AS level1SubjectName,
+            s2.subject_name AS level2SubjectName,
+            s2.subject_code AS level2SubjectCode,
             fv.summary,
             fv.transaction_direction AS transactionDirection,
             fv.tax_rate AS taxRate,
@@ -36,6 +39,8 @@
             fv.updated_at AS updatedAt,
             fv.updated_by AS updatedBy
         FROM finance_voucher fv
+        LEFT JOIN finance_subject s1 ON fv.level_1_subject_id = s1.id
+        LEFT JOIN finance_subject s2 ON fv.level_2_subject_id = s2.id
         LEFT JOIN sys_user eu ON fv.entry_user = eu.id
         LEFT JOIN sys_user au ON fv.auditor_user = au.id
         WHERE fv.uuid = #{uuid}
@@ -48,8 +53,11 @@
             fv.voucher_no AS voucherNo,
             fv.occurred_on AS occurredOn,
             fv.project_id AS projectId,
-            fv.level_1_subject AS level1Subject,
-            fv.level_2_subject AS level2Subject,
+            fv.level_1_subject_id AS level1SubjectId,
+            fv.level_2_subject_id AS level2SubjectId,
+            s1.subject_name AS level1SubjectName,
+            s2.subject_name AS level2SubjectName,
+            s2.subject_code AS level2SubjectCode,
             fv.summary,
             fv.transaction_direction AS transactionDirection,
             fv.tax_rate AS taxRate,
@@ -73,6 +81,8 @@
             fv.updated_at AS updatedAt,
             fv.updated_by AS updatedBy
         FROM finance_voucher fv
+        LEFT JOIN finance_subject s1 ON fv.level_1_subject_id = s1.id
+        LEFT JOIN finance_subject s2 ON fv.level_2_subject_id = s2.id
         LEFT JOIN sys_user eu ON fv.entry_user = eu.id
         LEFT JOIN sys_user au ON fv.auditor_user = au.id
         WHERE fv.voucher_no = #{voucherNo}
@@ -86,8 +96,11 @@
             fv.voucher_no AS voucherNo,
             fv.occurred_on AS occurredOn,
             fv.project_id AS projectId,
-            fv.level_1_subject AS level1Subject,
-            fv.level_2_subject AS level2Subject,
+            fv.level_1_subject_id AS level1SubjectId,
+            fv.level_2_subject_id AS level2SubjectId,
+            s1.subject_name AS level1SubjectName,
+            s2.subject_name AS level2SubjectName,
+            s2.subject_code AS level2SubjectCode,
             fv.summary,
             fv.transaction_direction AS transactionDirection,
             fv.tax_rate AS taxRate,
@@ -111,6 +124,8 @@
             fv.updated_at AS updatedAt,
             fv.updated_by AS updatedBy
         FROM finance_voucher fv
+        LEFT JOIN finance_subject s1 ON fv.level_1_subject_id = s1.id
+        LEFT JOIN finance_subject s2 ON fv.level_2_subject_id = s2.id
         LEFT JOIN sys_user eu ON fv.entry_user = eu.id
         LEFT JOIN sys_user au ON fv.auditor_user = au.id
         ORDER BY fv.occurred_on DESC, fv.voucher_no DESC
@@ -128,8 +143,8 @@
             voucher_no,
             occurred_on,
             project_id,
-            level_1_subject,
-            level_2_subject,
+            level_1_subject_id,
+            level_2_subject_id,
             summary,
             transaction_direction,
             tax_rate,
@@ -153,8 +168,8 @@
             #{voucherNo},
             #{occurredOn},
             #{projectId},
-            #{level1Subject},
-            #{level2Subject},
+            #{level1SubjectId},
+            #{level2SubjectId},
             #{summary},
             #{transactionDirection},
             #{taxRate},
@@ -182,8 +197,8 @@
             <if test="voucherNo != null">voucher_no = #{voucherNo},</if>
             <if test="occurredOn != null">occurred_on = #{occurredOn},</if>
             project_id = #{projectId},
-            <if test="level1Subject != null">level_1_subject = #{level1Subject},</if>
-            <if test="level2Subject != null">level_2_subject = #{level2Subject},</if>
+            <if test="level1SubjectId != null">level_1_subject_id = #{level1SubjectId},</if>
+            <if test="level2SubjectId != null">level_2_subject_id = #{level2SubjectId},</if>
             <if test="summary != null">summary = #{summary},</if>
             <if test="transactionDirection != null">transaction_direction = #{transactionDirection},</if>
             <if test="taxRate != null">tax_rate = #{taxRate},</if>

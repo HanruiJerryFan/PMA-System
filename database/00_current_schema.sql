@@ -321,6 +321,19 @@ CREATE TABLE `customer_type` (
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
+-- Table structure for finance_subject
+DROP TABLE IF EXISTS `finance_subject`;
+CREATE TABLE IF NOT EXISTS `finance_subject` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `subject_level` tinyint NOT NULL,
+  `subject_code` varchar(64) NOT NULL,
+  `subject_name` varchar(64) NOT NULL,
+  `sort_order` int NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_finance_subject_level_code` (`subject_level`, `subject_code`),
+  UNIQUE KEY `uk_finance_subject_level_name` (`subject_level`, `subject_name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 --
 -- Table structure for table `finance_voucher`
 --
@@ -334,8 +347,10 @@ CREATE TABLE `finance_voucher` (
   `voucher_no` varchar(10) NOT NULL,
   `occurred_on` date NOT NULL,
   `project_id` varchar(36) DEFAULT NULL,
-  `level_1_subject` varchar(32) NOT NULL,
-  `level_2_subject` varchar(64) NOT NULL,
+  `level_1_subject` varchar(32) DEFAULT NULL,
+  `level_2_subject` varchar(64) DEFAULT NULL,
+  `level_1_subject_id` bigint NOT NULL,
+  `level_2_subject_id` bigint NOT NULL,
   `summary` varchar(500) NOT NULL,
   `transaction_direction` varchar(16) NOT NULL,
   `tax_rate` decimal(5,4) NOT NULL,
@@ -363,7 +378,9 @@ CREATE TABLE `finance_voucher` (
   KEY `idx_finance_voucher_counterparty_customer_id` (`counterparty_customer_id`),
   KEY `idx_finance_voucher_invoice_status` (`invoice_status`),
   KEY `idx_finance_voucher_entry_user` (`entry_user`),
-  KEY `idx_finance_voucher_auditor_user` (`auditor_user`)
+  KEY `idx_finance_voucher_auditor_user` (`auditor_user`),
+  CONSTRAINT `fk_finance_voucher_level_1_subject` FOREIGN KEY (`level_1_subject_id`) REFERENCES `finance_subject` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT `fk_finance_voucher_level_2_subject` FOREIGN KEY (`level_2_subject_id`) REFERENCES `finance_subject` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!50003 SET @saved_cs_client      = @@character_set_client */ ;
@@ -1110,5 +1127,7 @@ CREATE TABLE `warehouse_info` (
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+
 
 -- Dump completed on 2026-03-29  2:37:19

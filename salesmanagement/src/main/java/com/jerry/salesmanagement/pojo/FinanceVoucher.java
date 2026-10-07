@@ -1,6 +1,7 @@
 package com.jerry.salesmanagement.pojo;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -15,8 +16,14 @@ public class FinanceVoucher implements EntryAuditable {
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate occurredOn;
     private String projectId;
-    private String level1Subject;
-    private String level2Subject;
+    private Long level1SubjectId;
+    private Long level2SubjectId;
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    private String level1SubjectName;
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    private String level2SubjectName;
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    private String level2SubjectCode;
     private String summary;
     private String transactionDirection;
     private BigDecimal taxRate;

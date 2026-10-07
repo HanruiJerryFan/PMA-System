@@ -52,7 +52,7 @@ class FinanceVoucherServiceImplAccountingTests {
     private FinanceVoucher payVoucher(String subject, String invoiceStatus, String taxRate, String expense) {
         FinanceVoucher voucher = new FinanceVoucher();
         voucher.setTransactionDirection("PAY");
-        voucher.setLevel2Subject(subject);
+        voucher.setLevel2SubjectCode(subject);
         voucher.setInvoiceStatus(invoiceStatus);
         voucher.setTaxRate(new BigDecimal(taxRate));
         voucher.setActualExpenseAmount(new BigDecimal(expense));

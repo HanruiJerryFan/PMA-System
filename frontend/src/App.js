@@ -42,6 +42,7 @@ import WarehouseDoc from "./pages/Inventory/WarehouseDoc";
 import Warehouses from "./pages/Inventory/Warehouses";
 import FinanceVouchers from "./pages/Finance/FinanceVouchers";
 import TaxRateManagement from "./pages/Finance/TaxRateManagement";
+import FinanceSubjectManagement from "./pages/Finance/FinanceSubjectManagement";
 import AttachmentCenter from "./pages/Attachment/AttachmentCenter";
 import LoginLogs from "./pages/Logs/LoginLogs";
 import AuditTrails from "./pages/Logs/AuditTrails";
@@ -152,6 +153,7 @@ function App() {
               <Route path="/inventory/warehouse" element={<PrivateRoute requiredAuthorities={["inventory.access", "inventory.warehouse-doc.entry", "inventory.warehouse-doc.audit"]}><WarehouseDoc /></PrivateRoute>} />
               <Route path="/finance/vouchers" element={<PrivateRoute requiredAuthorities={["finance.access", "finance.voucher.entry", "finance.voucher.audit"]}><FinanceVouchers /></PrivateRoute>} />
               <Route path="/finance/tax-rates" element={<PrivateRoute requiredAuthorities={["finance.manage"]}><TaxRateManagement /></PrivateRoute>} />
+              <Route path="/finance/subjects" element={<PrivateRoute requiredAuthorities={["finance.manage"]}><FinanceSubjectManagement /></PrivateRoute>} />
               <Route path="/attachment/center" element={<PrivateRoute requiredAuthorities={["attachment.access"]}><AttachmentCenter /></PrivateRoute>} />
               <Route path="/logs/login" element={<PrivateRoute requiredAuthorities={["logs.view"]}><LoginLogs /></PrivateRoute>} />
               <Route path="/logs/audit" element={<PrivateRoute requiredAuthorities={["logs.view"]}><AuditTrails /></PrivateRoute>} />

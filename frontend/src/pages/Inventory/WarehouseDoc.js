@@ -23,6 +23,7 @@ import { resolvePagePermissions } from "../../utils/pagePermissions";
 import { canMaintainEntryAuditUsers, getUserLabel } from "../../utils/entryAudit";
 import WarehouseDocumentModal from "./WarehouseDocumentModal";
 import {
+  DOC_TYPES,
   categoryLabel,
   docMeta,
   formatAmount,
@@ -228,12 +229,22 @@ export default function WarehouseDoc() {
   };
 
   const columns = [
-    { title: "单据编号", dataIndex: "docNumber", key: "docNumber", width: 170 },
+    {
+      title: "单据编号",
+      dataIndex: "docNumber",
+      key: "docNumber",
+      width: 170,
+      sorter: (left, right) =>
+        (left.docNumber || "").localeCompare(right.docNumber || "", "zh-CN", { numeric: true }),
+    },
     {
       title: "单据类型",
       dataIndex: "docTypeLabel",
       key: "docTypeLabel",
       width: 120,
+      filters: Object.entries(DOC_TYPES).map(([value, meta]) => ({ text: meta.label, value })),
+      filterMultiple: false,
+      onFilter: (value, record) => record.docType === value,
       render: (value, record) => <Tag color={docMeta(record.docType).tagColor}>{value}</Tag>,
     },
     { title: "业务类别", dataIndex: "businessCategoryLabel", key: "businessCategoryLabel", width: 180 },

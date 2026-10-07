@@ -166,6 +166,7 @@ export default function Sidebar() {
         children: [
           { key: "/finance/vouchers", label: "财务凭证", onClick: () => navigate("/finance/vouchers"), requiredAuthorities: ["finance.access", "finance.voucher.entry", "finance.voucher.audit"] },
           { key: "/finance/tax-rates", label: "税率字典", onClick: () => navigate("/finance/tax-rates"), requiredAuthorities: ["finance.manage"] },
+          { key: "/finance/subjects", label: "科目管理", onClick: () => navigate("/finance/subjects"), requiredAuthorities: ["finance.manage"] },
         ],
       },
       {

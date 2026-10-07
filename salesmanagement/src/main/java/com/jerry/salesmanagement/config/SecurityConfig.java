@@ -64,7 +64,8 @@ public class SecurityConfig {
 
     private static final String[] FINANCE_PATHS = {
             "/api/finance-vouchers/**",
-            "/api/tax-rate-dicts/**"
+            "/api/tax-rate-dicts/**",
+            "/api/finance-subjects/**"
     };
 
     private final CustomUserDetailsService customUserDetailsService;
@@ -215,6 +216,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/finance-vouchers/**")
                         .hasAnyAuthority("finance.access", "finance.manage", "finance.voucher.entry", "finance.voucher.audit")
                         .requestMatchers(HttpMethod.GET, "/api/tax-rate-dicts/**")
+                        .hasAnyAuthority("finance.access", "finance.manage", "finance.voucher.entry", "finance.voucher.audit")
+                        .requestMatchers(HttpMethod.GET, "/api/finance-subjects/**")
                         .hasAnyAuthority("finance.access", "finance.manage", "finance.voucher.entry", "finance.voucher.audit")
                         .requestMatchers(HttpMethod.POST, "/api/finance-vouchers/*/audit")
                         .hasAnyAuthority("finance.voucher.audit", "finance.manage")

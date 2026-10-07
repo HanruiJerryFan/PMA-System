@@ -40,31 +40,10 @@ import { hasAnyAuthority } from "../../utils/authorities";
 import { canMaintainEntryAuditUsers, getUserLabel } from "../../utils/entryAudit";
 import { uploadBusinessAttachments } from "../../utils/attachments";
 import { downloadApiFile, downloadExcel, resolveBlobErrorMessage } from "../../utils/exporters";
+import { getFinanceSubjectOptions } from "../../utils/financeSubjects";
 
 const { Option } = Select;
 
-const LEVEL_1_OPTIONS = [
-  { value: "NON_PROJECT", label: "非项目" },
-  { value: "PROJECT", label: "项目" },
-];
-
-const LEVEL_2_OPTIONS = [
-  { value: "EQUIPMENT_PURCHASE", label: "设备采购" },
-  { value: "AUXILIARY_MATERIAL_PURCHASE", label: "辅材采购" },
-  { value: "CONSTRUCTION_FEE", label: "施工费" },
-  { value: "SALES_EXPENSE", label: "销售费用" },
-  { value: "MISCELLANEOUS", label: "杂项支出" },
-  { value: "AMORTIZATION", label: "摊销" },
-  { value: "PROJECT_RECEIPT", label: "项目回款" },
-  { value: "WAREHOUSE_TRANSFER_IN", label: "仓库调入" },
-  { value: "PROJECT_TRANSFER_OUT", label: "项目调出" },
-  { value: "SALARY", label: "人员工资" },
-  { value: "TRAVEL", label: "差旅" },
-  { value: "ENTERTAINMENT", label: "招待" },
-  { value: "CONFERENCE", label: "会议" },
-  { value: "VEHICLE", label: "车辆" },
-  { value: "OTHER", label: "其他" },
-];
 
 const DIRECTION_OPTIONS = [
   { value: "RECEIVE", label: "收款" },
@@ -306,7 +285,7 @@ function calculateBookedAmountPreview(values) {
     }
 
     let denominator;
-    if (FIXED_THIRTEEN_PERCENT_EXPENSE_SUBJECTS.includes(values.level2Subject)) {
+    if (FIXED_THIRTEEN_PERCENT_EXPENSE_SUBJECTS.includes(values.level2SubjectCode)) {
       denominator = 1 - 0.13;
     } else if (taxRate === 0) {
       denominator = 1 - (values.invoiceStatus === "INVOICED" ? 0.115 : 0.18);
@@ -318,7 +297,7 @@ function calculateBookedAmountPreview(values) {
     }
 
     let bookedAmount = expense / denominator;
-    if (values.level2Subject === "PROJECT_TRANSFER_OUT") {
+    if (values.level2SubjectCode === "PROJECT_TRANSFER_OUT") {
       bookedAmount = -bookedAmount;
     }
     return Number(bookedAmount.toFixed(2));
@@ -396,12 +375,13 @@ function calculatePayableAmount(voucher) {
   return info.type === "应付" ? Number(info.amount || 0) : 0;
 }
 
-function BookedAmountPreview({ form }) {
+function BookedAmountPreview({ form, subjects }) {
   const direction = Form.useWatch("transactionDirection", form);
   const income = Form.useWatch("actualIncomeAmount", form);
   const expense = Form.useWatch("actualExpenseAmount", form);
   const taxRate = Form.useWatch("taxRate", form);
-  const level2Subject = Form.useWatch("level2Subject", form);
+  const level2SubjectId = Form.useWatch("level2SubjectId", form);
+  const level2SubjectCode = subjects.find((item) => item.id === level2SubjectId)?.subjectCode;
   const invoiceStatus = Form.useWatch("invoiceStatus", form);
   const storedBookedAmount = Form.useWatch("bookedAmount", form);
 
@@ -412,10 +392,10 @@ function BookedAmountPreview({ form }) {
         actualIncomeAmount: income,
         actualExpenseAmount: expense,
         taxRate,
-        level2Subject,
+        level2SubjectCode,
         invoiceStatus,
       }),
-    [direction, expense, income, invoiceStatus, level2Subject, taxRate]
+    [direction, expense, income, invoiceStatus, level2SubjectCode, taxRate]
   );
 
   const displayValue =
@@ -526,6 +506,9 @@ export default function FinanceVouchers() {
   const [projects, setProjects] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [taxRates, setTaxRates] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  const level1Options = useMemo(() => getFinanceSubjectOptions(subjects, 1), [subjects]);
+  const level2Options = useMemo(() => getFinanceSubjectOptions(subjects, 2), [subjects]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
@@ -593,9 +576,9 @@ export default function FinanceVouchers() {
       vouchers.map((item) => {
         const projectLabel = item.projectId ? projectMap[item.projectId] || item.projectId : "-";
         const level1Label =
-          LEVEL_1_OPTIONS.find((option) => option.value === item.level1Subject)?.label || item.level1Subject;
+          level1Options.find((option) => option.value === item.level1SubjectId)?.label || item.level1SubjectName || "-";
         const level2Label =
-          LEVEL_2_OPTIONS.find((option) => option.value === item.level2Subject)?.label || item.level2Subject;
+          level2Options.find((option) => option.value === item.level2SubjectId)?.label || item.level2SubjectName || "-";
         const directionLabel =
           DIRECTION_OPTIONS.find((option) => option.value === item.transactionDirection)?.label ||
           item.transactionDirection;
@@ -643,7 +626,7 @@ export default function FinanceVouchers() {
           searchText: buildVoucherSearchText(decoratedItem),
         };
       }),
-    [projectMap, taxRateLabelMap, userMap, vouchers]
+    [level1Options, level2Options, projectMap, taxRateLabelMap, userMap, vouchers]
   );
 
   const visibleVouchers = useMemo(
@@ -674,7 +657,7 @@ export default function FinanceVouchers() {
           accumulator.pending += item.isCompleted ? 0 : 1;
           const excludesNotInvoicedCount =
             item.transactionDirection === "PAY"
-            && FIXED_THIRTEEN_PERCENT_EXPENSE_SUBJECTS.includes(item.level2Subject);
+            && FIXED_THIRTEEN_PERCENT_EXPENSE_SUBJECTS.includes(item.level2SubjectCode);
           accumulator.notInvoiced += item.invoiceStatus === "NOT_INVOICED" && !excludesNotInvoicedCount ? 1 : 0;
           accumulator.payable += item.receivablePayableType === "应付" ? 1 : 0;
           accumulator.payableAmount += calculatePayableAmount(item);
@@ -762,6 +745,11 @@ export default function FinanceVouchers() {
     setTaxRates(normalizeApiData(response));
   };
 
+  const fetchSubjects = async () => {
+    const response = await financeAPI.getFinanceSubjects();
+    setSubjects(normalizeApiData(response));
+  };
+
   const fetchUsers = async () => {
     const response = await permissionAPI.getUserOptions().catch(() => []);
     setUsers(Array.isArray(response) ? response : normalizeApiData(response));
@@ -772,6 +760,7 @@ export default function FinanceVouchers() {
     fetchProjects();
     fetchCustomers();
     fetchTaxRates();
+    fetchSubjects().catch((error) => message.error(error?.message || "加载财务科目失败"));
     fetchUsers();
   }, []);
 
@@ -1197,7 +1186,7 @@ export default function FinanceVouchers() {
             label: "一级科目",
             component: (
               <Select placeholder="筛选一级科目" allowClear showSearch optionFilterProp="children">
-                {LEVEL_1_OPTIONS.map((item) => (
+                {level1Options.map((item) => (
                   <Option key={item.value} value={item.label}>
                     {item.label}
                   </Option>
@@ -1210,7 +1199,7 @@ export default function FinanceVouchers() {
             label: "二级科目",
             component: (
               <Select placeholder="筛选二级科目" allowClear showSearch optionFilterProp="children">
-                {LEVEL_2_OPTIONS.map((item) => (
+                {level2Options.map((item) => (
                   <Option key={item.value} value={item.label}>
                     {item.label}
                   </Option>
@@ -1418,12 +1407,12 @@ export default function FinanceVouchers() {
             ),
           },
           {
-            name: "level1Subject",
+            name: "level1SubjectId",
             label: "一级科目",
             rules: [{ required: true, message: "请选择一级科目" }],
             component: (
-              <Select placeholder="请选择一级科目">
-                {LEVEL_1_OPTIONS.map((item) => (
+              <Select placeholder="请选择一级科目" showSearch optionFilterProp="children">
+                {level1Options.map((item) => (
                   <Option key={item.value} value={item.value}>
                     {item.label}
                   </Option>
@@ -1432,12 +1421,12 @@ export default function FinanceVouchers() {
             ),
           },
           {
-            name: "level2Subject",
+            name: "level2SubjectId",
             label: "二级科目",
             rules: [{ required: true, message: "请选择二级科目" }],
             component: (
               <Select placeholder="请选择二级科目" showSearch optionFilterProp="children">
-                {LEVEL_2_OPTIONS.map((item) => (
+                {level2Options.map((item) => (
                   <Option key={item.value} value={item.value}>
                     {item.label}
                   </Option>
@@ -1480,7 +1469,7 @@ export default function FinanceVouchers() {
             renderOnly: true,
             render: ({ form }) => (
               <Form.Item label="记账金额（自动计算）">
-                <BookedAmountPreview form={form} />
+                <BookedAmountPreview form={form} subjects={subjects} />
               </Form.Item>
             ),
           },

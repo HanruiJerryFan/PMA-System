@@ -48,6 +48,7 @@ import {
 import { hasAnyAuthority } from "../../utils/authorities";
 import { uploadBusinessAttachments } from "../../utils/attachments";
 import { buildRegionOptions, buildRegionPath, formatRegionLabel } from "../../utils/regions";
+import { getFinanceSubjectOptions } from "../../utils/financeSubjects";
 
 const { Option } = Select;
 
@@ -57,28 +58,6 @@ const LIST_TYPE_OPTIONS = [
   { value: "CHANGE", label: "销售变更清单" },
 ];
 
-const LEVEL_1_OPTIONS = [
-  { value: "NON_PROJECT", label: "非项目" },
-  { value: "PROJECT", label: "项目" },
-];
-
-const LEVEL_2_OPTIONS = [
-  { value: "EQUIPMENT_PURCHASE", label: "设备采购" },
-  { value: "AUXILIARY_MATERIAL_PURCHASE", label: "辅材采购" },
-  { value: "CONSTRUCTION_FEE", label: "施工费" },
-  { value: "SALES_EXPENSE", label: "销售费用" },
-  { value: "MISCELLANEOUS", label: "杂项支出" },
-  { value: "AMORTIZATION", label: "摊销" },
-  { value: "PROJECT_RECEIPT", label: "项目回款" },
-  { value: "WAREHOUSE_TRANSFER_IN", label: "仓库调入" },
-  { value: "PROJECT_TRANSFER_OUT", label: "项目调出" },
-  { value: "SALARY", label: "人员工资" },
-  { value: "TRAVEL", label: "差旅" },
-  { value: "ENTERTAINMENT", label: "招待" },
-  { value: "CONFERENCE", label: "会议" },
-  { value: "VEHICLE", label: "车辆" },
-  { value: "OTHER", label: "其他" },
-];
 
 const DIRECTION_OPTIONS = [
   { value: "RECEIVE", label: "收款" },
@@ -239,7 +218,7 @@ function calculateBookedAmountPreview(values) {
     }
 
     let denominator;
-    if (FIXED_THIRTEEN_PERCENT_EXPENSE_SUBJECTS.includes(values.level2Subject)) {
+    if (FIXED_THIRTEEN_PERCENT_EXPENSE_SUBJECTS.includes(values.level2SubjectCode)) {
       denominator = 1 - 0.13;
     } else if (taxRate === 0) {
       denominator = 1 - (values.invoiceStatus === "INVOICED" ? 0.115 : 0.18);
@@ -251,7 +230,7 @@ function calculateBookedAmountPreview(values) {
     }
 
     let bookedAmount = expense / denominator;
-    if (values.level2Subject === "PROJECT_TRANSFER_OUT") {
+    if (values.level2SubjectCode === "PROJECT_TRANSFER_OUT") {
       bookedAmount = -bookedAmount;
     }
     return Number(bookedAmount.toFixed(2));
@@ -324,12 +303,13 @@ function calculateReceivablePayableInfo(values) {
   return { type: null, amount: null };
 }
 
-function BookedAmountPreview({ form }) {
+function BookedAmountPreview({ form, subjects }) {
   const direction = Form.useWatch("transactionDirection", form);
   const income = Form.useWatch("actualIncomeAmount", form);
   const expense = Form.useWatch("actualExpenseAmount", form);
   const taxRate = Form.useWatch("taxRate", form);
-  const level2Subject = Form.useWatch("level2Subject", form);
+  const level2SubjectId = Form.useWatch("level2SubjectId", form);
+  const level2SubjectCode = subjects.find((item) => item.id === level2SubjectId)?.subjectCode;
   const invoiceStatus = Form.useWatch("invoiceStatus", form);
   const storedBookedAmount = Form.useWatch("bookedAmount", form);
 
@@ -340,10 +320,10 @@ function BookedAmountPreview({ form }) {
         actualIncomeAmount: income,
         actualExpenseAmount: expense,
         taxRate,
-        level2Subject,
+        level2SubjectCode,
         invoiceStatus,
       }),
-    [direction, expense, income, invoiceStatus, level2Subject, taxRate]
+    [direction, expense, income, invoiceStatus, level2SubjectCode, taxRate]
   );
 
   const displayValue =
@@ -474,6 +454,9 @@ export default function ProjectDashboard() {
   const [contractTypes, setContractTypes] = useState([]);
   const [financeVouchers, setFinanceVouchers] = useState([]);
   const [taxRates, setTaxRates] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  const level1Options = useMemo(() => getFinanceSubjectOptions(subjects, 1), [subjects]);
+  const level2Options = useMemo(() => getFinanceSubjectOptions(subjects, 2), [subjects]);
   const [attachments, setAttachments] = useState([]);
   const [editVisible, setEditVisible] = useState(false);
   const [listVisible, setListVisible] = useState(false);
@@ -635,6 +618,7 @@ export default function ProjectDashboard() {
         contractTypeResponse,
         voucherResponse,
         taxRateResponse,
+        subjectResponse,
         attachmentResponse,
       ] = await Promise.all([
         projectAPI.getProjects(),
@@ -649,6 +633,7 @@ export default function ProjectDashboard() {
         allowContract ? contractAPI.getContractTypes() : Promise.resolve([]),
         allowFinance ? financeAPI.getFinanceVouchers() : Promise.resolve([]),
         allowFinance ? financeAPI.getTaxRateDicts() : Promise.resolve([]),
+        allowFinance ? financeAPI.getFinanceSubjects() : Promise.resolve([]),
         allowAttachment ? attachmentAPI.getAttachmentsByBusiness("projects", projectUuid) : Promise.resolve([]),
       ]);
 
@@ -665,6 +650,7 @@ export default function ProjectDashboard() {
       setContractTypes(normalizeResponseData(contractTypeResponse));
       setFinanceVouchers(normalizeResponseData(voucherResponse));
       setTaxRates(normalizeResponseData(taxRateResponse));
+      setSubjects(normalizeResponseData(subjectResponse));
       setAttachments(normalizeResponseData(attachmentResponse));
     } finally {
       setLoading(false);
@@ -823,8 +809,8 @@ export default function ProjectDashboard() {
         await financeAPI.createFinanceVoucher({
           occurredOn: values.occurredOn ? values.occurredOn.format("YYYY-MM-DD") : null,
           projectId: project.uuid,
-        level1Subject: values.level1Subject,
-        level2Subject: values.level2Subject,
+        level1SubjectId: values.level1SubjectId,
+        level2SubjectId: values.level2SubjectId,
         summary: values.summary,
           transactionDirection: values.transactionDirection,
           taxRate: values.taxRate,
@@ -884,7 +870,7 @@ export default function ProjectDashboard() {
       { title: "凭证号", dataIndex: "voucherNo", key: "voucherNo" },
       { title: "发生日期", dataIndex: "occurredOn", key: "occurredOn", render: (value) => formatDate(value) },
       { title: "项目", dataIndex: "projectId", key: "projectId", render: (value) => projectMap[value] || "-" },
-      { title: "二级科目", dataIndex: "level2Subject", key: "level2Subject", render: (value) => LEVEL_2_OPTIONS.find((item) => item.value === value)?.label || value || "-" },
+      { title: "二级科目", dataIndex: "level2SubjectId", key: "level2SubjectId", render: (value, record) => level2Options.find((item) => item.value === value)?.label || record.level2SubjectName || "-" },
       { title: "开票状态", dataIndex: "invoiceStatus", key: "invoiceStatus", render: (value) => INVOICE_STATUS_OPTIONS.find((item) => item.value === value)?.label || value || "-" },
       { title: "发票分类", dataIndex: "invoiceTypeLabel", key: "invoiceTypeLabel", render: (value) => value || "-" },
       { title: "记账金额", dataIndex: "bookedAmount", key: "bookedAmount", render: (value) => formatAmount(value) },
@@ -1506,23 +1492,23 @@ export default function ProjectDashboard() {
       </Modal>
 
       <Modal title="快速新增财务凭证" open={voucherVisible} onCancel={() => setVoucherVisible(false)} onOk={handleCreateVoucher} confirmLoading={submitting} destroyOnHidden>
-        <Form form={voucherForm} layout="vertical" initialValues={{ level1Subject: "PROJECT", transactionDirection: "PAY", taxRate: 0.13, invoiceStatus: "NOT_INVOICED" }}>
+        <Form form={voucherForm} layout="vertical" initialValues={{ level1SubjectId: subjects.find((item) => item.subjectCode === "PROJECT" && item.subjectLevel === 1)?.id, transactionDirection: "PAY", taxRate: 0.13, invoiceStatus: "NOT_INVOICED" }}>
           <VoucherDirectionSync form={voucherForm} />
           <Form.Item name="occurredOn" label="发生日期" rules={[{ required: true, message: "请选择发生日期" }]}>
             <DatePicker style={{ width: "100%" }} />
           </Form.Item>
-          <Form.Item name="level1Subject" label="一级科目" rules={[{ required: true, message: "请选择一级科目" }]}>
+          <Form.Item name="level1SubjectId" label="一级科目" rules={[{ required: true, message: "请选择一级科目" }]}>
             <Select>
-              {LEVEL_1_OPTIONS.map((item) => (
+              {level1Options.map((item) => (
                 <Option key={item.value} value={item.value}>
                   {item.label}
                 </Option>
               ))}
             </Select>
           </Form.Item>
-          <Form.Item name="level2Subject" label="二级科目" rules={[{ required: true, message: "请选择二级科目" }]}>
+          <Form.Item name="level2SubjectId" label="二级科目" rules={[{ required: true, message: "请选择二级科目" }]}>
             <Select>
-              {LEVEL_2_OPTIONS.map((item) => (
+              {level2Options.map((item) => (
                 <Option key={item.value} value={item.value}>
                   {item.label}
                 </Option>
@@ -1583,7 +1569,7 @@ export default function ProjectDashboard() {
             <ReceivablePayableAmountPreview form={voucherForm} />
           </Form.Item>
           <Form.Item label="记账金额（自动计算）">
-            <BookedAmountPreview form={voucherForm} />
+            <BookedAmountPreview form={voucherForm} subjects={subjects} />
           </Form.Item>
           <Form.Item name="remark" label="备注">
             <Input.TextArea rows={3} />

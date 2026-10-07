@@ -21,3 +21,22 @@ INSERT INTO `sys_permission` VALUES (23,'project.list.entry','项目清单录入
 INSERT INTO `sys_role_permission` VALUES (1,23),(1,24),(1,25),(1,26),(1,27),(1,28),(1,29),(2,23),(2,24),(2,25),(2,26),(2,27),(2,28),(2,29);
 INSERT INTO `tax_rate_dict` VALUES (1,0.00,'0%',1,1),(2,0.01,'1%',2,1),(3,0.03,'3%',3,1),(4,0.06,'6%',4,1),(5,0.09,'9%',5,1),(6,0.13,'13%',6,1);
 INSERT INTO `warehouse_info` VALUES (1,'WH-DEFAULT','默认仓库','默认仓库地址','默认联系人','00000000000','系统初始化默认仓库');
+
+INSERT INTO `finance_subject` (`subject_level`, `subject_code`, `subject_name`, `sort_order`) VALUES
+  (1, 'NON_PROJECT', '非项目', 1),
+  (1, 'PROJECT', '项目', 2),
+  (2, 'EQUIPMENT_PURCHASE', '设备采购', 1),
+  (2, 'AUXILIARY_MATERIAL_PURCHASE', '辅材采购', 2),
+  (2, 'CONSTRUCTION_FEE', '施工费', 3),
+  (2, 'SALES_EXPENSE', '销售费用', 4),
+  (2, 'MISCELLANEOUS', '杂项支出', 5),
+  (2, 'AMORTIZATION', '摊销', 6),
+  (2, 'PROJECT_RECEIPT', '项目回款', 7),
+  (2, 'WAREHOUSE_TRANSFER_IN', '仓库调入', 8),
+  (2, 'PROJECT_TRANSFER_OUT', '项目调出', 9),
+  (2, 'SALARY', '人员工资', 10),
+  (2, 'TRAVEL', '差旅', 11),
+  (2, 'ENTERTAINMENT', '招待', 12),
+  (2, 'CONFERENCE', '会议', 13),
+  (2, 'VEHICLE', '车辆', 14),
+  (2, 'OTHER', '其他', 15);
