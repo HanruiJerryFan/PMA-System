@@ -10,6 +10,7 @@ import { contractAPI, customerAPI, exportAPI, projectAPI } from "../../api/modul
 import { hasAnyAuthority } from "../../utils/authorities";
 import { uploadBusinessAttachments } from "../../utils/attachments";
 import { downloadApiFile, downloadExcel, resolveBlobErrorMessage } from "../../utils/exporters";
+import { sortSelectItems } from "../../utils/selectSorting";
 
 const { Option } = Select;
 
@@ -294,7 +295,7 @@ export default function ContractInfo() {
               placeholder="请选择合同类型"
               style={{ width: 180 }}
             >
-              {contractTypes.map((item) => {
+              {sortSelectItems(contractTypes, ["typeCode"]).map((item) => {
                 const label = getContractTypeName(item);
                 return (
                   <Option key={item.id} value={label}>
@@ -330,7 +331,7 @@ export default function ContractInfo() {
           rules: [{ required: true, message: "请选择合同类型" }],
           component: (
             <Select placeholder="请选择合同类型">
-              {contractTypes.map((item) => (
+              {sortSelectItems(contractTypes, ["typeCode"]).map((item) => (
                 <Option key={item.id} value={item.id}>
                   {getContractTypeName(item)}
                 </Option>
@@ -344,7 +345,7 @@ export default function ContractInfo() {
           rules: [{ required: true, message: "请选择客户" }],
           component: (
             <Select placeholder="请选择客户" showSearch optionFilterProp="children">
-              {customers.map((item) => (
+              {sortSelectItems(customers, ["customerCode"]).map((item) => (
                 <Option key={item.uuid} value={item.uuid}>
                   {item.customerName}
                 </Option>
@@ -363,7 +364,7 @@ export default function ContractInfo() {
               optionFilterProp="children"
               disabled={Boolean(projectUuidFilter)}
             >
-              {projects.map((item) => (
+              {sortSelectItems(projects, ["projectNumber"]).map((item) => (
                 <Option key={item.uuid} value={item.uuid}>
                   {item.projectName}
                 </Option>

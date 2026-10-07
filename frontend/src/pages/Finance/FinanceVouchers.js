@@ -41,6 +41,7 @@ import { canMaintainEntryAuditUsers, getUserLabel } from "../../utils/entryAudit
 import { uploadBusinessAttachments } from "../../utils/attachments";
 import { downloadApiFile, downloadExcel, resolveBlobErrorMessage } from "../../utils/exporters";
 import { getFinanceSubjectOptions } from "../../utils/financeSubjects";
+import { sortSelectItems } from "../../utils/selectSorting";
 
 const { Option } = Select;
 
@@ -504,6 +505,10 @@ export default function FinanceVouchers() {
   const projectIdFilter = searchParams.get("projectId") || searchParams.get("projectUuid") || "";
   const [vouchers, setVouchers] = useState([]);
   const [projects, setProjects] = useState([]);
+  const sortedProjects = useMemo(
+    () => sortSelectItems(projects, ["projectNumber"]),
+    [projects]
+  );
   const [customers, setCustomers] = useState([]);
   const [taxRates, setTaxRates] = useState([]);
   const [subjects, setSubjects] = useState([]);
@@ -547,7 +552,7 @@ export default function FinanceVouchers() {
   );
 
   const activeTaxRates = useMemo(
-    () => taxRates.filter((item) => item.isActive !== false),
+    () => sortSelectItems(taxRates.filter((item) => item.isActive !== false), ["sortOrder", "rate"]),
     [taxRates]
   );
 
@@ -1173,7 +1178,7 @@ export default function FinanceVouchers() {
             label: "项目",
             component: (
               <Select placeholder="筛选项目" allowClear showSearch optionFilterProp="children">
-                {projects.map((item) => (
+                {sortedProjects.map((item) => (
                   <Option key={item.uuid} value={formatProjectOptionLabel(item)}>
                     {formatProjectOptionLabel(item)}
                   </Option>
@@ -1242,7 +1247,7 @@ export default function FinanceVouchers() {
             label: "对方单位",
             component: (
               <Select placeholder="筛选对方单位" allowClear showSearch optionFilterProp="children">
-                {customers.map((item) => (
+                {sortSelectItems(customers, ["customerCode"]).map((item) => (
                   <Option key={item.uuid} value={item.customerName}>
                     {item.customerName}
                   </Option>
@@ -1398,7 +1403,7 @@ export default function FinanceVouchers() {
                 optionFilterProp="children"
                 disabled={Boolean(projectIdFilter)}
               >
-                {projects.map((item) => (
+                {sortedProjects.map((item) => (
                   <Option key={item.uuid} value={item.uuid}>
                     {formatProjectOptionLabel(item)}
                   </Option>
@@ -1493,7 +1498,7 @@ export default function FinanceVouchers() {
             rules: [{ required: true, message: "请选择对方单位" }],
             component: (
               <Select placeholder="请选择对方单位" showSearch optionFilterProp="children">
-                {customers.map((item) => (
+                {sortSelectItems(customers, ["customerCode"]).map((item) => (
                   <Option key={item.uuid} value={item.uuid}>
                     {item.customerName}
                   </Option>

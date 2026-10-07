@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Input, Select } from "antd";
 import CRUDTable from "../../components/Common/CRUDTable";
 import { customerAPI } from "../../api/modules";
+import { sortSelectItems } from "../../utils/selectSorting";
 
 const { Option } = Select;
 
@@ -91,7 +92,7 @@ export default function CustomerContacts() {
           rules: [{ required: true, message: "请选择客户" }],
           component: (
             <Select placeholder="请选择客户" showSearch optionFilterProp="children">
-              {customers.map((item) => (
+              {sortSelectItems(customers, ["customerCode"]).map((item) => (
                 <Option key={item.uuid} value={item.uuid}>
                   {item.customerName}
                 </Option>

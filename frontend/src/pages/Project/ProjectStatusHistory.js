@@ -4,6 +4,7 @@ import { DatePicker, Select } from "antd";
 import { useSearchParams } from "react-router-dom";
 import CRUDTable from "../../components/Common/CRUDTable";
 import { permissionAPI, projectAPI } from "../../api/modules";
+import { sortSelectItems } from "../../utils/selectSorting";
 
 const { Option } = Select;
 
@@ -117,7 +118,7 @@ export default function ProjectStatusHistory() {
               optionFilterProp="children"
               disabled={Boolean(projectIdFilter)}
             >
-              {projects.map((item) => (
+              {sortSelectItems(projects, ["projectNumber"]).map((item) => (
                 <Option key={item.uuid} value={item.uuid}>
                   {`${item.projectNumber || ""} ${item.projectName || ""}`.trim()}
                 </Option>
@@ -131,7 +132,7 @@ export default function ProjectStatusHistory() {
           rules: [{ required: true, message: "请选择阶段" }],
           component: (
             <Select placeholder="请选择阶段">
-              {activeStages.map((item) => (
+              {sortSelectItems(activeStages, ["sortOrder","stageCode"]).map((item) => (
                 <Option key={item.id} value={item.id}>
                   {item.description}
                 </Option>

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Form, InputNumber, Select } from "antd";
 import CRUDTable from "../../components/Common/CRUDTable";
 import { customerAPI, permissionAPI, productAPI } from "../../api/modules";
+import { sortSelectItems } from "../../utils/selectSorting";
 
 const { Option } = Select;
 
@@ -84,7 +85,7 @@ function MaterialCascadeFields({ form, products, categories, subcategories, band
             })
           }
         >
-          {activeCategories.map((item) => (
+          {sortSelectItems(activeCategories, ["sortOrder","code"]).map((item) => (
             <Option key={item.id} value={item.id}>
               {item.name}
             </Option>
@@ -106,7 +107,7 @@ function MaterialCascadeFields({ form, products, categories, subcategories, band
             })
           }
         >
-          {activeSubcategories.map((item) => (
+          {sortSelectItems(activeSubcategories, ["sortOrder","code"]).map((item) => (
             <Option key={item.id} value={item.id}>
               {item.name}
             </Option>
@@ -147,7 +148,7 @@ function MaterialCascadeFields({ form, products, categories, subcategories, band
             })
           }
         >
-          {productModelOptions.map((model) => (
+          {sortSelectItems(productModelOptions).map((model) => (
             <Option key={model || "_empty"} value={model}>
               {model || "未填写型号"}
             </Option>
@@ -162,7 +163,10 @@ function MaterialCascadeFields({ form, products, categories, subcategories, band
           optionFilterProp="children"
           onChange={() => form.setFieldsValue({ productBasicInfoUuid: undefined })}
         >
-          {bandOptions.map((bandCode) => {
+          {sortSelectItems(bandOptions, [
+            (code) => activeBands.find((item) => item.code === code)?.sortOrder,
+            (code) => code,
+          ]).map((bandCode) => {
             const band = activeBands.find((item) => item.code === bandCode);
             return (
               <Option key={bandCode} value={bandCode}>
@@ -175,7 +179,7 @@ function MaterialCascadeFields({ form, products, categories, subcategories, band
 
       <Form.Item name="productBasicInfoUuid" label="物料" rules={[{ required: true, message: "请选择物料" }]}>
         <Select placeholder="请选择物料" showSearch optionFilterProp="children">
-          {materialOptions.map((item) => (
+          {sortSelectItems(materialOptions, ["materialCode"]).map((item) => (
             <Option key={item.uuid} value={item.uuid}>
               {item.materialCode} / {item.productModel || "未填写型号"}
             </Option>
@@ -375,7 +379,7 @@ export default function ProductPrices() {
           rules: [{ required: true, message: "请选择供应商" }],
           component: (
             <Select placeholder="请选择供应商" showSearch optionFilterProp="children">
-              {supplierOptions.map((item) => (
+              {sortSelectItems(supplierOptions, ["customerCode"]).map((item) => (
                 <Option key={item.uuid} value={item.uuid}>
                   {item.customerName}
                 </Option>

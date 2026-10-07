@@ -8,6 +8,7 @@ import { attachmentAPI, contractAPI, customerAPI, financeAPI, inventoryAPI, proj
 import { hasAnyAuthority } from "../../utils/authorities";
 import { downloadApiFile, resolveBlobErrorMessage } from "../../utils/exporters";
 import { resolvePagePermissions } from "../../utils/pagePermissions";
+import { sortSelectItems } from "../../utils/selectSorting";
 
 const { Option } = Select;
 
@@ -28,6 +29,15 @@ const BUSINESS_OPTION_LOADERS = {
   contracts: () => contractAPI.getContractOptions(),
   customers: () => customerAPI.getCustomerOptions(),
   "warehouse-documents": () => inventoryAPI.getWarehouseDocOptions(),
+};
+
+const BUSINESS_OPTION_NUMBER_FIELDS = {
+  projects: "projectNumber",
+  "project-lists": "listName",
+  "finance-vouchers": "voucherNo",
+  contracts: "contractNumber",
+  customers: "customerCode",
+  "warehouse-documents": "docNumber",
 };
 
 function formatFileSize(value) {
@@ -289,7 +299,10 @@ export default function AttachmentCenter() {
       setBusinessOptionsLoading(true);
       try {
         const response = await BUSINESS_OPTION_LOADERS[selectedUploadBusinessType]?.();
-        setBusinessOptions(normalizeResponseData(response));
+        setBusinessOptions(sortSelectItems(
+          normalizeResponseData(response),
+          [BUSINESS_OPTION_NUMBER_FIELDS[selectedUploadBusinessType]],
+        ));
       } catch (error) {
         setBusinessOptions([]);
         message.error(error?.message || "加载业务对象列表失败");

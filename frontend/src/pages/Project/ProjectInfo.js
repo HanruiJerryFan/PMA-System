@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import CRUDTable from "../../components/Common/CRUDTable";
 import { customerAPI, permissionAPI, projectAPI, regionAPI } from "../../api/modules";
 import { buildRegionOptions, buildRegionPath, formatRegionLabel } from "../../utils/regions";
+import { sortSelectItems } from "../../utils/selectSorting";
 
 const { Option } = Select;
 
@@ -146,7 +147,7 @@ export default function ProjectInfo() {
           rules: [{ required: true, message: "请选择客户" }],
           component: (
             <Select placeholder="请选择客户" showSearch optionFilterProp="children">
-              {customers.map((item) => (
+              {sortSelectItems(customers, ["customerCode"]).map((item) => (
                 <Option key={item.uuid} value={item.uuid}>
                   {item.customerName}
                 </Option>
@@ -203,7 +204,7 @@ export default function ProjectInfo() {
           rules: [{ required: true, message: "请选择项目类型" }],
           component: (
             <Select placeholder="请选择项目类型">
-              {activeProjectTypes.map((item) => (
+              {sortSelectItems(activeProjectTypes, ["sortOrder","code"]).map((item) => (
                 <Option key={item.id} value={item.id}>
                   {item.code} {item.name}
                 </Option>

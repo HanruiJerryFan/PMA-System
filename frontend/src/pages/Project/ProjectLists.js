@@ -42,6 +42,7 @@ import { resolvePagePermissions } from "../../utils/pagePermissions";
 import { canMaintainEntryAuditUsers } from "../../utils/entryAudit";
 import { uploadBusinessAttachments } from "../../utils/attachments";
 import { downloadApiFile, downloadExcel, resolveBlobErrorMessage } from "../../utils/exporters";
+import { sortSelectItems } from "../../utils/selectSorting";
 
 const { Option } = Select;
 
@@ -779,7 +780,7 @@ export default function ProjectLists() {
         <Modal title={editingList ? "编辑项目清单" : "新增项目清单"} open={listModalVisible} onOk={submitList} onCancel={closeListModal} okText="保存" cancelText="取消" destroyOnHidden>
           <Form form={listForm} layout="vertical">
             <Form.Item name="projectId" label="项目" rules={projectUuidFilter ? [] : [{ required: true, message: "请选择项目" }]}>
-              <Select placeholder="请选择项目" showSearch optionFilterProp="children" disabled={Boolean(projectUuidFilter)}>{projects.map((item) => <Option key={item.uuid} value={item.uuid}>{item.projectName}</Option>)}</Select>
+              <Select placeholder="请选择项目" showSearch optionFilterProp="children" disabled={Boolean(projectUuidFilter)}>{sortSelectItems(projects, ["projectNumber"]).map((item) => <Option key={item.uuid} value={item.uuid}>{item.projectName}</Option>)}</Select>
             </Form.Item>
             <Form.Item name="listName" label="清单名称" rules={[{ required: true, message: "请输入清单名称" }]}>
               <Input maxLength={128} placeholder="例如：一期采购清单" />
@@ -824,14 +825,14 @@ export default function ProjectLists() {
         <Modal title={editingItem ? "编辑清单明细" : "新增清单明细"} open={itemModalVisible} onOk={submitItem} onCancel={() => { setItemModalVisible(false); setEditingItem(null); itemForm.resetFields(); }} okText="保存" cancelText="取消" width={860} destroyOnHidden>
           <Form form={itemForm} layout="vertical" preserve={false}>
             <Row gutter={16}>
-              <Col span={8}><Form.Item name="categoryId" label="大类" rules={[{ required: true, message: "请选择大类" }]}><Select showSearch optionFilterProp="children" onChange={() => clearItemSelection(["subcategoryId", "selectedProductName", "selectedProductModel", "selectedBandCode", "materialId", "materialCode", "itemName", "model", "brand", "unit"])}>{activeCategories.map((item) => <Option key={item.id} value={item.id}>{item.name}</Option>)}</Select></Form.Item></Col>
-              <Col span={8}><Form.Item name="subcategoryId" label="分项" rules={[{ required: true, message: "请选择分项" }]}><Select showSearch optionFilterProp="children" onChange={() => clearItemSelection(["selectedProductName", "selectedProductModel", "selectedBandCode", "materialId", "materialCode", "itemName", "model", "brand", "unit"])}>{filteredSubcategories.map((item) => <Option key={item.id} value={item.id}>{item.name}</Option>)}</Select></Form.Item></Col>
+              <Col span={8}><Form.Item name="categoryId" label="大类" rules={[{ required: true, message: "请选择大类" }]}><Select showSearch optionFilterProp="children" onChange={() => clearItemSelection(["subcategoryId", "selectedProductName", "selectedProductModel", "selectedBandCode", "materialId", "materialCode", "itemName", "model", "brand", "unit"])}>{sortSelectItems(activeCategories, ["sortOrder","code"]).map((item) => <Option key={item.id} value={item.id}>{item.name}</Option>)}</Select></Form.Item></Col>
+              <Col span={8}><Form.Item name="subcategoryId" label="分项" rules={[{ required: true, message: "请选择分项" }]}><Select showSearch optionFilterProp="children" onChange={() => clearItemSelection(["selectedProductName", "selectedProductModel", "selectedBandCode", "materialId", "materialCode", "itemName", "model", "brand", "unit"])}>{sortSelectItems(filteredSubcategories, ["sortOrder","code"]).map((item) => <Option key={item.id} value={item.id}>{item.name}</Option>)}</Select></Form.Item></Col>
               <Col span={8}><Form.Item name="selectedProductName" label="名称" rules={[{ required: true, message: "请选择名称" }]}><Select showSearch optionFilterProp="children" onChange={() => clearItemSelection(["selectedProductModel", "selectedBandCode", "materialId", "materialCode", "itemName", "model", "brand", "unit"])}>{productNameOptions.map((name) => <Option key={name} value={name}>{name}</Option>)}</Select></Form.Item></Col>
             </Row>
             <Row gutter={16}>
-              <Col span={8}><Form.Item name="selectedProductModel" label="型号" rules={[{ required: true, message: "请选择型号" }]}><Select showSearch optionFilterProp="children" onChange={() => clearItemSelection(["selectedBandCode", "materialId", "materialCode", "itemName", "model", "brand", "unit"])}>{productModelOptions.map((model) => <Option key={model || "_empty"} value={model}>{model || "未填写型号"}</Option>)}</Select></Form.Item></Col>
-              <Col span={8}><Form.Item name="selectedBandCode" label="频段" rules={[{ required: true, message: "请选择频段" }]}><Select showSearch optionFilterProp="children" onChange={() => clearItemSelection(["materialId", "materialCode", "itemName", "model", "brand", "unit"])}>{bandOptions.map((band) => <Option key={band} value={band}>{band}</Option>)}</Select></Form.Item></Col>
-              <Col span={8}><Form.Item name="materialId" label="物料" rules={[{ required: true, message: "请选择物料" }]}><Select showSearch optionFilterProp="children" onChange={handleMaterialChange}>{materialOptions.map((item) => <Option key={item.uuid} value={item.uuid}>{item.materialCode} / {item.productModel || "未填写型号"}</Option>)}</Select></Form.Item></Col>
+              <Col span={8}><Form.Item name="selectedProductModel" label="型号" rules={[{ required: true, message: "请选择型号" }]}><Select showSearch optionFilterProp="children" onChange={() => clearItemSelection(["selectedBandCode", "materialId", "materialCode", "itemName", "model", "brand", "unit"])}>{sortSelectItems(productModelOptions).map((model) => <Option key={model || "_empty"} value={model}>{model || "未填写型号"}</Option>)}</Select></Form.Item></Col>
+              <Col span={8}><Form.Item name="selectedBandCode" label="频段" rules={[{ required: true, message: "请选择频段" }]}><Select showSearch optionFilterProp="children" onChange={() => clearItemSelection(["materialId", "materialCode", "itemName", "model", "brand", "unit"])}>{sortSelectItems(bandOptions).map((band) => <Option key={band} value={band}>{band}</Option>)}</Select></Form.Item></Col>
+              <Col span={8}><Form.Item name="materialId" label="物料" rules={[{ required: true, message: "请选择物料" }]}><Select showSearch optionFilterProp="children" onChange={handleMaterialChange}>{sortSelectItems(materialOptions, ["materialCode"]).map((item) => <Option key={item.uuid} value={item.uuid}>{item.materialCode} / {item.productModel || "未填写型号"}</Option>)}</Select></Form.Item></Col>
             </Row>
             <Descriptions bordered size="small" column={2} style={{ marginBottom: 16 }}>
               <Descriptions.Item label="物料编码">{selectedMaterial?.materialCode || "-"}</Descriptions.Item>

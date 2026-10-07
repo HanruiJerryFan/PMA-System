@@ -49,6 +49,7 @@ import { hasAnyAuthority } from "../../utils/authorities";
 import { uploadBusinessAttachments } from "../../utils/attachments";
 import { buildRegionOptions, buildRegionPath, formatRegionLabel } from "../../utils/regions";
 import { getFinanceSubjectOptions } from "../../utils/financeSubjects";
+import { sortSelectItems } from "../../utils/selectSorting";
 
 const { Option } = Select;
 
@@ -1327,7 +1328,7 @@ export default function ProjectDashboard() {
             <Col span={12}>
               <Form.Item name="customerId" label="客户" rules={[{ required: true, message: "请选择客户" }]}>
                 <Select showSearch optionFilterProp="children">
-                  {customers.map((item) => (
+                  {sortSelectItems(customers, ["customerCode"]).map((item) => (
                     <Option key={item.uuid} value={item.uuid}>
                       {item.customerName}
                     </Option>
@@ -1382,7 +1383,7 @@ export default function ProjectDashboard() {
             <Col span={12}>
               <Form.Item name="projectTypeId" label="项目类型" rules={[{ required: true, message: "请选择项目类型" }]}>
                 <Select>
-                  {projectTypes.map((item) => (
+                  {sortSelectItems(projectTypes, ["sortOrder","code"]).map((item) => (
                     <Option key={item.id} value={item.id}>
                       {item.code} {item.name}
                     </Option>
@@ -1469,7 +1470,7 @@ export default function ProjectDashboard() {
           </Form.Item>
           <Form.Item name="contractTypeId" label="合同类型" rules={[{ required: true, message: "请选择合同类型" }]}>
             <Select>
-              {contractTypes.map((item) => (
+              {sortSelectItems(contractTypes, ["typeCode"]).map((item) => (
                 <Option key={item.id} value={item.id}>
                   {item.typeName || item.name || item.code}
                 </Option>
@@ -1529,7 +1530,7 @@ export default function ProjectDashboard() {
           </Form.Item>
           <Form.Item name="taxRate" label="税率" rules={[{ required: true, message: "请选择税率" }]}>
             <Select>
-              {taxRates.map((item) => (
+              {sortSelectItems(taxRates, ["sortOrder","rate"]).map((item) => (
                 <Option key={item.id} value={item.rate}>
                   {item.label || `${Number(item.rate || 0) * 100}%`}
                 </Option>
@@ -1538,7 +1539,7 @@ export default function ProjectDashboard() {
           </Form.Item>
           <Form.Item name="counterpartyCustomerId" label="对方单位" rules={[{ required: true, message: "请选择对方单位" }]}>
             <Select showSearch optionFilterProp="children">
-              {customers.map((item) => (
+              {sortSelectItems(customers, ["customerCode"]).map((item) => (
                 <Option key={item.uuid} value={item.uuid}>
                   {item.customerName}
                 </Option>

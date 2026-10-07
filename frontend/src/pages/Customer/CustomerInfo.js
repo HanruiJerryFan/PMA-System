@@ -5,6 +5,7 @@ import CRUDTable from "../../components/Common/CRUDTable";
 import { customerAPI, regionAPI } from "../../api/modules";
 import { downloadExcel } from "../../utils/exporters";
 import { buildRegionOptions, buildRegionPath, formatRegionLabel } from "../../utils/regions";
+import { sortSelectItems } from "../../utils/selectSorting";
 
 const { Option } = Select;
 
@@ -210,7 +211,7 @@ export default function CustomerInfo() {
           rules: [{ required: true, message: "请选择客户类型" }],
           component: (
             <Select placeholder="请选择客户类型">
-              {customerTypes.map((item) => (
+              {sortSelectItems(customerTypes, ["typeCode"]).map((item) => (
                 <Option key={item.id} value={item.id}>
                   {item.typeCode} - {item.typeName}
                 </Option>

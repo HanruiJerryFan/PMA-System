@@ -4,6 +4,7 @@ import { DownloadOutlined, UploadOutlined } from "@ant-design/icons";
 import CRUDTable from "../../components/Common/CRUDTable";
 import { productAPI } from "../../api/modules";
 import { downloadApiFile, downloadExcel, resolveBlobErrorMessage } from "../../utils/exporters";
+import { sortSelectItems } from "../../utils/selectSorting";
 
 const { Option } = Select;
 
@@ -234,7 +235,7 @@ export default function ProductInfo() {
             rules: [{ required: true, message: "请选择大类" }],
             component: (
               <Select placeholder="请选择大类">
-                {categories.filter((item) => item.isActive).map((item) => <Option key={item.id} value={item.id}>{item.code || "--"} {item.name}</Option>)}
+                {sortSelectItems(categories.filter((item) => item.isActive), ["sortOrder","code"]).map((item) => <Option key={item.id} value={item.id}>{item.code || "--"} {item.name}</Option>)}
               </Select>
             ),
           },
@@ -244,7 +245,7 @@ export default function ProductInfo() {
             rules: [{ required: true, message: "请选择分项" }],
             component: (
               <Select placeholder="请选择分项">
-                {subcategories.filter((item) => item.isActive).map((item) => <Option key={item.id} value={item.id}>{item.code || "--"} {item.name}</Option>)}
+                {sortSelectItems(subcategories.filter((item) => item.isActive), ["sortOrder","code"]).map((item) => <Option key={item.id} value={item.id}>{item.code || "--"} {item.name}</Option>)}
               </Select>
             ),
           },
@@ -254,7 +255,7 @@ export default function ProductInfo() {
             rules: [{ required: true, message: "请选择品牌" }],
             component: (
               <Select placeholder="请选择品牌">
-                {brands.filter((item) => item.isActive).map((item) => <Option key={item.id} value={item.id}>{item.code || "--"} {item.name}</Option>)}
+                {sortSelectItems(brands.filter((item) => item.isActive), ["sortOrder","code"]).map((item) => <Option key={item.id} value={item.id}>{item.code || "--"} {item.name}</Option>)}
               </Select>
             ),
           },
@@ -264,7 +265,7 @@ export default function ProductInfo() {
             rules: [{ required: true, message: "请选择频段" }],
             component: (
               <Select placeholder="请选择频段">
-                {bands.filter((item) => item.isActive).map((item) => <Option key={item.id} value={item.code}>{item.code || "---"} {item.description}</Option>)}
+                {sortSelectItems(bands.filter((item) => item.isActive), ["sortOrder","code"]).map((item) => <Option key={item.id} value={item.code}>{item.code || "---"} {item.description}</Option>)}
               </Select>
             ),
           },

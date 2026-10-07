@@ -8,6 +8,7 @@ import { contractAPI, customerAPI, exportAPI, projectAPI } from "../../api/modul
 import { hasAnyAuthority } from "../../utils/authorities";
 import { resolvePagePermissions } from "../../utils/pagePermissions";
 import { downloadApiFile, downloadExcel, resolveBlobErrorMessage } from "../../utils/exporters";
+import { sortSelectItems } from "../../utils/selectSorting";
 
 const { Option } = Select;
 
@@ -236,7 +237,7 @@ export default function ContractClauses() {
                 placeholder="请选择合同类型"
                 style={{ width: 180 }}
               >
-                {contractTypes.map((item) => {
+                {sortSelectItems(contractTypes, ["typeCode"]).map((item) => {
                   const label = getContractTypeName(item);
                   return (
                     <Option key={item.id} value={label}>

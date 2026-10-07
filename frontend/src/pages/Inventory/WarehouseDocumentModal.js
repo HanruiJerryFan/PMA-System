@@ -27,6 +27,7 @@ import {
   materialBrand,
 } from "./warehouseDocumentUtils";
 import { getUserLabel } from "../../utils/entryAudit";
+import { sortSelectItems } from "../../utils/selectSorting";
 
 const { Text } = Typography;
 
@@ -211,7 +212,7 @@ export default function WarehouseDocumentModal({
   );
   const filteredCustomerOptions = useMemo(() => {
     const allowedSet = new Set(allowedCustomerTypeCodes);
-    return customerOptions
+    return sortSelectItems(customerOptions, ["customerCode"])
       .filter((item) => allowedSet.has(String(item.customerTypeCode || "")))
       .map((item) => ({
         value: item.uuid,
@@ -224,7 +225,7 @@ export default function WarehouseDocumentModal({
   }, [allowedCustomerTypeCodes, customerOptions]);
   const materialOptions = useMemo(
     () =>
-      materials
+      sortSelectItems(materials, ["materialCode"])
         .filter((item) => item.isActive !== false)
         .map((item) => ({
           value: item.uuid,
@@ -415,7 +416,7 @@ export default function WarehouseDocumentModal({
                 filterOption={(input, option) =>
                   option?.searchText?.includes(input.trim().toLowerCase())
                 }
-                options={projects.map((item) => ({
+                options={sortSelectItems(projects, ["projectNumber"]).map((item) => ({
                   value: item.uuid,
                   label: item.projectName || "-",
                   searchText: [item.projectName, item.projectNumber]
@@ -443,7 +444,7 @@ export default function WarehouseDocumentModal({
                 rules={[{ required: true, message: "请选择仓库" }]}
               >
                 <Select placeholder="请选择仓库">
-                  {warehouses.map((item) => (
+                  {sortSelectItems(warehouses, ["warehouseCode"]).map((item) => (
                     <Select.Option key={item.id} value={item.id}>
                       {item.warehouseName}
                     </Select.Option>
