@@ -5,19 +5,26 @@ import {
   Button,
   Card,
   Col,
+  DatePicker,
   Empty,
+  Form,
+  Input,
   Popconfirm,
   Row,
+  Select,
   Space,
   Statistic,
   Table,
   Tag,
   message,
 } from "antd";
-import { CheckCircleOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, FilePdfOutlined, PlusOutlined } from "@ant-design/icons";
+import { CheckCircleOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, FilePdfOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
 import { getCurrentUser } from "../../api/auth";
 import { inventoryAPI, permissionAPI } from "../../api/modules";
-import { downloadApiFile, downloadHtmlExcel, resolveBlobErrorMessage } from "../../utils/exporters";
+import { downloadApiFile, downloadExcel, downloadHtmlExcel, resolveBlobErrorMessage } from "../../utils/exporters";
+import { formatProjectOptionLabel } from "../../utils/projectLabels";
+import { sortSelectItems } from "../../utils/selectSorting";
+import { queryWarehouseDocuments } from "./warehouseDocumentQuery";
 import { hasAnyAuthority } from "../../utils/authorities";
 import { resolvePagePermissions } from "../../utils/pagePermissions";
 import { canMaintainEntryAuditUsers, getUserLabel } from "../../utils/entryAudit";
@@ -45,6 +52,9 @@ export default function WarehouseDoc() {
   const [modalVisible, setModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [queryForm] = Form.useForm();
+  const [queryFilters, setQueryFilters] = useState({});
+  const [documentPage, setDocumentPage] = useState(1);
 
   const pagePermissions = useMemo(() => resolvePagePermissions("/inventory/warehouse"), []);
   const canManage = hasAnyAuthority(currentUser, ["inventory.warehouse-doc.entry", ...pagePermissions.manageAuthorities]);
@@ -54,7 +64,7 @@ export default function WarehouseDoc() {
   const projectMap = useMemo(
     () =>
       Object.fromEntries(
-        projects.map((item) => [item.uuid, `${item.projectNumber || ""} ${item.projectName || ""}`.trim()]),
+        projects.map((item) => [item.uuid, formatProjectOptionLabel(item)]),
       ),
     [projects],
   );
@@ -81,27 +91,36 @@ export default function WarehouseDoc() {
       })),
     [documents, projectMap, userMap, warehouseMap],
   );
+  const queryResult = useMemo(() => queryWarehouseDocuments(decoratedDocs, queryFilters), [decoratedDocs, queryFilters]);
+  const filteredDocs = queryResult.documents;
+  const summary = queryResult.summary;
   const selectedDoc = useMemo(
-    () => decoratedDocs.find((item) => item.docNumber === selectedDocNumber) || null,
-    [decoratedDocs, selectedDocNumber],
+    () => filteredDocs.find((item) => item.docNumber === selectedDocNumber) || null,
+    [filteredDocs, selectedDocNumber],
   );
-  const summary = useMemo(
-    () =>
-      decoratedDocs.reduce(
-        (acc, item) => {
-          acc.total += 1;
-          if (item.docType === "INBOUND_NOTE") {
-            acc.inbound += 1;
-          }
-          if (item.docType === "OUTBOUND_NOTE") {
-            acc.outbound += 1;
-          }
-          return acc;
-        },
-        { total: 0, inbound: 0, outbound: 0 },
-      ),
-    [decoratedDocs],
-  );
+
+  useEffect(() => {
+    setSelectedDocNumber((current) => filteredDocs.some((doc) => doc.docNumber === current) ? current : filteredDocs[0]?.docNumber || null);
+  }, [filteredDocs]);
+
+  const applyQuery = (values) => {
+    setQueryFilters(values);
+    setDocumentPage(1);
+  };
+
+  const resetQuery = () => {
+    queryForm.resetFields();
+    applyQuery({});
+  };
+
+  const exportQueryStatistics = () => {
+    downloadExcel(
+      `warehouse-document-statistics-${dayjs().format("YYYY-MM-DD")}.xls`, "出入库查询统计",
+      ["物料编码", "物料名称", "型号", "品牌", "单位", "单据数", "入库数量", "出库数量", "入库金额", "出库金额"],
+      queryResult.materials.map((item) => [item.materialCode, item.materialName, item.model, item.brand, item.unit,
+        item.documentCount, item.inboundQuantity, item.outboundQuantity, item.inboundAmount, item.outboundAmount]),
+    );
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -244,6 +263,7 @@ export default function WarehouseDoc() {
       width: 120,
       filters: Object.entries(DOC_TYPES).map(([value, meta]) => ({ text: meta.label, value })),
       filterMultiple: false,
+      filteredValue: queryFilters.docType ? [queryFilters.docType] : null,
       onFilter: (value, record) => record.docType === value,
       render: (value, record) => <Tag color={docMeta(record.docType).tagColor}>{value}</Tag>,
     },
@@ -258,7 +278,9 @@ export default function WarehouseDoc() {
       width: 140,
       render: (value) => (value ? dayjs(value).format("YYYY-MM-DD") : "-"),
     },
-    { title: "总金额", dataIndex: "totalAmount", key: "totalAmount", width: 120, render: formatAmount },
+    { title: "单据总金额", dataIndex: "totalAmount", key: "totalAmount", width: 120, render: formatAmount },
+    { title: "匹配数量", dataIndex: "matchedQuantity", key: "matchedQuantity", width: 120 },
+    { title: "匹配金额", dataIndex: "matchedAmount", key: "matchedAmount", width: 120, render: formatAmount },
     { title: "明细数", dataIndex: "itemCount", key: "itemCount", width: 100 },
     { title: "录入人", dataIndex: "entryUserName", key: "entryUserName", width: 120, render: (value) => value || "-" },
     { title: "审核人", dataIndex: "auditorUserName", key: "auditorUserName", width: 120, render: (value) => value || "-" },
@@ -307,23 +329,67 @@ export default function WarehouseDoc() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
+      <Card title="出入库查询统计">
+        <Form form={queryForm} layout="inline" onFinish={applyQuery} style={{ rowGap: 16 }}>
+          <Form.Item name="projectId" label="项目">
+            <Select allowClear showSearch optionFilterProp="label" placeholder="全部项目" style={{ width: 260 }}
+              options={sortSelectItems(projects, ["projectNumber"]).map((item) => ({ value: item.uuid, label: formatProjectOptionLabel(item) }))} />
+          </Form.Item>
+          <Form.Item name="docType" label="出入库">
+            <Select allowClear placeholder="全部" style={{ width: 140 }} options={[
+              { value: "INBOUND_NOTE", label: "入库" }, { value: "OUTBOUND_NOTE", label: "出库" },
+            ]} />
+          </Form.Item>
+          <Form.Item name="docDateRange" label="单据日期">
+            <DatePicker.RangePicker placeholder={["开始日期", "结束日期"]} />
+          </Form.Item>
+          <Form.Item name="materialCode" label="物料编码">
+            <Input allowClear placeholder="支持部分编码" style={{ width: 180 }} />
+          </Form.Item>
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit" icon={<SearchOutlined />}>查询</Button>
+              <Button onClick={resetQuery}>重置</Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Card>
       <Row gutter={[16, 16]}>
-        <Col xs={24} sm={8}>
+        <Col xs={24} sm={8} xl={4}>
           <Card>
             <Statistic title="单据总数" value={summary.total} />
           </Card>
         </Col>
-        <Col xs={24} sm={8}>
+        <Col xs={24} sm={8} xl={4}>
           <Card>
             <Statistic title="入库单" value={summary.inbound} />
           </Card>
         </Col>
-        <Col xs={24} sm={8}>
+        <Col xs={24} sm={8} xl={4}>
           <Card>
             <Statistic title="发货单" value={summary.outbound} />
           </Card>
         </Col>
+        <Col xs={24} sm={8} xl={4}><Card><Statistic title="入库数量合计" value={summary.inboundQuantity} precision={4} /></Card></Col>
+        <Col xs={24} sm={8} xl={4}><Card><Statistic title="出库数量合计" value={summary.outboundQuantity} precision={4} /></Card></Col>
+        <Col xs={24} sm={8} xl={4}><Card><Statistic title="匹配金额合计" value={summary.amount} precision={2} suffix="元" /></Card></Col>
       </Row>
+
+      <Card title="物料统计" extra={<Button icon={<DownloadOutlined />} disabled={!queryResult.materials.length} onClick={exportQueryStatistics}>导出统计</Button>}>
+        <Table rowKey="key" loading={loading} dataSource={queryResult.materials} size="middle" scroll={{ x: "max-content" }}
+          pagination={{ pageSize: 10 }} columns={[
+            { title: "物料编码", dataIndex: "materialCode", width: 140 },
+            { title: "物料名称", dataIndex: "materialName", width: 200 },
+            { title: "型号", dataIndex: "model", width: 160 },
+            { title: "品牌", dataIndex: "brand", width: 120 },
+            { title: "单位", dataIndex: "unit", width: 80 },
+            { title: "单据数", dataIndex: "documentCount", width: 100 },
+            { title: "入库数量", dataIndex: "inboundQuantity", width: 120 },
+            { title: "出库数量", dataIndex: "outboundQuantity", width: 120 },
+            { title: "入库金额", dataIndex: "inboundAmount", width: 140, render: formatAmount },
+            { title: "出库金额", dataIndex: "outboundAmount", width: 140, render: formatAmount },
+          ]} />
+      </Card>
 
       <Card
         title="出入库单列表"
@@ -348,14 +414,23 @@ export default function WarehouseDoc() {
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
-          message="出入库单采用“单据头 + 多行物料明细”模式。物料按物料代码引用，保存后会自动生成库存流水。"
+          message="统计按当前查询条件计算，物料编码只统计匹配明细；单据预览、打印及单据导出保留完整单据。数量合计含不同单位，具体数量请查看物料统计。"
         />
         <Table
           rowKey="docNumber"
           loading={loading}
-          dataSource={decoratedDocs}
+          dataSource={filteredDocs}
           columns={columns}
-          pagination={{ pageSize: 8 }}
+          pagination={{ pageSize: 8, current: documentPage }}
+          onChange={(pagination, filters, sorter, extra) => {
+            if (extra.action === "filter") {
+              const docType = filters.docTypeLabel?.[0];
+              queryForm.setFieldsValue({ docType });
+              applyQuery({ ...queryFilters, docType });
+            } else {
+              setDocumentPage(pagination.current);
+            }
+          }}
           scroll={{ x: "max-content" }}
           rowClassName={(record) => (record.docNumber === selectedDocNumber ? "ant-table-row-selected" : "")}
           onRow={(record) => ({
