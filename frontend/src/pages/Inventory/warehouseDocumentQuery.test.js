@@ -30,7 +30,7 @@ test("combines project, direction, dates and material code without including unr
     docDateRange: [dayjs("2026-10-01"), dayjs("2026-10-12")],
   });
   expect(result.documents.map((doc) => doc.docNumber)).toEqual(["IN1"]);
-  expect(result.summary).toEqual({ total: 1, inbound: 1, outbound: 0, inboundQuantity: 2, outboundQuantity: 0, amount: 200 });
+  expect(result.summary).toEqual({ total: 1, inbound: 1, outbound: 0, inboundQuantity: 2, outboundQuantity: 0, inboundAmount: 200, outboundAmount: 0, amountDifference: -200 });
   expect(result.documents[0]).toMatchObject({ matchedQuantity: 2, matchedAmount: 200, totalAmount: 1000 });
   expect(result.documents[0].items).toBe(docs[0].items);
   expect(result.materials).toHaveLength(1);
@@ -43,12 +43,12 @@ test("includes both full boundary days and excludes missing or invalid dates whe
     { ...docs[0], docNumber: "invalid", docDate: "not-a-date" },
   ], { projectId: "p1", docDateRange: [dayjs("2026-10-01"), dayjs("2026-10-12")] });
   expect(result.documents.map((doc) => doc.docNumber)).toEqual(["IN1", "OUT1"]);
-  expect(result.summary).toMatchObject({ total: 2, inbound: 1, outbound: 1, amount: 1150 });
+  expect(result.summary).toMatchObject({ total: 2, inbound: 1, outbound: 1, inboundAmount: 1000, outboundAmount: 150, amountDifference: -850 });
 });
 
 test("outbound filtering and partial codes update document and material totals together", () => {
   const result = queryWarehouseDocuments(docs, { docType: "OUTBOUND_NOTE", materialCode: "m" });
-  expect(result.summary).toMatchObject({ total: 1, inbound: 0, outbound: 1, inboundQuantity: 0, outboundQuantity: 1, amount: 150 });
+  expect(result.summary).toMatchObject({ total: 1, inbound: 0, outbound: 1, inboundQuantity: 0, outboundQuantity: 1, inboundAmount: 0, outboundAmount: 150, amountDifference: 150 });
   expect(result.materials[0]).toMatchObject({ documentCount: 1, inboundAmount: 0, outboundAmount: 150 });
 });
 
@@ -73,18 +73,22 @@ test("sums decimal quantities and money without binary floating point noise", ()
       { materialCode: "M1", quantity: 0.2, amount: 0.2 },
       { materialCode: "M1", quantity: 0.0001, amount: 0 },
     ],
+  }, {
+    ...docs[1], items: [{ materialCode: "M1", quantity: 1, amount: 0.4 }],
   }]);
   expect(result.summary.inboundQuantity).toBe(0.3001);
-  expect(result.summary.amount).toBe(0.3);
+  expect(result.summary.inboundAmount).toBe(0.3);
+  expect(result.summary.outboundAmount).toBe(0.4);
+  expect(result.summary.amountDifference).toBe(0.1);
   expect(result.materials[0].inboundAmount).toBe(0.3);
 });
 
 test("clearing filters restores all documents and empty results have zero totals", () => {
   expect(queryWarehouseDocuments(docs, { projectId: "missing" }).summary)
-    .toEqual({ total: 0, inbound: 0, outbound: 0, inboundQuantity: 0, outboundQuantity: 0, amount: 0 });
+    .toEqual({ total: 0, inbound: 0, outbound: 0, inboundQuantity: 0, outboundQuantity: 0, inboundAmount: 0, outboundAmount: 0, amountDifference: 0 });
   const result = queryWarehouseDocuments(docs, {});
   expect(result.documents).toHaveLength(4);
-  expect(result.summary.amount).toBe(1950);
+  expect(result.summary).toMatchObject({ inboundAmount: 1800, outboundAmount: 150, amountDifference: -1650 });
   expect(result.summary.total).toBe(4);
   expect(docs[0]).not.toHaveProperty("matchedAmount");
 });

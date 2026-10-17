@@ -355,24 +355,26 @@ export default function WarehouseDoc() {
         </Form>
       </Card>
       <Row gutter={[16, 16]}>
-        <Col xs={24} sm={8} xl={4}>
+        <Col xs={24} sm={12} xl={6}>
           <Card>
             <Statistic title="单据总数" value={summary.total} />
           </Card>
         </Col>
-        <Col xs={24} sm={8} xl={4}>
+        <Col xs={24} sm={12} xl={6}>
           <Card>
             <Statistic title="入库单" value={summary.inbound} />
           </Card>
         </Col>
-        <Col xs={24} sm={8} xl={4}>
+        <Col xs={24} sm={12} xl={6}>
           <Card>
             <Statistic title="发货单" value={summary.outbound} />
           </Card>
         </Col>
-        <Col xs={24} sm={8} xl={4}><Card><Statistic title="入库数量合计" value={summary.inboundQuantity} precision={4} /></Card></Col>
-        <Col xs={24} sm={8} xl={4}><Card><Statistic title="出库数量合计" value={summary.outboundQuantity} precision={4} /></Card></Col>
-        <Col xs={24} sm={8} xl={4}><Card><Statistic title="匹配金额合计" value={summary.amount} precision={2} suffix="元" /></Card></Col>
+        <Col xs={24} sm={12} xl={6}><Card><Statistic title="入库数量合计" value={summary.inboundQuantity} precision={4} /></Card></Col>
+        <Col xs={24} sm={12} xl={6}><Card><Statistic title="出库数量合计" value={summary.outboundQuantity} precision={4} /></Card></Col>
+        <Col xs={24} sm={12} xl={6}><Card><Statistic title="入库金额合计" value={summary.inboundAmount} precision={2} suffix="元" /></Card></Col>
+        <Col xs={24} sm={12} xl={6}><Card><Statistic title="出库金额合计" value={summary.outboundAmount} precision={2} suffix="元" /></Card></Col>
+        <Col xs={24} sm={12} xl={6}><Card><Statistic title="出入库金额差" value={summary.amountDifference} precision={2} suffix="元" /></Card></Col>
       </Row>
 
       <Card title="物料统计" extra={<Button icon={<DownloadOutlined />} disabled={!queryResult.materials.length} onClick={exportQueryStatistics}>导出统计</Button>}>

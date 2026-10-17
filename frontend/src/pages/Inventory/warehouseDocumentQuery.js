@@ -11,7 +11,7 @@ export function queryWarehouseDocuments(documents, filters = {}) {
   const endDate = end ? dayjs(end).endOf("day") : null;
   const matchedDocuments = [];
   const materials = new Map();
-  const summary = { total: 0, inbound: 0, outbound: 0, inboundQuantity: 0, outboundQuantity: 0, amount: 0 };
+  const summary = { total: 0, inbound: 0, outbound: 0, inboundQuantity: 0, outboundQuantity: 0, inboundAmount: 0, outboundAmount: 0 };
 
   for (const doc of documents) {
     if (filters.projectId && doc.projectId !== filters.projectId) continue;
@@ -49,14 +49,16 @@ export function queryWarehouseDocuments(documents, filters = {}) {
     summary.total += 1;
     summary[direction] += 1;
     summary[`${direction}Quantity`] += quantity;
-    summary.amount += amount;
+    summary[`${direction}Amount`] += amount;
   }
 
   return {
     documents: matchedDocuments,
     summary: {
       ...summary, inboundQuantity: summary.inboundQuantity / 10000,
-      outboundQuantity: summary.outboundQuantity / 10000, amount: summary.amount / 100,
+      outboundQuantity: summary.outboundQuantity / 10000,
+      inboundAmount: summary.inboundAmount / 100, outboundAmount: summary.outboundAmount / 100,
+      amountDifference: (summary.outboundAmount - summary.inboundAmount) / 100,
     },
     materials: sortSelectItems([...materials.values()].map(({ docNumbers, ...item }) => ({
       ...item, documentCount: docNumbers.size,
