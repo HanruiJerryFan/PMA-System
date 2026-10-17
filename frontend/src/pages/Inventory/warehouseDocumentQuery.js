@@ -57,6 +57,7 @@ export function queryWarehouseDocuments(documents, filters = {}) {
     summary: {
       ...summary, inboundQuantity: summary.inboundQuantity / 10000,
       outboundQuantity: summary.outboundQuantity / 10000,
+      balanceQuantity: (summary.inboundQuantity - summary.outboundQuantity) / 10000,
       inboundAmount: summary.inboundAmount / 100, outboundAmount: summary.outboundAmount / 100,
       amountDifference: (summary.outboundAmount - summary.inboundAmount) / 100,
     },

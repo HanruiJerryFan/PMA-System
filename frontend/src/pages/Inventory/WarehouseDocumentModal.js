@@ -193,7 +193,8 @@ export default function WarehouseDocumentModal({
     () => buildWarehouseDocumentFormValues(initialDocument, defaultWarehouse?.id),
     [defaultWarehouse?.id, initialDocument],
   );
-  const currentDocType = Form.useWatch("docType", form) || "INBOUND_NOTE";
+  const watchedDocType = Form.useWatch("docType", form);
+  const currentDocType = watchedDocType || initialValues.docType;
   const currentDocDate = Form.useWatch("docDate", form);
   const watchedItems = Form.useWatch("items", form);
   const currentItems = watchedItems ?? [];
@@ -292,7 +293,8 @@ export default function WarehouseDocumentModal({
   }, [defaultWarehouse, form, open]);
 
   useEffect(() => {
-    if (!open) {
+    // Wait for the form to load its document type before validating the saved counterparty.
+    if (!open || !watchedDocType) {
       return;
     }
     const currentCustomerId = form.getFieldValue("counterpartyCustomerId");
@@ -306,7 +308,7 @@ export default function WarehouseDocumentModal({
     ) {
       form.setFieldsValue({ counterpartyCustomerId: undefined });
     }
-  }, [allowedCustomerTypeCodes, customerOptionMap, form, open]);
+  }, [allowedCustomerTypeCodes, customerOptionMap, form, open, watchedDocType]);
 
   const handleSubmit = async () => {
     const values = await form.validateFields();

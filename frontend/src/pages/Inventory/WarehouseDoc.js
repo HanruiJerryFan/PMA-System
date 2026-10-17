@@ -355,26 +355,23 @@ export default function WarehouseDoc() {
         </Form>
       </Card>
       <Row gutter={[16, 16]}>
-        <Col xs={24} sm={12} xl={6}>
-          <Card>
-            <Statistic title="单据总数" value={summary.total} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} xl={6}>
-          <Card>
-            <Statistic title="入库单" value={summary.inbound} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} xl={6}>
-          <Card>
-            <Statistic title="发货单" value={summary.outbound} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} xl={6}><Card><Statistic title="入库数量合计" value={summary.inboundQuantity} precision={4} /></Card></Col>
-        <Col xs={24} sm={12} xl={6}><Card><Statistic title="出库数量合计" value={summary.outboundQuantity} precision={4} /></Card></Col>
-        <Col xs={24} sm={12} xl={6}><Card><Statistic title="入库金额合计" value={summary.inboundAmount} precision={2} suffix="元" /></Card></Col>
-        <Col xs={24} sm={12} xl={6}><Card><Statistic title="出库金额合计" value={summary.outboundAmount} precision={2} suffix="元" /></Card></Col>
-        <Col xs={24} sm={12} xl={6}><Card><Statistic title="出入库金额差" value={summary.amountDifference} precision={2} suffix="元" /></Card></Col>
+        {[
+          { key: "total", title: "单据总数" },
+          { key: "inbound", title: "入库单" },
+          { key: "outbound", title: "出库单" },
+          { key: "balanceQuantity", title: "库存数量", precision: 4 },
+          { key: "inboundQuantity", title: "入库数量", precision: 4 },
+          { key: "outboundQuantity", title: "出库数量", precision: 4 },
+          { key: "amountDifference", title: "出入库金额差额", precision: 2, suffix: "元" },
+          { key: "inboundAmount", title: "入库金额", precision: 2, suffix: "元" },
+          { key: "outboundAmount", title: "出库金额", precision: 2, suffix: "元" },
+        ].map(({ key, ...statistic }) => (
+          <Col span={8} key={key}>
+            <Card>
+              <Statistic {...statistic} value={summary[key]} />
+            </Card>
+          </Col>
+        ))}
       </Row>
 
       <Card title="物料统计" extra={<Button icon={<DownloadOutlined />} disabled={!queryResult.materials.length} onClick={exportQueryStatistics}>导出统计</Button>}>
