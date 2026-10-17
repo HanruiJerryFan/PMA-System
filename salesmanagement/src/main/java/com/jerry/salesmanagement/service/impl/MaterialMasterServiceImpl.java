@@ -130,11 +130,39 @@ public class MaterialMasterServiceImpl implements MaterialMasterService {
     }
 
     @Override
+    @Transactional
     public void delete(String uuid) {
-        materialMasterMapper.deleteByUuid(uuid);
+        MaterialMaster existing = materialMasterMapper.selectByUuid(uuid);
+        if (existing == null) {
+            return;
+        }
+        if (!StringUtils.hasText(existing.getCategoryCode()) || !StringUtils.hasText(existing.getSubcategoryCode())
+                || !StringUtils.hasText(existing.getBrandCode()) || !StringUtils.hasText(existing.getBandCode())
+                || existing.getSequenceNo() == null || !existing.getSequenceNo().matches("[0-9]{1,9}")) {
+            materialMasterMapper.deleteByUuid(uuid);
+            return;
+        }
+        // Use the codes stored on the material, not dictionary values which may have since changed.
+        ProductCategory category = new ProductCategory();
+        category.setCode(existing.getCategoryCode());
+        ProductSubcategory subcategory = new ProductSubcategory();
+        subcategory.setCode(existing.getSubcategoryCode());
+        ProductBrand brand = new ProductBrand();
+        brand.setCode(existing.getBrandCode());
+        ProductBand band = new ProductBand();
+        band.setCode(existing.getBandCode());
+        String scope = resolveSequenceScope();
+        int sequenceLength = existing.getSequenceNo().length();
+        String prefix = resolveLookupPrefix(scope, category, subcategory, brand, band);
+        String bandCode = "CATEGORY_SUBCATEGORY_BRAND_BAND".equals(scope) ? existing.getBandCode() : null;
+        codeSequenceService.deleteAndReclaimTail("material:" + scope + ":" + sequenceLength + ":" + prefix,
+                () -> materialMasterMapper.deleteByUuid(uuid),
+                () -> materialMasterMapper.selectMaxMaterialSequenceForUpdate(existing.getCategoryCode(),
+                        existing.getSubcategoryCode(), existing.getBrandCode(), bandCode, sequenceLength));
     }
 
     @Override
+    @Transactional
     public ExcelImportResult importFromExcel(MultipartFile file, String importMode) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("Excel file is required");
@@ -245,16 +273,12 @@ public class MaterialMasterServiceImpl implements MaterialMasterService {
         int sequenceLength = resolveSequenceLength();
         String sequenceScope = resolveSequenceScope();
         String lookupPrefix = resolveLookupPrefix(sequenceScope, category, subcategory, brand, band);
-        String currentMax = materialMasterMapper.selectMaxMaterialCodeByPrefix(lookupPrefix);
-        int sequenceStart = resolveTokenStart(pattern, "sequence", category, subcategory, brand, band, sequenceLength);
-        String currentSequence = currentMax != null && currentMax.length() >= sequenceStart + sequenceLength
-                ? currentMax.substring(sequenceStart, sequenceStart + sequenceLength)
-                : null;
-        int currentSequenceValue = currentSequence == null ? 0 : Integer.parseInt(currentSequence);
+        String bandCode = "CATEGORY_SUBCATEGORY_BRAND_BAND".equals(sequenceScope) ? band.getCode() : null;
         int maxSequence = (int) Math.pow(10, sequenceLength) - 1;
         int nextSequence = codeSequenceService.nextValue(
                 "material:" + sequenceScope + ":" + sequenceLength + ":" + lookupPrefix,
-                currentSequenceValue,
+                () -> materialMasterMapper.selectMaxMaterialSequenceForUpdate(
+                        category.getCode(), subcategory.getCode(), brand.getCode(), bandCode, sequenceLength),
                 maxSequence,
                 "Material code sequence for " + lookupPrefix
         );

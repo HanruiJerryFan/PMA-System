@@ -137,6 +137,14 @@
         WHERE voucher_no LIKE CONCAT(#{monthPrefix}, '%')
     </select>
 
+    <select id="selectMaxVoucherSequenceByMonthPrefixForUpdate" parameterType="string" resultType="int" flushCache="true" useCache="false">
+        SELECT CAST(RIGHT(voucher_no, 2) AS DECIMAL(10,0))
+        FROM finance_voucher
+        WHERE voucher_no LIKE CONCAT(#{monthPrefix}, '%')
+        ORDER BY CAST(RIGHT(voucher_no, 2) AS DECIMAL(10,0)) DESC
+        LIMIT 1 FOR UPDATE
+    </select>
+
     <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.FinanceVoucher" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO finance_voucher (
             uuid,

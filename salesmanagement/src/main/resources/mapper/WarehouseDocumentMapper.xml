@@ -69,6 +69,14 @@
         WHERE doc_number LIKE CONCAT(#{docNumberPrefix}, '%')
     </select>
 
+    <select id="selectMaxAnnualSequenceForUpdate" parameterType="string" resultType="java.lang.Integer" flushCache="true" useCache="false">
+        SELECT CAST(RIGHT(doc_number, 3) AS DECIMAL(10,0))
+        FROM warehouse_doc
+        WHERE doc_number LIKE CONCAT(#{docNumberPrefix}, '%')
+        ORDER BY CAST(RIGHT(doc_number, 3) AS DECIMAL(10,0)) DESC
+        LIMIT 1 FOR UPDATE
+    </select>
+
     <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.WarehouseDocument">
         INSERT INTO warehouse_doc (
             doc_number,

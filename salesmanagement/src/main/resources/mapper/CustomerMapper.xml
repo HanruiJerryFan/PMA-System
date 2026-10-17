@@ -114,6 +114,14 @@
         WHERE customer_code REGEXP CONCAT('^', #{prefix}, '[0-9]{4}$')
     </select>
 
+    <select id="selectMaxCustomerCodeByPrefixForUpdate" parameterType="string" resultType="string" flushCache="true" useCache="false">
+        SELECT customer_code
+        FROM customer_info
+        WHERE customer_code REGEXP CONCAT('^', #{prefix}, '[0-9]{4}$')
+        ORDER BY customer_code DESC
+        LIMIT 1 FOR UPDATE
+    </select>
+
     <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.Customer"
             useGeneratedKeys="true" keyProperty="id">
         INSERT INTO customer_info (

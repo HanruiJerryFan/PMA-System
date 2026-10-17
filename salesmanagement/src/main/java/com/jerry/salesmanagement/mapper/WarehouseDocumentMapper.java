@@ -11,6 +11,7 @@ public interface WarehouseDocumentMapper {
     List<WarehouseDocument> selectAll();
     WarehouseDocument selectByDocNumber(String docNumber);
     Integer selectMaxAnnualSequence(String docNumberPrefix);
+    Integer selectMaxAnnualSequenceForUpdate(String docNumberPrefix);
     int insert(WarehouseDocument warehouseDocument);
     int update(WarehouseDocument warehouseDocument);
     int updateAuditorByDocNumber(

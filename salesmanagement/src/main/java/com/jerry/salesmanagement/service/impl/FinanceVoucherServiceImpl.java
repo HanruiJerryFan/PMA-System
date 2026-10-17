@@ -135,8 +135,21 @@ public class FinanceVoucherServiceImpl implements FinanceVoucherService {
     }
 
     @Override
+    @Transactional
     public void delete(String uuid) {
-        mapper.deleteByUuid(uuid);
+        FinanceVoucher existing = mapper.selectByUuid(uuid);
+        if (existing == null) {
+            return;
+        }
+        String voucherNo = existing.getVoucherNo();
+        if (!StringUtils.hasText(voucherNo) || !VOUCHER_NO_PATTERN.matcher(voucherNo).matches()) {
+            mapper.deleteByUuid(uuid);
+            return;
+        }
+        String monthPrefix = voucherNo.substring(0, 6);
+        codeSequenceService.deleteAndReclaimTail("finance_voucher:" + monthPrefix,
+                () -> mapper.deleteByUuid(uuid),
+                () -> mapper.selectMaxVoucherSequenceByMonthPrefixForUpdate(monthPrefix));
     }
 
     private void validateVoucher(FinanceVoucher voucher) {
@@ -300,10 +313,9 @@ public class FinanceVoucherServiceImpl implements FinanceVoucherService {
         }
         String prefix = occurredOn.format(VOUCHER_DAY_FORMATTER);
         String monthPrefix = occurredOn.format(VOUCHER_MONTH_FORMATTER);
-        Integer currentMaxSequence = mapper.selectMaxVoucherSequenceByMonthPrefix(monthPrefix);
         int nextSequence = codeSequenceService.nextValue(
                 "finance_voucher:" + monthPrefix,
-                currentMaxSequence == null ? 0 : currentMaxSequence,
+                () -> mapper.selectMaxVoucherSequenceByMonthPrefixForUpdate(monthPrefix),
                 99,
                 "Finance voucher monthly sequence for " + monthPrefix
         );

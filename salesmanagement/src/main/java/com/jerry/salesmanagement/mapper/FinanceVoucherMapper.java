@@ -12,6 +12,7 @@ public interface FinanceVoucherMapper {
     FinanceVoucher selectByVoucherNo(String voucherNo);
     List<FinanceVoucher> selectAll();
     Integer selectMaxVoucherSequenceByMonthPrefix(String monthPrefix);
+    Integer selectMaxVoucherSequenceByMonthPrefixForUpdate(String monthPrefix);
     void insert(FinanceVoucher voucher);
     void updateByUuid(FinanceVoucher voucher);
     void updateAuditorByUuid(

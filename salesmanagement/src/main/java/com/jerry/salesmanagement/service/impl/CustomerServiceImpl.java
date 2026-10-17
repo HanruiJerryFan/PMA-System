@@ -104,8 +104,24 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
+    @Transactional
     public void delete(String uuid) {
-        customerMapper.deleteByUuid(uuid);
+        Customer existing = customerMapper.selectByUuid(uuid);
+        if (existing == null) {
+            return;
+        }
+        String code = existing.getCustomerCode();
+        if (!StringUtils.hasText(code) || !CUSTOMER_CODE_PATTERN.matcher(code).matches()) {
+            customerMapper.deleteByUuid(uuid);
+            return;
+        }
+        String prefix = code.substring(0, 5);
+        codeSequenceService.deleteAndReclaimTail("customer:" + prefix,
+                () -> customerMapper.deleteByUuid(uuid),
+                () -> {
+                    String maxCode = customerMapper.selectMaxCustomerCodeByPrefixForUpdate(prefix);
+                    return maxCode == null ? 0 : Integer.parseInt(maxCode.substring(5));
+                });
     }
 
     private void validateCustomer(Customer customer) {
@@ -170,14 +186,12 @@ public class CustomerServiceImpl implements CustomerService {
 
         String customerTypeCode = resolveCustomerTypeCode(customerTypeId);
         String prefix = regionCode.substring(0, 4) + customerTypeCode;
-        String maxCustomerCode = customerMapper.selectMaxCustomerCodeByPrefix(prefix);
-        int currentSequence = 0;
-        if (StringUtils.hasText(maxCustomerCode)) {
-            currentSequence = Integer.parseInt(maxCustomerCode.substring(5));
-        }
         int nextSequence = codeSequenceService.nextValue(
                 "customer:" + prefix,
-                currentSequence,
+                () -> {
+                    String maxCode = customerMapper.selectMaxCustomerCodeByPrefixForUpdate(prefix);
+                    return maxCode == null ? 0 : Integer.parseInt(maxCode.substring(5));
+                },
                 9999,
                 "Customer code sequence for prefix " + prefix
         );

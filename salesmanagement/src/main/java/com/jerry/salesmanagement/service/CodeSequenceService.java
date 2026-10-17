@@ -1,5 +1,10 @@
 package com.jerry.salesmanagement.service;
 
+import java.util.function.Supplier;
+
 public interface CodeSequenceService {
-    int nextValue(String sequenceKey, int initialValue, int maxValue, String description);
+    // The caller must save the numbered record in the same transaction; the supplier must use a locking read.
+    int nextValue(String sequenceKey, Supplier<Integer> currentMaxValue, int maxValue, String description);
+
+    void deleteAndReclaimTail(String sequenceKey, Runnable deleteAction, Supplier<Integer> remainingMaxValue);
 }

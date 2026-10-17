@@ -98,6 +98,16 @@
         WHERE material_code LIKE CONCAT(#{prefix}, '%')
     </select>
 
+    <select id="selectMaxMaterialSequenceForUpdate" resultType="int" flushCache="true" useCache="false">
+        SELECT CAST(sequence_no AS DECIMAL(10,0))
+        FROM product_basic_info
+        WHERE category_code = #{categoryCode} AND subcategory_code = #{subcategoryCode}
+          AND brand_code = #{brandCode} AND CHAR_LENGTH(sequence_no) = #{sequenceLength}
+        <if test="bandCode != null">AND band_code = #{bandCode}</if>
+        ORDER BY CAST(sequence_no AS DECIMAL(10,0)) DESC
+        LIMIT 1 FOR UPDATE
+    </select>
+
     <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.MaterialMaster">
         INSERT INTO product_basic_info (
             uuid,

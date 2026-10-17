@@ -13,6 +13,7 @@ public interface CustomerMapper {
     Customer selectByCustomerName(String customerName);
     Customer selectByTaxIdentificationNumber(String taxIdentificationNumber);
     String selectMaxCustomerCodeByPrefix(String prefix);
+    String selectMaxCustomerCodeByPrefixForUpdate(String prefix);
     int insert(Customer customer);
     int updateByUuid(Customer customer);
     int touchActivityByUuid(@Param("uuid") String uuid, @Param("activityStatus") String activityStatus);

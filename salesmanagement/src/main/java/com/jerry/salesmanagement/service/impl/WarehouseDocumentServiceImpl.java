@@ -155,9 +155,18 @@ public class WarehouseDocumentServiceImpl implements WarehouseDocumentService {
     @Override
     @Transactional
     public void delete(String docNumber) {
-        inventoryTransactionMapper.deleteBySourceRef("WAREHOUSE_DOC", docNumber);
-        warehouseDocumentItemMapper.deleteByDocNumber(docNumber);
-        warehouseDocumentMapper.deleteByDocNumber(docNumber);
+        Runnable deleteAction = () -> {
+            inventoryTransactionMapper.deleteBySourceRef("WAREHOUSE_DOC", docNumber);
+            warehouseDocumentItemMapper.deleteByDocNumber(docNumber);
+            warehouseDocumentMapper.deleteByDocNumber(docNumber);
+        };
+        if (docNumber == null || !docNumber.matches("^(RKD|FHD)[0-9]{9}$")) {
+            deleteAction.run();
+            return;
+        }
+        String annualPrefix = docNumber.substring(0, 7);
+        codeSequenceService.deleteAndReclaimTail("warehouse_doc:" + annualPrefix, deleteAction,
+                () -> warehouseDocumentMapper.selectMaxAnnualSequenceForUpdate(annualPrefix));
     }
 
     private void validateAndHydrate(WarehouseDocument warehouseDocument) {
@@ -312,10 +321,9 @@ public class WarehouseDocumentServiceImpl implements WarehouseDocumentService {
                 .toLocalDate()
                 .format(DOC_NUMBER_YEAR_MONTH);
         String annualPrefix = prefix + yearMonth.substring(0, 4);
-        Integer maxSequence = warehouseDocumentMapper.selectMaxAnnualSequence(annualPrefix);
         int nextSequence = codeSequenceService.nextValue(
                 "warehouse_doc:" + annualPrefix,
-                maxSequence == null ? 0 : maxSequence,
+                () -> warehouseDocumentMapper.selectMaxAnnualSequenceForUpdate(annualPrefix),
                 999,
                 "Warehouse document annual sequence for " + annualPrefix
         );
