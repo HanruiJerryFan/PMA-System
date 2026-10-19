@@ -1,5 +1,6 @@
 package com.jerry.salesmanagement.service.impl;
 
+import com.jerry.salesmanagement.common.WarehouseDocumentRules;
 import com.jerry.salesmanagement.mapper.CustomerMapper;
 import com.jerry.salesmanagement.mapper.CustomerTypeMapper;
 import com.jerry.salesmanagement.mapper.InventoryTransactionMapper;
@@ -16,6 +17,7 @@ import com.jerry.salesmanagement.pojo.MaterialMaster;
 import com.jerry.salesmanagement.pojo.ProductBrand;
 import com.jerry.salesmanagement.pojo.WarehouseDocument;
 import com.jerry.salesmanagement.pojo.WarehouseDocumentItem;
+import com.jerry.salesmanagement.pojo.Warehouse;
 import com.jerry.salesmanagement.service.CodeSequenceService;
 import com.jerry.salesmanagement.service.CurrentUserService;
 import com.jerry.salesmanagement.service.CustomerService;
@@ -23,8 +25,10 @@ import com.jerry.salesmanagement.service.EntryAuditService;
 import com.jerry.salesmanagement.service.InventoryTransactionService;
 import com.jerry.salesmanagement.service.WarehouseDocumentService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.util.StringUtils;
 
 import java.time.ZoneId;
@@ -37,7 +41,7 @@ import java.util.UUID;
 @Service
 public class WarehouseDocumentServiceImpl implements WarehouseDocumentService {
 
-    private static final List<String> ALLOWED_DOC_TYPES = Arrays.asList("INBOUND_NOTE", "OUTBOUND_NOTE");
+    private static final List<String> ALLOWED_DOC_TYPES = Arrays.asList("INBOUND_NOTE", "OUTBOUND_NOTE", "TRANSFER_JTX", "TRANSFER_XTJ");
     private static final List<String> ALLOWED_CATEGORIES = Arrays.asList(
             "PROJECT_PURCHASE",
             "PROJECT_SALES",
@@ -106,62 +110,69 @@ public class WarehouseDocumentServiceImpl implements WarehouseDocumentService {
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public WarehouseDocument create(WarehouseDocument warehouseDocument) {
         Long currentUserId = currentUserService.requireCurrentUserId();
         entryAuditService.applyCreate(warehouseDocument);
         warehouseDocument.setCreateUser(currentUserId);
-        validateAndHydrate(warehouseDocument);
+        validateAndHydrate(warehouseDocument, null);
         warehouseDocumentMapper.insert(warehouseDocument);
         persistItemsAndTransactions(warehouseDocument);
-        customerService.touchActivity(warehouseDocument.getCounterpartyCustomerId());
+        synchronizeTransfer(warehouseDocument);
+        touchCounterparty(warehouseDocument);
         return getByDocNumber(warehouseDocument.getDocNumber());
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public WarehouseDocument update(WarehouseDocument warehouseDocument) {
-        WarehouseDocument existing = warehouseDocumentMapper.selectByDocNumber(warehouseDocument.getDocNumber());
-        if (existing == null) {
-            throw new IllegalArgumentException("Warehouse document does not exist");
-        }
-        entryAuditService.applyUpdate(warehouseDocument, existing);
-        warehouseDocument.setUpdateUser(currentUserService.requireCurrentUserId());
-        validateAndHydrate(warehouseDocument);
-        warehouseDocumentMapper.update(warehouseDocument);
-        warehouseDocumentItemMapper.deleteByDocNumber(warehouseDocument.getDocNumber());
-        inventoryTransactionMapper.deleteBySourceRef("WAREHOUSE_DOC", warehouseDocument.getDocNumber());
-        persistItemsAndTransactions(warehouseDocument);
-        customerService.touchActivity(warehouseDocument.getCounterpartyCustomerId());
+        codeSequenceService.withLock(sequenceKey(warehouseDocument.getDocNumber()), () -> {
+            WarehouseDocument identity = warehouseDocumentMapper.selectIdentityForUpdate(warehouseDocument.getDocNumber());
+            requireEditable(identity);
+            WarehouseDocument existing = warehouseDocumentMapper.selectByDocNumber(warehouseDocument.getDocNumber());
+            if (!existing.getDocType().equals(warehouseDocument.getDocType())) {
+                throw new IllegalArgumentException("单据类型创建后不可修改，请新建对应类型单据");
+            }
+            entryAuditService.applyUpdate(warehouseDocument, existing);
+            warehouseDocument.setCreateUser(existing.getCreateUser());
+            warehouseDocument.setUpdateUser(currentUserService.requireCurrentUserId());
+            validateAndHydrate(warehouseDocument, existing);
+            if (warehouseDocumentMapper.update(warehouseDocument) != 1) throw new IllegalStateException("单据更新失败");
+            replaceItemsAndTransactions(warehouseDocument);
+            synchronizeTransfer(warehouseDocument);
+            touchCounterparty(warehouseDocument);
+        });
         return getByDocNumber(warehouseDocument.getDocNumber());
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public WarehouseDocument audit(String docNumber) {
-        WarehouseDocument existing = warehouseDocumentMapper.selectByDocNumber(docNumber);
-        if (existing == null) {
-            throw new IllegalArgumentException("Warehouse document does not exist");
-        }
-        entryAuditService.applyAudit(existing);
-        warehouseDocumentMapper.updateAuditorByDocNumber(
-                docNumber,
-                existing.getAuditorUser(),
-                currentUserService.requireCurrentUserId()
-        );
+        codeSequenceService.withLock(sequenceKey(docNumber), () -> {
+            WarehouseDocument existing = warehouseDocumentMapper.selectIdentityForUpdate(docNumber);
+            requireEditable(existing);
+            entryAuditService.applyAudit(existing);
+            Long userId = currentUserService.requireCurrentUserId();
+            warehouseDocumentMapper.updateAuditorByDocNumber(docNumber, existing.getAuditorUser(), userId);
+            WarehouseDocument inbound = linkedInbound(docNumber);
+            if (inbound != null) warehouseDocumentMapper.updateAuditorByDocNumber(inbound.getDocNumber(), existing.getAuditorUser(), userId);
+        });
         return getByDocNumber(docNumber);
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public void delete(String docNumber) {
         Runnable deleteAction = () -> {
-            inventoryTransactionMapper.deleteBySourceRef("WAREHOUSE_DOC", docNumber);
-            warehouseDocumentItemMapper.deleteByDocNumber(docNumber);
-            warehouseDocumentMapper.deleteByDocNumber(docNumber);
+            WarehouseDocument existing = warehouseDocumentMapper.selectIdentityForUpdate(docNumber);
+            if (existing == null) return;
+            requireEditable(existing);
+            WarehouseDocument inbound = linkedInbound(docNumber);
+            if (inbound != null) deleteLinkedInbound(inbound);
+            deleteRecords(docNumber);
         };
-        if (docNumber == null || !docNumber.matches("^(RKD|FHD)[0-9]{9}$")) {
-            deleteAction.run();
+        if (docNumber == null || !docNumber.matches("^(RKD|FHD|HBJ|HBX)[0-9]{9}$")) {
+            codeSequenceService.withLock(sequenceKey(docNumber), deleteAction);
             return;
         }
         String annualPrefix = docNumber.substring(0, 7);
@@ -169,7 +180,99 @@ public class WarehouseDocumentServiceImpl implements WarehouseDocumentService {
                 () -> warehouseDocumentMapper.selectMaxAnnualSequenceForUpdate(annualPrefix));
     }
 
-    private void validateAndHydrate(WarehouseDocument warehouseDocument) {
+    private String sequenceKey(String docNumber) {
+        if (docNumber == null) throw new IllegalArgumentException("单据编号不能为空");
+        return "warehouse_doc:" + (docNumber.matches("^(RKD|FHD|HBJ|HBX)[0-9]{9}$") ? docNumber.substring(0, 7) : "legacy:" + docNumber);
+    }
+
+    private void requireEditable(WarehouseDocument document) {
+        if (document == null) throw new IllegalArgumentException("Warehouse document does not exist");
+        if (WarehouseDocumentRules.TRANSFER_SOURCE.equals(document.getSourceRefType())) {
+            throw new IllegalArgumentException("自动入库单由划拨单 " + document.getSourceRefId() + " 统一修改、审核和删除");
+        }
+    }
+
+    private WarehouseDocument linkedInbound(String docNumber) {
+        List<WarehouseDocument> linked = warehouseDocumentMapper.selectByTransferSource(docNumber);
+        if (linked.size() > 1) throw new IllegalStateException("划拨单存在多张关联入库单，请先核对数据");
+        return linked.isEmpty() ? null : linked.get(0);
+    }
+
+    private void deleteRecords(String docNumber) {
+        inventoryTransactionMapper.deleteBySourceRef("WAREHOUSE_DOC", docNumber);
+        warehouseDocumentItemMapper.deleteByDocNumber(docNumber);
+        warehouseDocumentMapper.deleteByDocNumber(docNumber);
+    }
+
+    private void deleteLinkedInbound(WarehouseDocument inbound) {
+        String prefix = inbound.getDocNumber().substring(0, 7);
+        codeSequenceService.deleteAndReclaimTail(sequenceKey(inbound.getDocNumber()),
+                () -> deleteRecords(inbound.getDocNumber()),
+                () -> warehouseDocumentMapper.selectMaxAnnualSequenceForUpdate(prefix));
+    }
+
+    private void replaceItemsAndTransactions(WarehouseDocument document) {
+        warehouseDocumentItemMapper.deleteByDocNumber(document.getDocNumber());
+        inventoryTransactionMapper.deleteBySourceRef("WAREHOUSE_DOC", document.getDocNumber());
+        persistItemsAndTransactions(document);
+    }
+
+    private Warehouse warehouseByCode(String code) {
+        List<Warehouse> matches = warehouseMapper.selectAll().stream()
+                .filter(item -> code.equalsIgnoreCase(item.getWarehouseCode() == null ? "" : item.getWarehouseCode().trim())
+                        || code.equalsIgnoreCase(item.getWarehouseName() == null ? "" : item.getWarehouseName().trim())).toList();
+        if (matches.size() != 1) throw new IllegalArgumentException("请核对已有仓库 " + code + "（仓库编码或名称需唯一匹配）");
+        return matches.get(0);
+    }
+
+    private void touchCounterparty(WarehouseDocument document) {
+        if (StringUtils.hasText(document.getCounterpartyCustomerId())) customerService.touchActivity(document.getCounterpartyCustomerId());
+    }
+
+    private String warehouseContact(Warehouse warehouse) {
+        return ((warehouse.getContactName() == null ? "" : warehouse.getContactName()) + " "
+                + (warehouse.getContactPhone() == null ? "" : warehouse.getContactPhone())).trim();
+    }
+
+    private void synchronizeTransfer(WarehouseDocument parent) {
+        WarehouseDocument existingInbound = linkedInbound(parent.getDocNumber());
+        if (!WarehouseDocumentRules.isTransfer(parent.getDocType())) {
+            if (existingInbound != null) deleteLinkedInbound(existingInbound);
+            return;
+        }
+        Warehouse destination = warehouseByCode(WarehouseDocumentRules.destinationWarehouse(parent.getDocType()));
+        Warehouse source = warehouseMapper.selectById(parent.getWarehouseId());
+        WarehouseDocument inbound = new WarehouseDocument();
+        BeanUtils.copyProperties(parent, inbound);
+        inbound.setDocNumber(existingInbound == null ? generateDocNumber("INBOUND_NOTE", parent.getDocDate()) : existingInbound.getDocNumber());
+        inbound.setDocType("INBOUND_NOTE");
+        inbound.setWarehouseId(destination.getId());
+        inbound.setSourceRefType(WarehouseDocumentRules.TRANSFER_SOURCE);
+        inbound.setSourceRefId(parent.getDocNumber());
+        inbound.setCounterpartyCustomerId(null);
+        inbound.setCounterpartyName(source.getWarehouseCode() + " - " + source.getWarehouseName());
+        inbound.setCounterpartyAddress(source.getWarehouseAddress());
+        inbound.setCounterpartyContact(warehouseContact(source));
+        inbound.setItems(parent.getItems().stream().map(item -> {
+            WarehouseDocumentItem copy = new WarehouseDocumentItem();
+            BeanUtils.copyProperties(item, copy);
+            copy.setId(null);
+            copy.setUuid(UUID.randomUUID().toString());
+            copy.setDocNumber(inbound.getDocNumber());
+            return copy;
+        }).toList());
+        if (existingInbound == null) {
+            warehouseDocumentMapper.insert(inbound);
+            persistItemsAndTransactions(inbound);
+        } else {
+            codeSequenceService.withLock(sequenceKey(inbound.getDocNumber()), () -> {
+                if (warehouseDocumentMapper.update(inbound) != 1) throw new IllegalStateException("关联入库单更新失败");
+                replaceItemsAndTransactions(inbound);
+            });
+        }
+    }
+
+    private void validateAndHydrate(WarehouseDocument warehouseDocument, WarehouseDocument existing) {
         if (!StringUtils.hasText(warehouseDocument.getDocType())) {
             throw new IllegalArgumentException("Document type is required");
         }
@@ -184,19 +287,31 @@ public class WarehouseDocumentServiceImpl implements WarehouseDocumentService {
         if (!ALLOWED_CATEGORIES.contains(warehouseDocument.getBusinessCategory())) {
             throw new IllegalArgumentException("Business category is invalid");
         }
-        if (warehouseDocument.getWarehouseId() == null) {
-            List<com.jerry.salesmanagement.pojo.Warehouse> warehouses = warehouseMapper.selectAll();
-            if (warehouses.size() == 1) {
-                warehouseDocument.setWarehouseId(warehouses.get(0).getId());
-            }
+        boolean legacyCategory = existing != null
+                && existing.getBusinessCategory().equals(warehouseDocument.getBusinessCategory())
+                && !WarehouseDocumentRules.categories(existing.getDocType()).contains(existing.getBusinessCategory());
+        if (!legacyCategory && !WarehouseDocumentRules.categories(warehouseDocument.getDocType()).contains(warehouseDocument.getBusinessCategory())) {
+            throw new IllegalArgumentException("业务类别与单据类型不匹配");
         }
-        if (warehouseDocument.getWarehouseId() == null || warehouseMapper.selectById(warehouseDocument.getWarehouseId()) == null) {
-            throw new IllegalArgumentException("Warehouse is required");
+        if (legacyCategory) {
+            warehouseDocument.setWarehouseId(existing.getWarehouseId());
+            if (existing.getWarehouseId() == null || warehouseMapper.selectById(existing.getWarehouseId()) == null) {
+                throw new IllegalArgumentException("请核对历史单据的仓库");
+            }
+        } else {
+            warehouseDocument.setWarehouseId(warehouseByCode(WarehouseDocumentRules.sourceWarehouse(warehouseDocument.getBusinessCategory())).getId());
         }
         if (StringUtils.hasText(warehouseDocument.getProjectId())
                 && projectMapper.selectByUuid(warehouseDocument.getProjectId()) == null) {
             throw new IllegalArgumentException("Project does not exist");
         }
+        if (WarehouseDocumentRules.isTransfer(warehouseDocument.getDocType())) {
+            Warehouse destination = warehouseByCode(WarehouseDocumentRules.destinationWarehouse(warehouseDocument.getDocType()));
+            warehouseDocument.setCounterpartyCustomerId(null);
+            warehouseDocument.setCounterpartyName(destination.getWarehouseCode() + " - " + destination.getWarehouseName());
+            warehouseDocument.setCounterpartyAddress(destination.getWarehouseAddress());
+            warehouseDocument.setCounterpartyContact(warehouseContact(destination));
+        } else {
         if (!StringUtils.hasText(warehouseDocument.getCounterpartyCustomerId())) {
             throw new IllegalArgumentException("Counterparty customer is required");
         }
@@ -221,6 +336,7 @@ public class WarehouseDocumentServiceImpl implements WarehouseDocumentService {
                             ? customer.getOfficeAddress()
                             : customer.getRegisterAddress()
             );
+        }
         }
         if (warehouseDocument.getDocDate() == null) {
             warehouseDocument.setDocDate(new Date());
@@ -315,7 +431,7 @@ public class WarehouseDocumentServiceImpl implements WarehouseDocumentService {
     }
 
     private String generateDocNumber(String docType, Date docDate) {
-        String prefix = "INBOUND_NOTE".equals(docType) ? "RKD" : "FHD";
+        String prefix = WarehouseDocumentRules.numberPrefix(docType);
         String yearMonth = docDate.toInstant()
                 .atZone(ZoneId.systemDefault())
                 .toLocalDate()

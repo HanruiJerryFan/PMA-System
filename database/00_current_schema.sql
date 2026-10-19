@@ -1060,6 +1060,7 @@ CREATE TABLE `warehouse_doc` (
   `update_time` datetime DEFAULT NULL,
   `update_user` bigint(20) DEFAULT NULL,
   PRIMARY KEY (`doc_number`),
+  KEY `idx_warehouse_doc_source` (`source_ref_type`,`source_ref_id`),
   KEY `idx_warehouse_doc_entry_user` (`entry_user`),
   KEY `idx_warehouse_doc_auditor_user` (`auditor_user`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

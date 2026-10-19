@@ -61,4 +61,15 @@ public class CodeSequenceServiceImpl implements CodeSequenceService {
         }
         mapper.updateCurrentValue(sequenceKey, remainingMax == null ? 0 : remainingMax);
     }
+
+    @Override
+    @Transactional
+    public void withLock(String sequenceKey, Runnable action) {
+        if (!StringUtils.hasText(sequenceKey)) throw new IllegalArgumentException("Sequence key is required");
+        mapper.insertIfAbsent(sequenceKey, 0, sequenceKey);
+        if (mapper.selectCurrentValueForUpdate(sequenceKey) == null) {
+            throw new IllegalStateException("Sequence row was not created: " + sequenceKey);
+        }
+        action.run();
+    }
 }

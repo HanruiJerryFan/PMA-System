@@ -64,14 +64,14 @@ class GoodsInventoryMapperTests {
     }
 
     @Test
-    void usesAllInboundQuantityAsDenominatorButOnlyPurchaseCostsAsNumerator() {
+    void transfersDoNotDilutePurchaseAveragePrice() {
         transaction("id-1", "M001", "PROJECT_PURCHASE", "IN", "10", "100");
         transaction("id-1", "M001", "PROJECT_TRANSFER_TO_WAREHOUSE", "IN", "10", "9999");
         transaction("id-1", "M001", "WAREHOUSE_TRANSFER_TO_PROJECT", "OUT", "4", "9999");
         try (SqlSession session = factory.openSession(true)) {
             GoodsInventory stock = session.getMapper(GoodsInventoryMapper.class).selectByUuid("id-1");
-            assertDecimal("50", stock.getPurchaseAveragePrice());
-            assertDecimal("800.00", stock.getInventoryAmount());
+            assertDecimal("100", stock.getPurchaseAveragePrice());
+            assertDecimal("1600.00", stock.getInventoryAmount());
         }
     }
 

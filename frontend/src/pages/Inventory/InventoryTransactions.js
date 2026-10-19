@@ -5,13 +5,14 @@ import { DownloadOutlined } from "@ant-design/icons";
 import CRUDTable from "../../components/Common/CRUDTable";
 import { inventoryAPI } from "../../api/modules";
 import { downloadExcel } from "../../utils/exporters";
+import { BUSINESS_CATEGORIES } from "./warehouseDocumentUtils";
 
 const BUSINESS_CATEGORY_OPTIONS = [
   { value: "PROJECT_PURCHASE", label: "项目采购" },
   { value: "PROJECT_SALES", label: "项目销售" },
   { value: "CENTRALIZED_PURCHASE", label: "集中采购" },
-  { value: "WAREHOUSE_TRANSFER_TO_PROJECT", label: "仓库调拨到项目" },
-  { value: "PROJECT_TRANSFER_TO_WAREHOUSE", label: "项目退回仓库" },
+  { value: "WAREHOUSE_TRANSFER_TO_PROJECT", label: BUSINESS_CATEGORIES.WAREHOUSE_TRANSFER_TO_PROJECT },
+  { value: "PROJECT_TRANSFER_TO_WAREHOUSE", label: BUSINESS_CATEGORIES.PROJECT_TRANSFER_TO_WAREHOUSE },
 ];
 
 const TXN_TYPE_OPTIONS = [
@@ -46,7 +47,7 @@ export default function InventoryTransactions() {
   );
 
   const warehouseMap = useMemo(
-    () => Object.fromEntries(warehouses.map((item) => [String(item.id), item.warehouseName])),
+    () => Object.fromEntries(warehouses.map((item) => [String(item.id), [item.warehouseCode, item.warehouseName].filter(Boolean).join(" - ")])),
     [warehouses]
   );
 

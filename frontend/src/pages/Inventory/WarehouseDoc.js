@@ -31,6 +31,8 @@ import { canMaintainEntryAuditUsers, getUserLabel } from "../../utils/entryAudit
 import WarehouseDocumentModal from "./WarehouseDocumentModal";
 import {
   DOC_TYPES,
+  isGeneratedInbound,
+  isTransferDocument,
   categoryLabel,
   docMeta,
   formatAmount,
@@ -69,7 +71,7 @@ export default function WarehouseDoc() {
     [projects],
   );
   const warehouseMap = useMemo(
-    () => Object.fromEntries(warehouses.map((item) => [String(item.id), item.warehouseName])),
+    () => Object.fromEntries(warehouses.map((item) => [String(item.id), [item.warehouseCode, item.warehouseName].filter(Boolean).join(" - ")])),
     [warehouses],
   );
   const defaultWarehouse = useMemo(
@@ -88,6 +90,7 @@ export default function WarehouseDoc() {
         entryUserName: item.entryUserName || userMap[item.entryUser] || "",
         auditorUserName: item.auditorUserName || userMap[item.auditorUser] || "",
         itemCount: item.items?.length || 0,
+        relatedDocNumber: isGeneratedInbound(item) ? item.sourceRefId : documents.find((doc) => isGeneratedInbound(doc) && doc.sourceRefId === item.docNumber)?.docNumber,
       })),
     [documents, projectMap, userMap, warehouseMap],
   );
@@ -175,13 +178,13 @@ export default function WarehouseDoc() {
     setSaving(true);
     try {
       if (initialDocument?.docNumber) {
-        const result = await inventoryAPI.updateWarehouseDoc(initialDocument.docNumber, payload);
+        const result = normalize(await inventoryAPI.updateWarehouseDoc(initialDocument.docNumber, payload));
         setSelectedDocNumber(result?.docNumber || initialDocument.docNumber);
         message.success("出入库单已更新");
       } else {
-        const result = await inventoryAPI.createWarehouseDoc(payload);
+        const result = normalize(await inventoryAPI.createWarehouseDoc(payload));
         setSelectedDocNumber(result?.docNumber || null);
-        message.success("出入库单已创建");
+        message.success(isTransferDocument(payload.docType) ? "划拨单已创建，调入仓库入库单已自动生成" : "出入库单已创建");
       }
       closeModal();
       await fetchData();
@@ -268,6 +271,7 @@ export default function WarehouseDoc() {
       render: (value, record) => <Tag color={docMeta(record.docType).tagColor}>{value}</Tag>,
     },
     { title: "业务类别", dataIndex: "businessCategoryLabel", key: "businessCategoryLabel", width: 180 },
+    { title: "关联单据", dataIndex: "relatedDocNumber", key: "relatedDocNumber", width: 180, render: (value) => value || "-" },
     { title: "项目", dataIndex: "projectLabel", key: "projectLabel", width: 220 },
     { title: "仓库", dataIndex: "warehouseLabel", key: "warehouseLabel", width: 180 },
     { title: "往来单位", dataIndex: "counterpartyName", key: "counterpartyName", width: 220 },
@@ -296,7 +300,7 @@ export default function WarehouseDoc() {
           <Button
             type="link"
             icon={<EditOutlined />}
-            disabled={!canManage}
+            disabled={!canManage || isGeneratedInbound(record)}
             onClick={() => openModal(record)}
           >
             编辑
@@ -304,7 +308,7 @@ export default function WarehouseDoc() {
           <Button
             type="link"
             icon={<CheckCircleOutlined />}
-            disabled={!canAudit || Boolean(record.auditorUser)}
+            disabled={!canAudit || Boolean(record.auditorUser) || isGeneratedInbound(record)}
             onClick={() => auditDocument(record.docNumber)}
           >
             审核
@@ -315,7 +319,7 @@ export default function WarehouseDoc() {
             okText="确定"
             cancelText="取消"
           >
-            <Button type="link" danger icon={<DeleteOutlined />} disabled={!canManage}>
+            <Button type="link" danger icon={<DeleteOutlined />} disabled={!canManage || isGeneratedInbound(record)}>
               删除
             </Button>
           </Popconfirm>
@@ -324,7 +328,7 @@ export default function WarehouseDoc() {
     },
   ];
 
-  const previewMeta = docMeta(selectedDoc?.docType);
+  const previewMeta = docMeta(selectedDoc?.docType, selectedDoc?.sourceRefType);
   const previewRows = selectedDoc ? buildWarehouseDocumentRows(selectedDoc) : [];
 
   return (
@@ -335,10 +339,13 @@ export default function WarehouseDoc() {
             <Select allowClear showSearch optionFilterProp="label" placeholder="全部项目" style={{ width: 260 }}
               options={sortSelectItems(projects, ["projectNumber"]).map((item) => ({ value: item.uuid, label: formatProjectOptionLabel(item) }))} />
           </Form.Item>
-          <Form.Item name="docType" label="出入库">
+          <Form.Item name="txnType" label="出入库">
             <Select allowClear placeholder="全部" style={{ width: 140 }} options={[
-              { value: "INBOUND_NOTE", label: "入库" }, { value: "OUTBOUND_NOTE", label: "出库" },
+              { value: "IN", label: "入库" }, { value: "OUT", label: "出库（含划拨）" },
             ]} />
+          </Form.Item>
+          <Form.Item name="warehouseId" label="仓库">
+            <Select allowClear placeholder="全部仓库" style={{ width: 230 }} options={sortSelectItems(warehouses, ["warehouseCode"]).map((item) => ({ value: item.id, label: warehouseMap[String(item.id)] }))} />
           </Form.Item>
           <Form.Item name="docDateRange" label="单据日期">
             <DatePicker.RangePicker placeholder={["开始日期", "结束日期"]} />
@@ -413,7 +420,7 @@ export default function WarehouseDoc() {
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
-          message="统计按当前查询条件计算，物料编码只统计匹配明细；单据预览、打印及单据导出保留完整单据。数量合计含不同单位，具体数量请查看物料统计。"
+          message="划拨会生成调出单和关联入库单，由划拨单统一修改、审核和删除。统计按查询条件计算，可按仓库查看；物料编码只统计匹配明细，单据打印保留完整内容。"
         />
         <Table
           rowKey="docNumber"
@@ -424,7 +431,6 @@ export default function WarehouseDoc() {
           onChange={(pagination, filters, sorter, extra) => {
             if (extra.action === "filter") {
               const docType = filters.docTypeLabel?.[0];
-              queryForm.setFieldsValue({ docType });
               applyQuery({ ...queryFilters, docType });
             } else {
               setDocumentPage(pagination.current);
@@ -570,7 +576,7 @@ const documentColumnGroupHtml = `<colgroup>${documentColumnWidths
   .join("")}</colgroup>`;
 
 function buildWarehouseDocumentHtml(doc, { autoPrint = false } = {}) {
-  const previewMeta = docMeta(doc.docType);
+  const previewMeta = docMeta(doc.docType, doc.sourceRefType);
   const rows = buildWarehouseDocumentRows(doc);
   return `<!DOCTYPE html><html><head><meta charset="utf-8" /><title>${escapeHtml(previewMeta.label)}</title><style>
     @page{margin:6mm}

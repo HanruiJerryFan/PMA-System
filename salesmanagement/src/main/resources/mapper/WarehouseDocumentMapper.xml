@@ -18,6 +18,8 @@
             wd.contract_number AS contractNumber,
             wd.doc_date AS docDate,
             wd.total_amount AS totalAmount,
+            wd.source_ref_type AS sourceRefType,
+            wd.source_ref_id AS sourceRefId,
             wd.entry_user AS entryUser,
             COALESCE(NULLIF(eu.real_name, ''), eu.username) AS entryUserName,
             wd.auditor_user AS auditorUser,
@@ -48,6 +50,8 @@
             wd.contract_number AS contractNumber,
             wd.doc_date AS docDate,
             wd.total_amount AS totalAmount,
+            wd.source_ref_type AS sourceRefType,
+            wd.source_ref_id AS sourceRefId,
             wd.entry_user AS entryUser,
             COALESCE(NULLIF(eu.real_name, ''), eu.username) AS entryUserName,
             wd.auditor_user AS auditorUser,
@@ -61,6 +65,20 @@
         LEFT JOIN sys_user eu ON wd.entry_user = eu.id
         LEFT JOIN sys_user au ON wd.auditor_user = au.id
         WHERE wd.doc_number = #{docNumber}
+    </select>
+
+    <select id="selectIdentityForUpdate" parameterType="string" resultType="com.jerry.salesmanagement.pojo.WarehouseDocument" flushCache="true" useCache="false">
+        SELECT doc_number AS docNumber, doc_type AS docType,
+               source_ref_type AS sourceRefType, source_ref_id AS sourceRefId
+        FROM warehouse_doc WHERE doc_number = #{docNumber} FOR UPDATE
+    </select>
+
+    <select id="selectByTransferSource" parameterType="string" resultType="com.jerry.salesmanagement.pojo.WarehouseDocument" flushCache="true" useCache="false">
+        SELECT doc_number AS docNumber, doc_type AS docType,
+               source_ref_type AS sourceRefType, source_ref_id AS sourceRefId
+        FROM warehouse_doc
+        WHERE source_ref_type = 'WAREHOUSE_TRANSFER' AND source_ref_id = #{docNumber}
+        ORDER BY doc_number
     </select>
 
     <select id="selectMaxAnnualSequence" parameterType="string" resultType="java.lang.Integer">
@@ -91,6 +109,8 @@
             contract_number,
             doc_date,
             total_amount,
+            source_ref_type,
+            source_ref_id,
             entry_user,
             auditor_user,
             remark,
@@ -109,6 +129,8 @@
             #{contractNumber},
             #{docDate},
             #{totalAmount},
+            #{sourceRefType},
+            #{sourceRefId},
             #{entryUser},
             #{auditorUser},
             #{remark},
@@ -122,7 +144,7 @@
         <set>
             <if test="docType != null">doc_type = #{docType},</if>
             <if test="businessCategory != null">business_category = #{businessCategory},</if>
-            <if test="projectId != null">project_id = #{projectId},</if>
+            project_id = #{projectId},
             <if test="warehouseId != null">warehouse_id = #{warehouseId},</if>
             counterparty_customer_id = #{counterpartyCustomerId},
             <if test="counterpartyName != null">counterparty_name = #{counterpartyName},</if>

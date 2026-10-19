@@ -10,6 +10,8 @@ import java.util.List;
 public interface WarehouseDocumentMapper {
     List<WarehouseDocument> selectAll();
     WarehouseDocument selectByDocNumber(String docNumber);
+    WarehouseDocument selectIdentityForUpdate(String docNumber);
+    List<WarehouseDocument> selectByTransferSource(String docNumber);
     Integer selectMaxAnnualSequence(String docNumberPrefix);
     Integer selectMaxAnnualSequenceForUpdate(String docNumberPrefix);
     int insert(WarehouseDocument warehouseDocument);

@@ -7,4 +7,6 @@ public interface CodeSequenceService {
     int nextValue(String sequenceKey, Supplier<Integer> currentMaxValue, int maxValue, String description);
 
     void deleteAndReclaimTail(String sequenceKey, Runnable deleteAction, Supplier<Integer> remainingMaxValue);
+
+    void withLock(String sequenceKey, Runnable action);
 }

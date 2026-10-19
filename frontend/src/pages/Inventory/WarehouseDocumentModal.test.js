@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import WarehouseDocumentModal from "./WarehouseDocumentModal";
+import { findDocumentWarehouse } from "./warehouseDocumentUtils";
 
 beforeAll(() => {
   window.matchMedia = window.matchMedia || (() => ({
@@ -11,6 +12,13 @@ beforeAll(() => {
   window.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
   const getComputedStyle = window.getComputedStyle;
   window.getComputedStyle = (element) => getComputedStyle(element);
+});
+
+test("warehouse references can match existing warehouse names without changing their IDs", () => {
+  const existing = [{ id: 17, warehouseCode: "WH-17", warehouseName: "CK-XMCG" }, { id: 22, warehouseCode: "WH-22", warehouseName: "CK-JZCG" }];
+  expect(findDocumentWarehouse(existing, "CK-XMCG").id).toBe(17);
+  expect(findDocumentWarehouse(existing, "CK-JZCG").id).toBe(22);
+  expect(findDocumentWarehouse([...existing, { id: 33, warehouseCode: "CK-XMCG" }], "CK-XMCG")).toBeUndefined();
 });
 
 const initialDocument = {
@@ -23,7 +31,10 @@ const initialDocument = {
 function renderEditor(document, onSubmit, customerTypeCode = "2") {
   return render(<ConfigProvider locale={zhCN}><WarehouseDocumentModal
     open initialDocument={document}
-    defaultWarehouse={{ id: 1, warehouseName: "仓库" }} warehouses={[]}
+    defaultWarehouse={{ id: 1, warehouseName: "仓库", warehouseCode: "CK-XMCG" }} warehouses={[
+      { id: 1, warehouseName: "仓库", warehouseCode: "CK-XMCG" },
+      { id: 2, warehouseName: "集采仓库", warehouseCode: "CK-JZCG" },
+    ]}
     projects={[{ uuid: "p1", projectNumber: "P1", projectName: "项目甲" }]}
     materials={[{ uuid: "m1", materialCode: "M1", productName: "设备", productModel: "型号" }]}
     customerOptions={[
@@ -65,10 +76,41 @@ test.each(["2", "5"])("receiver type %s remains selected when opening and reopen
 });
 
 test("changing an outbound document to inbound still clears an incompatible receiver", async () => {
-  renderEditor(initialDocument, jest.fn());
+  renderEditor(null, jest.fn());
+  fireEvent.mouseDown(screen.getByLabelText("单据类型"));
+  const outboundOption = await screen.findByText("发货单");
+  await act(async () => { fireEvent.click(outboundOption); });
+  fireEvent.mouseDown(screen.getByLabelText("收货公司"));
+  const receiver = await screen.findByText("收货公司甲");
+  await act(async () => { fireEvent.click(receiver); });
   await waitFor(() => expect(screen.getByLabelText("收货公司").closest(".ant-select").textContent).toContain("收货公司甲"));
   fireEvent.mouseDown(screen.getByLabelText("单据类型"));
   const inboundOption = await screen.findByText("入库单");
   await act(async () => { fireEvent.click(inboundOption); });
   await waitFor(() => expect(screen.getByLabelText("发货公司").closest(".ant-select").textContent).not.toContain("收货公司甲"));
+});
+
+test.each([
+  ["TRANSFER_JTX", "WAREHOUSE_TRANSFER_TO_PROJECT", "HBJ202610001", 2, "CK-XMCG"],
+  ["TRANSFER_XTJ", "PROJECT_TRANSFER_TO_WAREHOUSE", "HBX202610001", 1, "CK-JZCG"],
+])("%s uses internal warehouses without requiring an external customer", async (docType, businessCategory, docNumber, warehouseId, destination) => {
+  const onSubmit = jest.fn().mockResolvedValue(undefined);
+  renderEditor({ ...initialDocument, docType, businessCategory, docNumber, counterpartyCustomerId: null }, onSubmit);
+  expect(screen.queryByLabelText("收货公司")).toBeNull();
+  expect(screen.getByLabelText("调入仓库").value).toContain(destination);
+  await act(async () => {
+    fireEvent.click(screen.getByText(/确\s*定/, { selector: "button > span" }).closest("button"));
+  });
+  await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+  expect(onSubmit.mock.calls[0][0]).toMatchObject({ docType, businessCategory, warehouseId, counterpartyCustomerId: null });
+});
+
+test("historical outbound categories keep their original warehouse when editing", async () => {
+  const onSubmit = jest.fn().mockResolvedValue(undefined);
+  renderEditor({ ...initialDocument, businessCategory: "WAREHOUSE_TRANSFER_TO_PROJECT", warehouseId: 2 }, onSubmit);
+  await act(async () => {
+    fireEvent.click(screen.getByText(/确\s*定/, { selector: "button > span" }).closest("button"));
+  });
+  await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+  expect(onSubmit.mock.calls[0][0]).toMatchObject({ docType: "OUTBOUND_NOTE", businessCategory: "WAREHOUSE_TRANSFER_TO_PROJECT", warehouseId: 2 });
 });

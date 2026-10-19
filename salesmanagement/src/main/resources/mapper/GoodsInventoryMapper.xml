@@ -24,7 +24,9 @@
                         WHEN txn_type = 'IN' AND category IN ('PROJECT_PURCHASE', 'CENTRALIZED_PURCHASE')
                             THEN COALESCE(unit_price, 0) * quantity
                         ELSE 0
-                    END) / NULLIF(SUM(CASE WHEN txn_type = 'IN' THEN quantity ELSE 0 END), 0),
+                    END) / NULLIF(SUM(CASE
+                        WHEN txn_type = 'IN' AND category IN ('PROJECT_PURCHASE', 'CENTRALIZED_PURCHASE') THEN quantity
+                        ELSE 0 END), 0),
                     0
                 ) AS purchaseAveragePrice
             FROM goods_transaction_dynamic_info

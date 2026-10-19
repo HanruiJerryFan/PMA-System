@@ -21,6 +21,11 @@ import {
   BUSINESS_CATEGORIES,
   CUSTOMER_TYPE_RULES,
   DOC_TYPES,
+  DOCUMENT_CATEGORY_RULES,
+  documentWarehouseCode,
+  findDocumentWarehouse,
+  transferDestinationCode,
+  isTransferDocument,
   buildWarehouseDocumentFormValues,
   docMeta,
   formatAmount,
@@ -195,6 +200,19 @@ export default function WarehouseDocumentModal({
   );
   const watchedDocType = Form.useWatch("docType", form);
   const currentDocType = watchedDocType || initialValues.docType;
+  const currentCategory = Form.useWatch("businessCategory", form) || initialValues.businessCategory;
+  const isTransfer = isTransferDocument(currentDocType);
+  const categoryOptions = useMemo(() => {
+    const allowed = DOCUMENT_CATEGORY_RULES[currentDocType] || [];
+    const historical = initialDocument?.docType === currentDocType ? initialDocument.businessCategory : null;
+    return historical && !allowed.includes(historical) ? [...allowed, historical] : allowed;
+  }, [currentDocType, initialDocument]);
+  const legacyCategory = initialDocument?.docType === currentDocType && initialDocument.businessCategory === currentCategory
+    && !DOCUMENT_CATEGORY_RULES[currentDocType]?.includes(currentCategory);
+  const warehouseCode = documentWarehouseCode(currentDocType, currentCategory);
+  const selectedWarehouse = legacyCategory ? warehouses.find((item) => String(item.id) === String(initialDocument.warehouseId))
+    : findDocumentWarehouse(warehouses, warehouseCode);
+  const destinationWarehouse = isTransfer ? findDocumentWarehouse(warehouses, transferDestinationCode(currentDocType)) : null;
   const currentDocDate = Form.useWatch("docDate", form);
   const watchedItems = Form.useWatch("items", form);
   const currentItems = watchedItems ?? [];
@@ -278,23 +296,24 @@ export default function WarehouseDocumentModal({
     [watchedItems],
   );
   const docNumberPreview = useMemo(() => {
-    const prefix = currentDocType === "INBOUND_NOTE" ? "RKD" : "FHD";
+    const prefix = meta.prefix;
     const yearMonth = dayjs(currentDocDate || dayjs()).format("YYYYMM");
     return `${prefix}${yearMonth}001`;
-  }, [currentDocDate, currentDocType]);
+  }, [currentDocDate, meta.prefix]);
 
   useEffect(() => {
-    if (!open || !defaultWarehouse) {
+    if (!open || !watchedDocType) {
       return;
     }
-    if (!form.getFieldValue("warehouseId")) {
-      form.setFieldValue("warehouseId", defaultWarehouse.id);
+    if (!categoryOptions.includes(form.getFieldValue("businessCategory"))) {
+      form.setFieldValue("businessCategory", categoryOptions[0]);
     }
-  }, [defaultWarehouse, form, open]);
+    if (form.getFieldValue("warehouseId") !== selectedWarehouse?.id) form.setFieldValue("warehouseId", selectedWarehouse?.id);
+  }, [categoryOptions, form, open, selectedWarehouse?.id, watchedDocType]);
 
   useEffect(() => {
     // Wait for the form to load its document type before validating the saved counterparty.
-    if (!open || !watchedDocType) {
+    if (!open || !watchedDocType || isTransfer) {
       return;
     }
     const currentCustomerId = form.getFieldValue("counterpartyCustomerId");
@@ -308,7 +327,7 @@ export default function WarehouseDocumentModal({
     ) {
       form.setFieldsValue({ counterpartyCustomerId: undefined });
     }
-  }, [allowedCustomerTypeCodes, customerOptionMap, form, open, watchedDocType]);
+  }, [allowedCustomerTypeCodes, customerOptionMap, form, isTransfer, open, watchedDocType]);
 
   const handleSubmit = async () => {
     const values = await form.validateFields();
@@ -317,8 +336,8 @@ export default function WarehouseDocumentModal({
       docType: values.docType,
       businessCategory: values.businessCategory,
       projectId: values.projectId || null,
-      warehouseId: values.warehouseId || defaultWarehouse?.id || null,
-      counterpartyCustomerId: values.counterpartyCustomerId,
+      warehouseId: values.warehouseId || null,
+      counterpartyCustomerId: isTransfer ? null : values.counterpartyCustomerId,
       counterpartyAddress: values.counterpartyAddress || null,
       counterpartyContact: values.counterpartyContact || null,
       contractNumber: values.contractNumber || null,
@@ -365,9 +384,11 @@ export default function WarehouseDocumentModal({
             <Form.Item
               name="docType"
               label="单据类型"
+              extra={initialDocument ? "单据类型与编号绑定，创建后不可修改" : undefined}
               rules={[{ required: true, message: "请选择单据类型" }]}
             >
               <Select
+                disabled={Boolean(initialDocument)}
                 options={Object.entries(DOC_TYPES).map(([value, item]) => ({
                   value,
                   label: item.label,
@@ -402,9 +423,8 @@ export default function WarehouseDocumentModal({
               rules={[{ required: true, message: "请选择业务类别" }]}
             >
               <Select
-                options={Object.entries(BUSINESS_CATEGORIES).map(([value, label]) => ({
-                  value,
-                  label,
+                options={categoryOptions.map((value) => ({
+                  value, label: BUSINESS_CATEGORIES[value],
                 }))}
               />
             </Form.Item>
@@ -431,31 +451,15 @@ export default function WarehouseDocumentModal({
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            {defaultWarehouse ? (
-              <>
-                <Form.Item label="仓库">
-                  <Input value={defaultWarehouse.warehouseName} disabled />
-                </Form.Item>
-                <Form.Item name="warehouseId" hidden>
-                  <Input />
-                </Form.Item>
-              </>
-            ) : (
-              <Form.Item
-                name="warehouseId"
-                label="仓库"
-                rules={[{ required: true, message: "请选择仓库" }]}
-              >
-                <Select placeholder="请选择仓库">
-                  {sortSelectItems(warehouses, ["warehouseCode"]).map((item) => (
-                    <Select.Option key={item.id} value={item.id}>
-                      {item.warehouseName}
-                    </Select.Option>
-                  ))}
-                </Select>
-              </Form.Item>
-            )}
+            <Form.Item label={isTransfer ? "调出仓库" : "仓库"}>
+              <Input aria-label={isTransfer ? "调出仓库" : "仓库"} value={selectedWarehouse ? `${selectedWarehouse.warehouseCode} - ${selectedWarehouse.warehouseName}` : `请核对已有仓库 ${warehouseCode}`} disabled />
+            </Form.Item>
+            <Form.Item name="warehouseId" hidden rules={[{ required: true, message: `请核对已有仓库 ${warehouseCode}` }]}><Input /></Form.Item>
           </Col>
+          {isTransfer ? <>
+            <Col xs={24} md={12}><Form.Item label="调入仓库"><Input aria-label="调入仓库" disabled value={destinationWarehouse ? `${destinationWarehouse.warehouseCode} - ${destinationWarehouse.warehouseName}` : `请核对已有仓库 ${transferDestinationCode(currentDocType)}`} /></Form.Item></Col>
+            <Col span={24}><Alert type="info" showIcon message="保存划拨单会自动生成调入仓库的入库单；修改、审核和删除由划拨单统一联动。" /></Col>
+          </> : <>
           <Col xs={24} md={8}>
             <Form.Item
               name="counterpartyCustomerId"
@@ -490,6 +494,7 @@ export default function WarehouseDocumentModal({
               <Input placeholder={`请输入${meta.partyContact}`} />
             </Form.Item>
           </Col>
+          </>}
           <Col xs={24} md={8}>
             <Form.Item name="contractNumber" label="合同编号">
               <Input placeholder="请输入合同编号" />

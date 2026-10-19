@@ -42,7 +42,7 @@ class CodeSequenceTailTests {
         jdbc = new JdbcTemplate(dataSource);
         transactionManager = new DataSourceTransactionManager(dataSource);
         jdbc.execute("CREATE TABLE code_sequence (sequence_key VARCHAR(128) PRIMARY KEY, current_value INT, description VARCHAR(255), create_time TIMESTAMP, update_time TIMESTAMP)");
-        jdbc.execute("CREATE TABLE warehouse_doc (doc_number VARCHAR(30) PRIMARY KEY)");
+        jdbc.execute("CREATE TABLE warehouse_doc (doc_number VARCHAR(30) PRIMARY KEY, doc_type VARCHAR(50), source_ref_type VARCHAR(100), source_ref_id VARCHAR(100))");
         jdbc.execute("CREATE TABLE warehouse_doc_item (doc_number VARCHAR(30))");
         jdbc.execute("CREATE TABLE goods_transaction_dynamic_info (source_ref_type VARCHAR(64), source_ref_id VARCHAR(64))");
         jdbc.execute("CREATE TABLE customer_info (uuid VARCHAR(36) PRIMARY KEY, customer_code VARCHAR(9))");
@@ -245,7 +245,7 @@ class CodeSequenceTailTests {
     }
 
     private void document(String number) {
-        jdbc.update("INSERT INTO warehouse_doc VALUES (?)", number);
+        jdbc.update("INSERT INTO warehouse_doc(doc_number) VALUES (?)", number);
         jdbc.update("INSERT INTO warehouse_doc_item VALUES (?)", number);
         jdbc.update("INSERT INTO goods_transaction_dynamic_info VALUES ('WAREHOUSE_DOC', ?)", number);
     }

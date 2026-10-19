@@ -93,3 +93,17 @@ test("clearing filters restores all documents and empty results have zero totals
   expect(result.summary.total).toBe(4);
   expect(docs[0]).not.toHaveProperty("matchedAmount");
 });
+
+test("warehouse and movement filters count a transfer outbound and its generated inbound separately", () => {
+  const transfer = { ...docs[0], docNumber: "HBJ202610001", docType: "TRANSFER_JTX", warehouseId: 2,
+    items: [{ materialCode: "M1", unit: "台", quantity: 2, amount: 200 }] };
+  const inbound = { ...transfer, docNumber: "RKD202610001", docType: "INBOUND_NOTE", warehouseId: 1,
+    sourceRefType: "WAREHOUSE_TRANSFER", sourceRefId: transfer.docNumber };
+  const all = queryWarehouseDocuments([transfer, inbound]);
+  expect(all.summary).toMatchObject({ total: 2, inbound: 1, outbound: 1, balanceQuantity: 0, amountDifference: 0 });
+  const source = queryWarehouseDocuments([transfer, inbound], { warehouseId: 2, txnType: "OUT" });
+  expect(source.documents.map((item) => item.docNumber)).toEqual([transfer.docNumber]);
+  expect(source.summary).toMatchObject({ outboundQuantity: 2, inboundQuantity: 0, outboundAmount: 200 });
+  expect(queryWarehouseDocuments([transfer, inbound], { warehouseId: "1", txnType: "IN" }).summary)
+    .toMatchObject({ inboundQuantity: 2, outboundQuantity: 0, inboundAmount: 200 });
+});

@@ -1,6 +1,7 @@
 package com.jerry.salesmanagement.service.impl;
 
 import com.jerry.salesmanagement.common.PdfExportSupport;
+import com.jerry.salesmanagement.common.WarehouseDocumentRules;
 import com.jerry.salesmanagement.pojo.WarehouseDocument;
 import com.jerry.salesmanagement.pojo.WarehouseDocumentItem;
 import com.jerry.salesmanagement.service.SystemConfigService;
@@ -57,18 +58,20 @@ public class WarehouseDocumentPdfExportServiceImpl extends PdfExportSupport impl
     }
 
     private String resolveDocLabel(String docType) {
-        return "OUTBOUND_NOTE".equals(docType) ? "发货单" : "入库单";
+        return WarehouseDocumentRules.label(docType);
     }
 
     private String resolveNumberLabel(String docType) {
-        return "OUTBOUND_NOTE".equals(docType) ? "发货单编号" : "入库单编号";
+        return resolveDocLabel(docType) + "编号";
     }
 
     private String resolveDateLabel(String docType) {
+        if (WarehouseDocumentRules.isTransfer(docType)) return "划拨日期";
         return "OUTBOUND_NOTE".equals(docType) ? "发货日期" : "入库日期";
     }
 
     private String resolvePartyBlockLabel(String docType) {
+        if (WarehouseDocumentRules.isTransfer(docType)) return "调入仓库、地址及联系人";
         return "OUTBOUND_NOTE".equals(docType) ? "收货公司、收货地址及收货人" : "发货公司及发货人";
     }
 
@@ -162,7 +165,8 @@ public class WarehouseDocumentPdfExportServiceImpl extends PdfExportSupport impl
                 escapeHtml(docLabel),
                 columnGroupHtml(),
                 escapeHtml(projectLabel),
-                escapeHtml(resolvePartyBlockLabel(warehouseDocument.getDocType())),
+                escapeHtml(WarehouseDocumentRules.TRANSFER_SOURCE.equals(warehouseDocument.getSourceRefType())
+                        ? "调出仓库、地址及联系人" : resolvePartyBlockLabel(warehouseDocument.getDocType())),
                 formatCounterpartyHtml(warehouseDocument),
                 escapeHtml(resolveNumberLabel(warehouseDocument.getDocType())),
                 escapeHtml(warehouseDocument.getDocNumber()),

@@ -2,6 +2,7 @@ import dayjs from "dayjs";
 
 export const DOC_TYPES = {
   INBOUND_NOTE: {
+    prefix: "RKD",
     label: "入库单",
     tagColor: "green",
     numberLabel: "入库单编号",
@@ -13,6 +14,7 @@ export const DOC_TYPES = {
     placeholder: "例如：RKD202503001",
   },
   OUTBOUND_NOTE: {
+    prefix: "FHD",
     label: "发货单",
     tagColor: "blue",
     numberLabel: "发货单编号",
@@ -23,14 +25,41 @@ export const DOC_TYPES = {
     partyContact: "收货人及联系方式",
     placeholder: "例如：FHD202603006",
   },
+  TRANSFER_JTX: {
+    prefix: "HBJ", label: "划拨单JTX", tagColor: "purple", numberLabel: "划拨单编号", dateLabel: "划拨日期",
+    partyBlock: "调入仓库、地址及联系人", partyName: "调入仓库", partyAddress: "仓库地址", partyContact: "联系人及联系方式",
+    placeholder: "例如：HBJ202610001",
+  },
+  TRANSFER_XTJ: {
+    prefix: "HBX", label: "划拨单XTJ", tagColor: "orange", numberLabel: "划拨单编号", dateLabel: "划拨日期",
+    partyBlock: "调入仓库、地址及联系人", partyName: "调入仓库", partyAddress: "仓库地址", partyContact: "联系人及联系方式",
+    placeholder: "例如：HBX202610001",
+  },
 };
 
 export const BUSINESS_CATEGORIES = {
   PROJECT_PURCHASE: "项目采购",
   PROJECT_SALES: "项目销售",
   CENTRALIZED_PURCHASE: "集中采购",
-  WAREHOUSE_TRANSFER_TO_PROJECT: "仓库调拨到项目",
-  PROJECT_TRANSFER_TO_WAREHOUSE: "项目退回仓库",
+  WAREHOUSE_TRANSFER_TO_PROJECT: "集采仓库划拨项目仓库",
+  PROJECT_TRANSFER_TO_WAREHOUSE: "项目仓库划拨集采仓库",
+};
+
+export const DOCUMENT_CATEGORY_RULES = {
+  INBOUND_NOTE: ["PROJECT_PURCHASE", "CENTRALIZED_PURCHASE"],
+  OUTBOUND_NOTE: ["PROJECT_SALES"],
+  TRANSFER_JTX: ["WAREHOUSE_TRANSFER_TO_PROJECT"],
+  TRANSFER_XTJ: ["PROJECT_TRANSFER_TO_WAREHOUSE"],
+};
+export const isTransferDocument = (type) => type === "TRANSFER_JTX" || type === "TRANSFER_XTJ";
+export const isGeneratedInbound = (document) => document?.sourceRefType === "WAREHOUSE_TRANSFER";
+export const documentWarehouseCode = (type, category) =>
+  type === "TRANSFER_JTX" || (type === "INBOUND_NOTE" && category === "CENTRALIZED_PURCHASE") ? "CK-JZCG" : "CK-XMCG";
+export const transferDestinationCode = (type) => type === "TRANSFER_JTX" ? "CK-XMCG" : "CK-JZCG";
+export const findDocumentWarehouse = (warehouses, reference) => {
+  const matches = warehouses.filter((item) => [item.warehouseCode, item.warehouseName]
+    .some((value) => String(value || "").trim().toUpperCase() === reference));
+  return matches.length === 1 ? matches[0] : undefined;
 };
 
 export const CUSTOMER_TYPE_RULES = {
@@ -41,7 +70,9 @@ export const CUSTOMER_TYPE_RULES = {
 export const normalize = (response) => response?.data ?? response ?? [];
 export const formatAmount = (value) => (value == null || value === "" ? "-" : Number(value).toFixed(2));
 export const formatUnitPrice = (value) => (value == null || value === "" ? "-" : Number(value).toFixed(4));
-export const docMeta = (docType) => DOC_TYPES[docType] || DOC_TYPES.INBOUND_NOTE;
+export const docMeta = (docType, sourceRefType) => sourceRefType === "WAREHOUSE_TRANSFER"
+  ? { ...DOC_TYPES.INBOUND_NOTE, partyBlock: "调出仓库、地址及联系人", partyName: "调出仓库" }
+  : DOC_TYPES[docType] || DOC_TYPES.INBOUND_NOTE;
 export const categoryLabel = (value) => BUSINESS_CATEGORIES[value] || value || "-";
 export const materialBrand = (item) => item?.brandName || item?.brand || item?.brandCode || item?.manufacturer || "-";
 

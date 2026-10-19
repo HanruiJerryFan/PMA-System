@@ -16,6 +16,8 @@ export function queryWarehouseDocuments(documents, filters = {}) {
   for (const doc of documents) {
     if (filters.projectId && doc.projectId !== filters.projectId) continue;
     if (filters.docType && doc.docType !== filters.docType) continue;
+    if (filters.txnType && (doc.docType === "INBOUND_NOTE" ? "IN" : "OUT") !== filters.txnType) continue;
+    if (filters.warehouseId != null && String(doc.warehouseId) !== String(filters.warehouseId)) continue;
     if (startDate || endDate) {
       const date = doc.docDate ? dayjs(doc.docDate) : null;
       if (!date?.isValid() || (startDate && date.isBefore(startDate)) || (endDate && date.isAfter(endDate))) continue;
