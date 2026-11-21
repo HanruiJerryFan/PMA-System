@@ -9,6 +9,22 @@ import java.util.List;
 @Mapper
 public interface CustomerMapper {
     List<Customer> selectAll();
+    List<Customer> selectPage(
+            @Param("customerCode") String customerCode,
+            @Param("customerName") String customerName,
+            @Param("taxIdentificationNumber") String taxIdentificationNumber,
+            @Param("industry") String industry,
+            @Param("activityStatus") String activityStatus,
+            @Param("offset") int offset,
+            @Param("limit") int limit
+    );
+    long countPage(
+            @Param("customerCode") String customerCode,
+            @Param("customerName") String customerName,
+            @Param("taxIdentificationNumber") String taxIdentificationNumber,
+            @Param("industry") String industry,
+            @Param("activityStatus") String activityStatus
+    );
     Customer selectByUuid(String uuid);
     Customer selectByCustomerName(String customerName);
     Customer selectByTaxIdentificationNumber(String taxIdentificationNumber);

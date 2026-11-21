@@ -13,6 +13,7 @@ import com.jerry.salesmanagement.pojo.ProductCategory;
 import com.jerry.salesmanagement.pojo.ProductSubcategory;
 import com.jerry.salesmanagement.pojo.dto.ExcelImportError;
 import com.jerry.salesmanagement.pojo.dto.ExcelImportResult;
+import com.jerry.salesmanagement.pojo.dto.PageResult;
 import com.jerry.salesmanagement.service.CodeSequenceService;
 import com.jerry.salesmanagement.service.MaterialMasterService;
 import com.jerry.salesmanagement.service.SystemConfigService;
@@ -102,6 +103,25 @@ public class MaterialMasterServiceImpl implements MaterialMasterService {
     @Override
     public List<MaterialMaster> getAll() {
         return materialMasterMapper.selectAll();
+    }
+
+    @Override
+    public PageResult<MaterialMaster> getPage(
+            String materialCode,
+            String productName,
+            String productModel,
+            Long brandId,
+            Boolean isActive,
+            int page,
+            int pageSize
+    ) {
+        return PageResult.paginate(
+                page,
+                pageSize,
+                () -> materialMasterMapper.countPage(materialCode, productName, productModel, brandId, isActive),
+                (offset, limit) -> materialMasterMapper.selectPage(
+                        materialCode, productName, productModel, brandId, isActive, offset, limit)
+        );
     }
 
     @Override

@@ -31,6 +31,44 @@
         ORDER BY a.occurred_at DESC, a.id DESC
     </select>
 
+    <sql id="PageFromAndWhere">
+        FROM audit_trail a
+        LEFT JOIN sys_user u ON a.user_id = u.id
+        <where>
+            (u.username IS NULL OR LOWER(u.username) &lt;&gt; 'system')
+            <if test="userId != null">
+                AND a.user_id = #{userId}
+            </if>
+            <if test="module != null and module != ''">
+                AND LOWER(TRIM(a.module)) = LOWER(TRIM(#{module}))
+            </if>
+            <if test="action != null and action != ''">
+                AND LOWER(TRIM(a.action)) = LOWER(TRIM(#{action}))
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectPage" resultType="com.jerry.salesmanagement.pojo.AuditTrail">
+        SELECT
+            a.id,
+            a.user_id AS userId,
+            u.username AS username,
+            a.module,
+            a.action,
+            a.target_type AS targetType,
+            a.target_id AS targetId,
+            a.detail,
+            a.occurred_at AS occurredAt
+        <include refid="PageFromAndWhere"/>
+        ORDER BY a.occurred_at DESC, a.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countPage" resultType="long">
+        SELECT COUNT(*)
+        <include refid="PageFromAndWhere"/>
+    </select>
+
     <select id="selectById" resultType="com.jerry.salesmanagement.pojo.AuditTrail">
         SELECT
             a.id,

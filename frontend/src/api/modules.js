@@ -32,6 +32,7 @@ export const permissionAPI = {
 
 export const customerAPI = {
   getCustomers: () => api.get("/customers"),
+  getCustomersPage: (params) => api.get("/customers/page", { params }),
   getCustomerOptions: () => api.get("/customers/options"),
   createCustomer: (data) => api.post("/customers", data),
   updateCustomer: (uuid, data) => api.put(`/customers/${uuid}`, data),
@@ -58,6 +59,7 @@ export const customerAPI = {
 
 export const projectAPI = {
   getProjects: () => api.get("/projects"),
+  getProjectsPage: (params) => api.get("/projects/page", { params }),
   getProjectOptions: () => api.get("/projects/options"),
   createProject: (data) => api.post("/projects", data),
   updateProject: (uuid, data) => api.put(`/projects/${uuid}`, data),
@@ -125,6 +127,7 @@ export const contractAPI = {
 
 export const productAPI = {
   getProducts: () => api.get("/materials"),
+  getProductsPage: (params) => api.get("/materials/page", { params }),
   getProductOptions: () => api.get("/materials/options"),
   createProduct: (data) => api.post("/materials", data),
   updateProduct: (uuid, data) => api.put(`/materials/${uuid}`, data),
@@ -179,6 +182,7 @@ export const inventoryAPI = {
   getInventory: () => api.get("/inventory-stock"),
 
   getTransactions: () => api.get("/inventory-transactions"),
+  getTransactionsPage: (params) => api.get("/inventory-transactions/page", { params }),
   createTransaction: (data) => api.post("/inventory-transactions", data),
   updateTransaction: (uuid, data) => api.put(`/inventory-transactions/${uuid}`, data),
   deleteTransaction: (uuid) => api.delete(`/inventory-transactions/${uuid}`),
@@ -253,8 +257,10 @@ export const regionAPI = {
 
 export const logAPI = {
   getLoginRecords: (params) => api.get("/login-logs", { params }),
+  getLoginRecordsPage: (params) => api.get("/login-logs/page", { params }),
   getLoginRecord: (id) => api.get(`/login-logs/${id}`),
   getAuditTrails: (params) => api.get("/audit-trails", { params }),
+  getAuditTrailsPage: (params) => api.get("/audit-trails/page", { params }),
   getAuditTrail: (id) => api.get(`/audit-trails/${id}`),
 };
 

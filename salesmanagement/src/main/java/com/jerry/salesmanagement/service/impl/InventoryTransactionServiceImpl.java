@@ -8,6 +8,7 @@ import com.jerry.salesmanagement.mapper.WarehouseMapper;
 import com.jerry.salesmanagement.pojo.InventoryTransaction;
 import com.jerry.salesmanagement.pojo.MaterialMaster;
 import com.jerry.salesmanagement.pojo.ProductBrand;
+import com.jerry.salesmanagement.pojo.dto.PageResult;
 import com.jerry.salesmanagement.service.InventoryTransactionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -51,6 +52,28 @@ public class InventoryTransactionServiceImpl implements InventoryTransactionServ
     @Override
     public List<InventoryTransaction> getAll() {
         return inventoryTransactionMapper.selectAll();
+    }
+
+    @Override
+    public PageResult<InventoryTransaction> getPage(
+            String materialCode,
+            String materialName,
+            String category,
+            String txnType,
+            String projectId,
+            Long warehouseId,
+            String sourceRefId,
+            int page,
+            int pageSize
+    ) {
+        return PageResult.paginate(
+                page,
+                pageSize,
+                () -> inventoryTransactionMapper.countPage(
+                        materialCode, materialName, category, txnType, projectId, warehouseId, sourceRefId),
+                (offset, limit) -> inventoryTransactionMapper.selectPage(
+                        materialCode, materialName, category, txnType, projectId, warehouseId, sourceRefId, offset, limit)
+        );
     }
 
     @Override

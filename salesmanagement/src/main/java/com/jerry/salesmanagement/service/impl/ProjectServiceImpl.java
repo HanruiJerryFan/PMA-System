@@ -6,6 +6,7 @@ import com.jerry.salesmanagement.mapper.ProjectTypeMapper;
 import com.jerry.salesmanagement.mapper.ReferenceCheckMapper;
 import com.jerry.salesmanagement.pojo.Project;
 import com.jerry.salesmanagement.pojo.ProjectType;
+import com.jerry.salesmanagement.pojo.dto.PageResult;
 import com.jerry.salesmanagement.pojo.dto.ProjectStageSortOrder;
 import com.jerry.salesmanagement.service.CustomerService;
 import com.jerry.salesmanagement.service.ProjectService;
@@ -58,6 +59,26 @@ public class ProjectServiceImpl implements ProjectService {
         List<Project> projects = projectMapper.selectAll();
         enrichDeletionStates(projects);
         return projects;
+    }
+
+    @Override
+    public PageResult<Project> getPage(
+            String projectNumber,
+            String projectName,
+            String customerId,
+            Long managerId,
+            int page,
+            int pageSize
+    ) {
+        PageResult<Project> result = PageResult.paginate(
+                page,
+                pageSize,
+                () -> projectMapper.countPage(projectNumber, projectName, customerId, managerId),
+                (offset, limit) -> projectMapper.selectPage(
+                        projectNumber, projectName, customerId, managerId, offset, limit)
+        );
+        enrichDeletionStates(result.getRecords());
+        return result;
     }
 
     @Override

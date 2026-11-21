@@ -2,6 +2,7 @@ package com.jerry.salesmanagement.controller;
 
 import com.jerry.salesmanagement.common.ApiResponse;
 import com.jerry.salesmanagement.pojo.Project;
+import com.jerry.salesmanagement.pojo.dto.PageResult;
 import com.jerry.salesmanagement.service.ProjectService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -28,6 +30,24 @@ public class ProjectController {
             return ApiResponse.success(projectService.getAll());
         } catch (Exception e) {
             return ApiResponse.error("Failed to query projects: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/page")
+    public ApiResponse<PageResult<Project>> getPage(
+            @RequestParam(required = false) String projectNumber,
+            @RequestParam(required = false) String projectName,
+            @RequestParam(required = false) String customerId,
+            @RequestParam(required = false) Long managerId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int pageSize
+    ) {
+        try {
+            return ApiResponse.success(projectService.getPage(
+                    projectNumber, projectName, customerId, managerId, page, pageSize
+            ));
+        } catch (Exception e) {
+            return ApiResponse.error("Failed to query projects page: " + e.getMessage());
         }
     }
 

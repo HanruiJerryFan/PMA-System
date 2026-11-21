@@ -11,6 +11,22 @@ public interface MaterialMasterMapper {
     MaterialMaster selectByUuid(String uuid);
     MaterialMaster selectByMaterialCode(String materialCode);
     List<MaterialMaster> selectAll();
+    List<MaterialMaster> selectPage(
+            @Param("materialCode") String materialCode,
+            @Param("productName") String productName,
+            @Param("productModel") String productModel,
+            @Param("brandId") Long brandId,
+            @Param("isActive") Boolean isActive,
+            @Param("offset") int offset,
+            @Param("limit") int limit
+    );
+    long countPage(
+            @Param("materialCode") String materialCode,
+            @Param("productName") String productName,
+            @Param("productModel") String productModel,
+            @Param("brandId") Long brandId,
+            @Param("isActive") Boolean isActive
+    );
     String selectMaxMaterialCodeByPrefix(String prefix);
     Integer selectMaxMaterialSequenceForUpdate(
             @Param("categoryCode") String categoryCode, @Param("subcategoryCode") String subcategoryCode,

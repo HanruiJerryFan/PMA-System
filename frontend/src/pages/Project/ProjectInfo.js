@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
 import { Cascader, DatePicker, Input, Select } from "antd";
 import { useNavigate } from "react-router-dom";
@@ -9,14 +9,20 @@ import { sortSelectItems } from "../../utils/selectSorting";
 
 const { Option } = Select;
 
+function normalizeTextFilter(value) {
+  return typeof value === "string" ? value.trim() || undefined : undefined;
+}
+
 export default function ProjectInfo() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
+  const [total, setTotal] = useState(0);
   const [customers, setCustomers] = useState([]);
   const [projectTypes, setProjectTypes] = useState([]);
   const [users, setUsers] = useState([]);
   const [regions, setRegions] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [query, setQuery] = useState({ page: 1, pageSize: 10, filters: {}, reloadKey: 0 });
 
   const userMap = useMemo(
     () => Object.fromEntries(users.map((item) => [item.id, item.realName || item.username || `用户${item.id}`])),
@@ -44,48 +50,64 @@ export default function ProjectInfo() {
     [projectTypes]
   );
 
-  const fetchProjects = async () => {
+  const fetchProjectsPage = useCallback(async ({ page, pageSize, filters }) => {
     setLoading(true);
     try {
-      const response = await projectAPI.getProjects();
-      setProjects(response.data || []);
+      const response = await projectAPI.getProjectsPage({ page, pageSize, ...filters });
+      const pageData = response?.data || {};
+      const nextRecords = Array.isArray(pageData.records) ? pageData.records : [];
+      const nextTotal = Number(pageData.total ?? 0);
+      if (nextRecords.length === 0 && page > 1 && nextTotal > 0) {
+        const lastPage = Math.max(1, Math.ceil(nextTotal / pageSize));
+        setQuery((prev) => ({ ...prev, page: lastPage }));
+        return;
+      }
+      setProjects(nextRecords);
+      setTotal(nextTotal);
     } finally {
       setLoading(false);
     }
-  };
-
-  const fetchOptions = async () => {
-    const [customerResponse, typeResponse, userResponse, regionResponse] = await Promise.all([
-      customerAPI.getCustomerOptions(),
-      projectAPI.getProjectTypes(),
-      permissionAPI.getUserOptions(),
-      regionAPI.getRegionOptions(),
-    ]);
-
-    setCustomers(customerResponse.data || []);
-    setProjectTypes(typeResponse.data || []);
-    setUsers(Array.isArray(userResponse) ? userResponse : []);
-    setRegions(regionResponse.data || []);
-  };
+  }, []);
 
   useEffect(() => {
-    fetchProjects();
+    fetchProjectsPage(query);
+  }, [fetchProjectsPage, query]);
+
+  useEffect(() => {
+    async function fetchOptions() {
+      const [customerResponse, typeResponse, userResponse, regionResponse] = await Promise.all([
+        customerAPI.getCustomerOptions(),
+        projectAPI.getProjectTypes(),
+        permissionAPI.getUserOptions(),
+        regionAPI.getRegionOptions(),
+      ]);
+
+      setCustomers(customerResponse.data || []);
+      setProjectTypes(typeResponse.data || []);
+      setUsers(Array.isArray(userResponse) ? userResponse : []);
+      setRegions(regionResponse.data || []);
+    }
+
     fetchOptions();
   }, []);
 
+  const reloadCurrentPage = () => {
+    setQuery((prev) => ({ ...prev, reloadKey: prev.reloadKey + 1 }));
+  };
+
   const handleCreate = async (values) => {
     await projectAPI.createProject(values);
-    await fetchProjects();
+    reloadCurrentPage();
   };
 
   const handleUpdate = async (uuid, values) => {
     await projectAPI.updateProject(uuid, values);
-    await fetchProjects();
+    reloadCurrentPage();
   };
 
   const handleDelete = async (uuid) => {
     await projectAPI.deleteProject(uuid);
-    await fetchProjects();
+    reloadCurrentPage();
   };
 
   const openProjectDashboard = (record) => {
@@ -125,6 +147,25 @@ export default function ProjectInfo() {
       onUpdate={handleUpdate}
       onDelete={handleDelete}
       showActions={false}
+      serverPagination={{
+        current: query.page,
+        pageSize: query.pageSize,
+        total,
+        onChange: (nextPage, nextPageSize) => setQuery((prev) => ({ ...prev, page: nextPage, pageSize: nextPageSize })),
+        onSearch: (values) => {
+          setQuery((prev) => ({
+            ...prev,
+            page: 1,
+            filters: {
+              projectNumber: normalizeTextFilter(values.projectNumber),
+              projectName: normalizeTextFilter(values.projectName),
+              customerId: normalizeTextFilter(values.customerId),
+              managerId: values.managerId != null ? Number(values.managerId) : undefined,
+            },
+          }));
+        },
+        onReset: () => setQuery((prev) => ({ ...prev, page: 1, filters: {} })),
+      }}
       formFields={[
         {
           name: "projectNumber",
@@ -237,6 +278,15 @@ export default function ProjectInfo() {
         { name: "projectNumber", label: "项目编号" },
         { name: "projectName", label: "项目名称" },
         { name: "customerId", label: "客户 ID" },
+        {
+          name: "managerId",
+          label: "负责人",
+          component: (
+            <Select placeholder="请选择负责人" allowClear showSearch optionFilterProp="children" style={{ width: 150 }}>
+              {userOptions}
+            </Select>
+          ),
+        },
       ]}
       rowKey="uuid"
       mapRecordToFormValues={(record) => ({

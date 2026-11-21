@@ -3,6 +3,7 @@ package com.jerry.salesmanagement.service.impl;
 import com.jerry.salesmanagement.mapper.LoginRecordMapper;
 import com.jerry.salesmanagement.pojo.LoginRecord;
 import com.jerry.salesmanagement.pojo.SysUser;
+import com.jerry.salesmanagement.pojo.dto.PageResult;
 import com.jerry.salesmanagement.service.LoginRecordService;
 import com.jerry.salesmanagement.service.SysUserService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,6 +45,19 @@ public class LoginRecordServiceImpl implements LoginRecordService {
             return List.of();
         }
         return loginRecordMapper.selectByUserId(userId);
+    }
+
+    @Override
+    public PageResult<LoginRecord> getPage(Long userId, int page, int pageSize) {
+        if (userId != null && isSystemUserId(userId)) {
+            return PageResult.of(List.of(), 0L, page, pageSize);
+        }
+        return PageResult.paginate(
+                page,
+                pageSize,
+                () -> loginRecordMapper.countPage(userId),
+                (offset, limit) -> loginRecordMapper.selectPage(userId, offset, limit)
+        );
     }
 
     @Override

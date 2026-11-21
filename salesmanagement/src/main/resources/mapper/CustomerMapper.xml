@@ -28,6 +28,59 @@
         FROM customer_info
     </select>
 
+    <sql id="PageWhere">
+        <where>
+            <if test="customerCode != null and customerCode.trim() != ''">
+                AND LOWER(COALESCE(customer_code, '')) LIKE CONCAT('%', LOWER(TRIM(#{customerCode})), '%')
+            </if>
+            <if test="customerName != null and customerName.trim() != ''">
+                AND LOWER(COALESCE(customer_name, '')) LIKE CONCAT('%', LOWER(TRIM(#{customerName})), '%')
+            </if>
+            <if test="taxIdentificationNumber != null and taxIdentificationNumber.trim() != ''">
+                AND LOWER(COALESCE(tax_identification_number, '')) LIKE CONCAT('%', LOWER(TRIM(#{taxIdentificationNumber})), '%')
+            </if>
+            <if test="industry != null and industry.trim() != ''">
+                AND LOWER(COALESCE(industry, '')) LIKE CONCAT('%', LOWER(TRIM(#{industry})), '%')
+            </if>
+            <if test="activityStatus != null and activityStatus.trim() != ''">
+                AND UPPER(TRIM(activity_status)) = UPPER(TRIM(#{activityStatus}))
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectPage" resultType="com.jerry.salesmanagement.pojo.Customer">
+        SELECT
+            id,
+            uuid,
+            customer_code AS customerCode,
+            customer_name AS customerName,
+            region_id AS regionId,
+            register_address AS registerAddress,
+            office_address AS officeAddress,
+            tax_identification_number AS taxIdentificationNumber,
+            customer_type_id AS customerTypeId,
+            bank_name AS bankName,
+            bank_account AS bankAccount,
+            industry AS industry,
+            remark AS remark,
+            activity_status AS activityStatus,
+            last_active_at AS lastActiveAt,
+            create_time AS createTime,
+            create_user AS createUser,
+            update_time AS updateTime,
+            update_user AS updateUser
+        FROM customer_info
+        <include refid="PageWhere"/>
+        ORDER BY id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countPage" resultType="long">
+        SELECT COUNT(*)
+        FROM customer_info
+        <include refid="PageWhere"/>
+    </select>
+
     <select id="selectByUuid" parameterType="string"
             resultType="com.jerry.salesmanagement.pojo.Customer">
         SELECT

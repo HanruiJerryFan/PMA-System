@@ -14,6 +14,20 @@ public interface AuditTrailMapper {
             @Param("action") String action
     );
 
+    List<AuditTrail> selectPage(
+            @Param("userId") Long userId,
+            @Param("module") String module,
+            @Param("action") String action,
+            @Param("offset") int offset,
+            @Param("limit") int limit
+    );
+
+    long countPage(
+            @Param("userId") Long userId,
+            @Param("module") String module,
+            @Param("action") String action
+    );
+
     AuditTrail selectById(@Param("id") Long id);
 
     int insert(AuditTrail auditTrail);

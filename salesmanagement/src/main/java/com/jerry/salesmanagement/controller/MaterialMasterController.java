@@ -4,6 +4,7 @@ import com.jerry.salesmanagement.common.ApiResponse;
 import com.jerry.salesmanagement.common.DownloadResponseBuilder;
 import com.jerry.salesmanagement.pojo.MaterialMaster;
 import com.jerry.salesmanagement.pojo.dto.ExcelImportResult;
+import com.jerry.salesmanagement.pojo.dto.PageResult;
 import com.jerry.salesmanagement.service.ExcelImportTemplateService;
 import com.jerry.salesmanagement.service.MaterialMasterService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,6 +41,25 @@ public class MaterialMasterController {
             return ApiResponse.success(materialMasterService.getAll());
         } catch (Exception e) {
             return ApiResponse.error("Failed to fetch materials: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/page")
+    public ApiResponse<PageResult<MaterialMaster>> getPage(
+            @RequestParam(required = false) String materialCode,
+            @RequestParam(required = false) String productName,
+            @RequestParam(required = false) String productModel,
+            @RequestParam(required = false) Long brandId,
+            @RequestParam(required = false) Boolean isActive,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int pageSize
+    ) {
+        try {
+            return ApiResponse.success(materialMasterService.getPage(
+                    materialCode, productName, productModel, brandId, isActive, page, pageSize
+            ));
+        } catch (Exception e) {
+            return ApiResponse.error("Failed to fetch materials page: " + e.getMessage());
         }
     }
 

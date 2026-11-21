@@ -33,6 +33,63 @@
         ORDER BY material_code ASC, id ASC
     </select>
 
+    <sql id="PageWhere">
+        <where>
+            <if test="materialCode != null and materialCode.trim() != ''">
+                AND LOWER(COALESCE(material_code, '')) LIKE CONCAT('%', LOWER(TRIM(#{materialCode})), '%')
+            </if>
+            <if test="productName != null and productName.trim() != ''">
+                AND LOWER(COALESCE(product_name, '')) LIKE CONCAT('%', LOWER(TRIM(#{productName})), '%')
+            </if>
+            <if test="productModel != null and productModel.trim() != ''">
+                AND LOWER(COALESCE(product_model, '')) LIKE CONCAT('%', LOWER(TRIM(#{productModel})), '%')
+            </if>
+            <if test="brandId != null">
+                AND brand_id = #{brandId}
+            </if>
+            <if test="isActive != null">
+                AND is_active = #{isActive}
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectPage" resultType="com.jerry.salesmanagement.pojo.MaterialMaster">
+        SELECT
+            id,
+            uuid,
+            brand_code AS brandCode,
+            category_code AS categoryCode,
+            subcategory_code AS subcategoryCode,
+            sequence_no AS sequenceNo,
+            band_code AS bandCode,
+            material_code AS materialCode,
+            category_id AS categoryId,
+            subcategory_id AS subcategoryId,
+            product_name AS productName,
+            product_model AS productModel,
+            brand_id AS brandId,
+            manufacturer,
+            unit,
+            frequency,
+            specification,
+            other_note AS otherNote,
+            is_active AS isActive,
+            created_at AS createdAt,
+            created_by AS createdBy,
+            updated_at AS updatedAt,
+            updated_by AS updatedBy
+        FROM product_basic_info
+        <include refid="PageWhere"/>
+        ORDER BY material_code ASC, id ASC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countPage" resultType="long">
+        SELECT COUNT(*)
+        FROM product_basic_info
+        <include refid="PageWhere"/>
+    </select>
+
     <select id="selectByUuid" parameterType="string" resultType="com.jerry.salesmanagement.pojo.MaterialMaster">
         SELECT
             id,

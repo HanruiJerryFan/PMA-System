@@ -1,11 +1,13 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
-import { Alert, Button, Tag } from "antd";
+import { Alert, Button, Select, Tag } from "antd";
 import { DownloadOutlined } from "@ant-design/icons";
 import CRUDTable from "../../components/Common/CRUDTable";
 import { inventoryAPI } from "../../api/modules";
 import { downloadExcel } from "../../utils/exporters";
 import { BUSINESS_CATEGORIES } from "./warehouseDocumentUtils";
+
+const { Option } = Select;
 
 const BUSINESS_CATEGORY_OPTIONS = [
   { value: "PROJECT_PURCHASE", label: "项目采购" },
@@ -32,11 +34,18 @@ function getTxnTypeLabel(value) {
   return TXN_TYPE_OPTIONS.find((item) => item.value === value)?.label || value || "-";
 }
 
+function normalizeTextFilter(value) {
+  return typeof value === "string" ? value.trim() || undefined : undefined;
+}
+
 export default function InventoryTransactions() {
   const [transactions, setTransactions] = useState([]);
+  const [total, setTotal] = useState(0);
   const [projects, setProjects] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [query, setQuery] = useState({ page: 1, pageSize: 10, filters: {}, reloadKey: 0 });
 
   const projectMap = useMemo(
     () =>
@@ -51,61 +60,110 @@ export default function InventoryTransactions() {
     [warehouses]
   );
 
-  const decoratedTransactions = useMemo(
-    () =>
-      transactions.map((item) => ({
+  const decorateRows = useCallback(
+    (rows) =>
+      rows.map((item) => ({
         ...item,
         categoryLabel: getBusinessCategoryLabel(item.category),
         txnTypeLabel: getTxnTypeLabel(item.txnType),
         projectLabel: item.projectId ? projectMap[item.projectId] || item.projectId : "-",
         warehouseLabel: item.warehouseId != null ? warehouseMap[String(item.warehouseId)] || item.warehouseId : "-",
       })),
-    [projectMap, transactions, warehouseMap]
+    [projectMap, warehouseMap]
   );
 
-  const fetchData = async () => {
+  const decoratedTransactions = useMemo(() => decorateRows(transactions), [decorateRows, transactions]);
+
+  const fetchTransactionsPage = useCallback(async ({ page, pageSize, filters }) => {
     setLoading(true);
     try {
-      const [transactionResponse, projectResponse, warehouseResponse] = await Promise.all([
-        inventoryAPI.getTransactions(),
-        inventoryAPI.getWarehouseDocProjectOptions(),
-        inventoryAPI.getWarehouses(),
-      ]);
-
-      setTransactions(normalizeResponseData(transactionResponse));
-      setProjects(normalizeResponseData(projectResponse));
-      setWarehouses(normalizeResponseData(warehouseResponse));
+      const params = { page, pageSize, ...filters };
+      const response = await inventoryAPI.getTransactionsPage(params);
+      const pageData = response?.data || {};
+      const nextRecords = Array.isArray(pageData.records) ? pageData.records : [];
+      const nextTotal = Number(pageData.total ?? 0);
+      if (nextRecords.length === 0 && page > 1 && nextTotal > 0) {
+        const lastPage = Math.max(1, Math.ceil(nextTotal / pageSize));
+        setQuery((prev) => ({ ...prev, page: lastPage }));
+        return;
+      }
+      setTransactions(nextRecords);
+      setTotal(nextTotal);
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchData();
   }, []);
 
-  const exportProjectOutboundSummary = (rows = decoratedTransactions) => {
-    const outboundRows = rows.filter((item) => item.txnType === "OUT" && item.projectId);
-    downloadExcel(
-      `project-material-outbound-summary-${dayjs().format("YYYY-MM-DD")}.xls`,
-      "项目物料出库汇总明细表",
-      ["项目", "物料编码", "物料名称", "型号", "品牌", "业务类别", "仓库", "业务时间", "数量", "单价", "金额", "来源类型", "来源 ID"],
-      outboundRows.map((item) => [
-        item.projectLabel || "",
-        item.materialCode || "",
-        item.materialName || "",
-        item.model || "",
-        item.brand || "",
-        item.categoryLabel || "",
-        item.warehouseLabel || "",
-        item.txnTime ? dayjs(item.txnTime).format("YYYY-MM-DD HH:mm:ss") : "",
-        item.quantity ?? "",
-        item.unitPrice != null ? Number(item.unitPrice).toFixed(4) : "",
-        item.amount ?? "",
-        item.sourceRefType || "",
-        item.sourceRefId || "",
-      ])
-    );
+  useEffect(() => {
+    fetchTransactionsPage(query);
+  }, [fetchTransactionsPage, query]);
+
+  useEffect(() => {
+    async function fetchOptions() {
+      const [projectResponse, warehouseResponse] = await Promise.all([
+        inventoryAPI.getWarehouseDocProjectOptions(),
+        inventoryAPI.getWarehouses(),
+      ]);
+      setProjects(normalizeResponseData(projectResponse));
+      setWarehouses(normalizeResponseData(warehouseResponse));
+    }
+
+    fetchOptions();
+  }, []);
+
+  const matchesActiveFilters = useCallback((item, filters) => {
+    if (filters.materialCode && !String(item.materialCode || "").toLowerCase().includes(filters.materialCode.toLowerCase())) {
+      return false;
+    }
+    if (filters.materialName && !String(item.materialName || "").toLowerCase().includes(filters.materialName.toLowerCase())) {
+      return false;
+    }
+    if (filters.category && item.category !== filters.category) {
+      return false;
+    }
+    if (filters.projectId && item.projectId !== filters.projectId) {
+      return false;
+    }
+    if (filters.warehouseId != null && Number(item.warehouseId) !== Number(filters.warehouseId)) {
+      return false;
+    }
+    if (filters.sourceRefId && !String(item.sourceRefId || "").toLowerCase().includes(filters.sourceRefId.toLowerCase())) {
+      return false;
+    }
+    return true;
+  }, []);
+
+  const exportProjectOutboundSummary = async () => {
+    setExporting(true);
+    try {
+      const response = await inventoryAPI.getTransactions();
+      const allRows = decorateRows(normalizeResponseData(response));
+      const outboundRows = allRows.filter(
+        (item) => item.txnType === "OUT" && item.projectId && matchesActiveFilters(item, query.filters || {})
+      );
+      downloadExcel(
+        `project-material-outbound-summary-${dayjs().format("YYYY-MM-DD")}.xls`,
+        "项目物料出库汇总明细表",
+        ["项目", "物料编码", "物料名称", "型号", "品牌", "业务类别", "仓库", "业务时间", "数量", "单价", "金额", "来源类型", "来源 ID"],
+        outboundRows.map((item) => [
+          item.projectLabel || "",
+          item.materialCode || "",
+          item.materialName || "",
+          item.model || "",
+          item.brand || "",
+          item.categoryLabel || "",
+          item.warehouseLabel || "",
+          item.txnTime ? dayjs(item.txnTime).format("YYYY-MM-DD HH:mm:ss") : "",
+          item.quantity ?? "",
+          item.unitPrice != null ? Number(item.unitPrice).toFixed(4) : "",
+          item.amount ?? "",
+          item.sourceRefType || "",
+          item.sourceRefId || "",
+        ])
+      );
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -160,7 +218,28 @@ export default function InventoryTransactions() {
       dataSource={decoratedTransactions}
       loading={loading}
       rowKey="uuid"
-      extraActions={({ filteredData, canExport }) => (
+      serverPagination={{
+        current: query.page,
+        pageSize: query.pageSize,
+        total,
+        onChange: (nextPage, nextPageSize) => setQuery((prev) => ({ ...prev, page: nextPage, pageSize: nextPageSize })),
+        onSearch: (values) => {
+          setQuery((prev) => ({
+            ...prev,
+            page: 1,
+            filters: {
+              materialCode: normalizeTextFilter(values.materialCode),
+              materialName: normalizeTextFilter(values.materialName),
+              category: values.category || undefined,
+              projectId: values.projectId || undefined,
+              warehouseId: values.warehouseId != null ? Number(values.warehouseId) : undefined,
+              sourceRefId: normalizeTextFilter(values.sourceRefId),
+            },
+          }));
+        },
+        onReset: () => setQuery((prev) => ({ ...prev, page: 1, filters: {} })),
+      }}
+      extraActions={({ canExport }) => (
         <>
           <Alert
             type="info"
@@ -170,8 +249,9 @@ export default function InventoryTransactions() {
           />
           <Button
             icon={<DownloadOutlined />}
-            onClick={() => exportProjectOutboundSummary(filteredData)}
-            disabled={!canExport || !filteredData.length}
+            loading={exporting}
+            onClick={exportProjectOutboundSummary}
+            disabled={!canExport || total === 0}
           >
             导出项目物料出库汇总明细表
           </Button>
@@ -180,9 +260,45 @@ export default function InventoryTransactions() {
       searchFields={[
         { name: "materialCode", label: "物料编码" },
         { name: "materialName", label: "物料名称" },
-        { name: "categoryLabel", label: "业务类别" },
-        { name: "projectLabel", label: "项目" },
-        { name: "warehouseLabel", label: "仓库" },
+        {
+          name: "category",
+          label: "业务类别",
+          component: (
+            <Select placeholder="请选择业务类别" allowClear style={{ width: 180 }}>
+              {BUSINESS_CATEGORY_OPTIONS.map((item) => (
+                <Option key={item.value} value={item.value}>
+                  {item.label}
+                </Option>
+              ))}
+            </Select>
+          ),
+        },
+        {
+          name: "projectId",
+          label: "项目",
+          component: (
+            <Select placeholder="请选择项目" allowClear showSearch optionFilterProp="children" style={{ width: 200 }}>
+              {projects.map((item) => (
+                <Option key={item.uuid} value={item.uuid}>
+                  {`${item.projectNumber || ""} ${item.projectName || ""}`.trim()}
+                </Option>
+              ))}
+            </Select>
+          ),
+        },
+        {
+          name: "warehouseId",
+          label: "仓库",
+          component: (
+            <Select placeholder="请选择仓库" allowClear style={{ width: 180 }}>
+              {warehouses.map((item) => (
+                <Option key={item.id} value={item.id}>
+                  {[item.warehouseCode, item.warehouseName].filter(Boolean).join(" - ")}
+                </Option>
+              ))}
+            </Select>
+          ),
+        },
         { name: "sourceRefId", label: "单据编号" },
       ]}
       enableView={false}

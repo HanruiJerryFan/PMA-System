@@ -40,26 +40,38 @@ function getLogoutReasonLabel(reason) {
 
 export default function LoginLogs() {
   const [records, setRecords] = useState([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [filters, setFilters] = useState({});
+  const [exporting, setExporting] = useState(false);
+  const [query, setQuery] = useState({ page: 1, pageSize: 10, filters: {}, reloadKey: 0 });
   const { currentUser } = useAuth();
   const [form] = Form.useForm();
   const canExport = hasAnyAuthority(currentUser, ["logs.view"]);
 
-  const fetchRecords = useCallback(async (nextFilters = filters) => {
+  const fetchRecords = useCallback(async ({ page, pageSize, filters }) => {
     setLoading(true);
     try {
-      const params = nextFilters.userId ? { userId: nextFilters.userId } : undefined;
-      const response = await logAPI.getLoginRecords(params);
-      setRecords(Array.isArray(response?.data) ? response.data : []);
+      const params = { page, pageSize };
+      if (filters?.userId) params.userId = filters.userId;
+      const response = await logAPI.getLoginRecordsPage(params);
+      const pageData = response?.data || {};
+      const nextRecords = Array.isArray(pageData.records) ? pageData.records : [];
+      const nextTotal = Number(pageData.total ?? 0);
+      if (nextRecords.length === 0 && page > 1 && nextTotal > 0) {
+        const lastPage = Math.max(1, Math.ceil(nextTotal / pageSize));
+        setQuery((prev) => ({ ...prev, page: lastPage }));
+        return;
+      }
+      setRecords(nextRecords);
+      setTotal(nextTotal);
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, []);
 
   useEffect(() => {
-    fetchRecords({});
-  }, [fetchRecords]);
+    fetchRecords(query);
+  }, [fetchRecords, query]);
 
   const columns = useMemo(
     () => [
@@ -113,39 +125,44 @@ export default function LoginLogs() {
     []
   );
 
-  const handleSearch = async (values) => {
+  const handleSearch = (values) => {
     const nextFilters = {
       userId: values.userId ? Number(values.userId) : undefined,
     };
-    setFilters(nextFilters);
-    await fetchRecords(nextFilters);
+    setQuery((prev) => ({ ...prev, page: 1, filters: nextFilters }));
   };
 
-  const handleReset = async () => {
+  const handleReset = () => {
     form.resetFields();
-    const nextFilters = {};
-    setFilters(nextFilters);
-    await fetchRecords(nextFilters);
+    setQuery((prev) => ({ ...prev, page: 1, filters: {} }));
   };
 
-  const handleExportExcel = () => {
-    downloadExcel(
-      `登录日志-${new Date().toISOString().slice(0, 10)}.xls`,
-      "登录日志",
-      ["ID", "用户 ID", "登录时间", "最后活跃时间", "退出时间", "持续时长", "退出原因", "登录 IP", "浏览器标识", "创建时间"],
-      records.map((item) => [
-        item.id ?? "",
-        item.userId ?? "",
-        item.loginStartTime ? new Date(item.loginStartTime).toLocaleString() : "",
-        item.lastSeenAt ? new Date(item.lastSeenAt).toLocaleString() : "",
-        item.loginEndTime ? new Date(item.loginEndTime).toLocaleString() : "",
-        formatDuration(item.durationSeconds),
-        getLogoutReasonLabel(item.logoutReason),
-        item.loginIp ?? "",
-        item.userAgent ?? "",
-        item.createdAt ? new Date(item.createdAt).toLocaleString() : "",
-      ])
-    );
+  const handleExportExcel = async () => {
+    setExporting(true);
+    try {
+      const params = query.filters?.userId ? { userId: query.filters.userId } : undefined;
+      const response = await logAPI.getLoginRecords(params);
+      const exportRows = Array.isArray(response?.data) ? response.data : [];
+      downloadExcel(
+        `登录日志-${new Date().toISOString().slice(0, 10)}.xls`,
+        "登录日志",
+        ["ID", "用户 ID", "登录时间", "最后活跃时间", "退出时间", "持续时长", "退出原因", "登录 IP", "浏览器标识", "创建时间"],
+        exportRows.map((item) => [
+          item.id ?? "",
+          item.userId ?? "",
+          item.loginStartTime ? new Date(item.loginStartTime).toLocaleString() : "",
+          item.lastSeenAt ? new Date(item.lastSeenAt).toLocaleString() : "",
+          item.loginEndTime ? new Date(item.loginEndTime).toLocaleString() : "",
+          formatDuration(item.durationSeconds),
+          getLogoutReasonLabel(item.logoutReason),
+          item.loginIp ?? "",
+          item.userAgent ?? "",
+          item.createdAt ? new Date(item.createdAt).toLocaleString() : "",
+        ])
+      );
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -153,10 +170,10 @@ export default function LoginLogs() {
       title="登录日志"
       extra={(
         <Space>
-          <Button icon={<DownloadOutlined />} onClick={handleExportExcel} disabled={!canExport || records.length === 0}>
+          <Button icon={<DownloadOutlined />} loading={exporting} onClick={handleExportExcel} disabled={!canExport || total === 0}>
             导出 Excel
           </Button>
-          <Button icon={<ReloadOutlined />} onClick={() => fetchRecords()}>
+          <Button icon={<ReloadOutlined />} onClick={() => setQuery((prev) => ({ ...prev, reloadKey: prev.reloadKey + 1 }))}>
             刷新
           </Button>
         </Space>
@@ -181,7 +198,14 @@ export default function LoginLogs() {
         columns={columns}
         dataSource={records}
         loading={loading}
-        pagination={{ pageSize: 10, showSizeChanger: true }}
+        pagination={{
+          current: query.page,
+          pageSize: query.pageSize,
+          total,
+          showSizeChanger: true,
+          showTotal: (count) => `共 ${count} 条`,
+          onChange: (nextPage, nextPageSize) => setQuery((prev) => ({ ...prev, page: nextPage, pageSize: nextPageSize })),
+        }}
         scroll={{ x: 1600 }}
       />
     </Card>

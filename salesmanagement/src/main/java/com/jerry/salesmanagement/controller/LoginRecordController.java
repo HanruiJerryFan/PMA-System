@@ -1,6 +1,8 @@
 package com.jerry.salesmanagement.controller;
 
+import com.jerry.salesmanagement.common.ApiResponse;
 import com.jerry.salesmanagement.pojo.LoginRecord;
+import com.jerry.salesmanagement.pojo.dto.PageResult;
 import com.jerry.salesmanagement.service.LoginRecordService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -20,6 +22,19 @@ public class LoginRecordController {
             return loginRecordService.getByUserId(userId);
         }
         return loginRecordService.getAll();
+    }
+
+    @GetMapping("/page")
+    public ApiResponse<PageResult<LoginRecord>> getPage(
+            @RequestParam(required = false) Long userId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int pageSize
+    ) {
+        try {
+            return ApiResponse.success(loginRecordService.getPage(userId, page, pageSize));
+        } catch (Exception e) {
+            return ApiResponse.error("Failed to query login logs page: " + e.getMessage());
+        }
     }
 
     @GetMapping("/{id}")

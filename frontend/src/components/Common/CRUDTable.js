@@ -67,6 +67,7 @@ export default function CRUDTable({
   onModalCancel = null,
   onModalSuccess = null,
   onFilteredDataChange = null,
+  serverPagination = null,
 }) {
   const location = useLocation();
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -198,7 +199,11 @@ export default function CRUDTable({
     }
   };
 
-  const handleSearch = (values) => {
+  const handleSearch = async (values) => {
+    if (serverPagination?.onSearch) {
+      await serverPagination.onSearch(values);
+      return;
+    }
     const searchFieldMap = Object.fromEntries(normalizedSearchFields.map((field) => [field.name, field]));
     const filtered = dataSource.filter((item) =>
       Object.entries(values).every(([key, value]) => {
@@ -217,8 +222,12 @@ export default function CRUDTable({
     setFilteredData(filtered);
   };
 
-  const handleResetSearch = () => {
+  const handleResetSearch = async () => {
     searchForm.resetFields();
+    if (serverPagination?.onReset) {
+      await serverPagination.onReset();
+      return;
+    }
     setFilteredData(dataSource);
   };
 
@@ -367,6 +376,17 @@ export default function CRUDTable({
       }));
   }, [columns, detailFields]);
 
+  const resolvedPagination = serverPagination
+    ? {
+        current: serverPagination.current || 1,
+        pageSize: serverPagination.pageSize || 10,
+        total: serverPagination.total || 0,
+        showSizeChanger: true,
+        showTotal: (total) => `共 ${total} 条`,
+        onChange: (nextPage, nextPageSize) => serverPagination.onChange?.(nextPage, nextPageSize),
+      }
+    : pagination;
+
   return (
     <Card>
       <div
@@ -418,7 +438,7 @@ export default function CRUDTable({
         dataSource={filteredData}
         rowKey={rowKey}
         loading={loading}
-        pagination={pagination}
+        pagination={resolvedPagination}
         size={size}
         scroll={{ x: "max-content" }}
         {...tableProps}

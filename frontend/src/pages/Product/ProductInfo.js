@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Descriptions, Input, Modal, Select, Space, Switch, Table, message } from "antd";
 import { DownloadOutlined, UploadOutlined } from "@ant-design/icons";
 import CRUDTable from "../../components/Common/CRUDTable";
@@ -8,13 +8,20 @@ import { sortSelectItems } from "../../utils/selectSorting";
 
 const { Option } = Select;
 
+function normalizeTextFilter(value) {
+  return typeof value === "string" ? value.trim() || undefined : undefined;
+}
+
 export default function ProductInfo() {
   const [products, setProducts] = useState([]);
+  const [total, setTotal] = useState(0);
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
   const [brands, setBrands] = useState([]);
   const [bands, setBands] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [query, setQuery] = useState({ page: 1, pageSize: 10, filters: {}, reloadKey: 0 });
   const [importVisible, setImportVisible] = useState(false);
   const [pendingImportFile, setPendingImportFile] = useState(null);
   const [importMode, setImportMode] = useState("PARTIAL_SUCCESS");
@@ -40,79 +47,123 @@ export default function ProductInfo() {
     [bands]
   );
 
-  const decoratedProducts = useMemo(
-    () =>
-      products.map((item) => ({
+  const decorateRows = useCallback(
+    (rows) =>
+      rows.map((item) => ({
         ...item,
         categoryLabel: categoryMap[item.categoryId] || item.categoryCode || "-",
         subcategoryLabel: subcategoryMap[item.subcategoryId] || item.subcategoryCode || "-",
         brandLabel: brandMap[item.brandId] || item.brandCode || "-",
         bandLabel: bandMap[item.bandCode] || item.bandCode || "-",
       })),
-    [products, categoryMap, subcategoryMap, brandMap, bandMap]
+    [bandMap, brandMap, categoryMap, subcategoryMap]
   );
 
-  const fetchProducts = async () => {
+  const decoratedProducts = useMemo(() => decorateRows(products), [decorateRows, products]);
+
+  const fetchProductsPage = useCallback(async ({ page, pageSize, filters }) => {
     setLoading(true);
     try {
-      const response = await productAPI.getProducts();
-      setProducts(response.data || []);
+      const response = await productAPI.getProductsPage({ page, pageSize, ...filters });
+      const pageData = response?.data || {};
+      const nextRecords = Array.isArray(pageData.records) ? pageData.records : [];
+      const nextTotal = Number(pageData.total ?? 0);
+      if (nextRecords.length === 0 && page > 1 && nextTotal > 0) {
+        const lastPage = Math.max(1, Math.ceil(nextTotal / pageSize));
+        setQuery((prev) => ({ ...prev, page: lastPage }));
+        return;
+      }
+      setProducts(nextRecords);
+      setTotal(nextTotal);
     } finally {
       setLoading(false);
     }
-  };
-
-  const fetchOptions = async () => {
-    const [categoryResponse, subcategoryResponse, brandResponse, bandResponse] = await Promise.all([
-      productAPI.getProductCategories(),
-      productAPI.getProductSubcategories(),
-      productAPI.getProductBrands(),
-      productAPI.getProductBands(),
-    ]);
-    setCategories(categoryResponse.data || []);
-    setSubcategories(subcategoryResponse.data || []);
-    setBrands(brandResponse.data || []);
-    setBands(bandResponse.data || []);
-  };
+  }, []);
 
   useEffect(() => {
-    fetchProducts();
+    fetchProductsPage(query);
+  }, [fetchProductsPage, query]);
+
+  useEffect(() => {
+    async function fetchOptions() {
+      const [categoryResponse, subcategoryResponse, brandResponse, bandResponse] = await Promise.all([
+        productAPI.getProductCategories(),
+        productAPI.getProductSubcategories(),
+        productAPI.getProductBrands(),
+        productAPI.getProductBands(),
+      ]);
+      setCategories(categoryResponse.data || []);
+      setSubcategories(subcategoryResponse.data || []);
+      setBrands(brandResponse.data || []);
+      setBands(bandResponse.data || []);
+    }
+
     fetchOptions();
   }, []);
 
+  const reloadCurrentPage = () => {
+    setQuery((prev) => ({ ...prev, reloadKey: prev.reloadKey + 1 }));
+  };
+
   const handleCreate = async (values) => {
     await productAPI.createProduct(values);
-    await fetchProducts();
+    reloadCurrentPage();
   };
 
   const handleUpdate = async (uuid, values) => {
     await productAPI.updateProduct(uuid, values);
-    await fetchProducts();
+    reloadCurrentPage();
   };
 
   const handleDelete = async (uuid) => {
     await productAPI.deleteProduct(uuid);
-    await fetchProducts();
+    reloadCurrentPage();
   };
 
-  const handleExportExcel = (rows = decoratedProducts) => {
-    downloadExcel(
-      `materials-${new Date().toISOString().slice(0, 10)}.xls`,
-      "物料主数据",
-      ["序号", "品牌", "大类", "分项", "名称", "型号", "规格参数", "物料编码", "其他说明", "启用状态"],
-      rows.map((item, index) => [
-        index + 1,
-        item.brandLabel || "",
-        item.categoryLabel || "",
-        item.subcategoryLabel || "",
-        item.productName || "",
-        item.productModel || "",
-        item.specification || "",
-        item.materialCode || "",
-        item.otherNote || "",
-        item.isActive ? "启用" : "停用",
-      ])
-    );
+  const handleExportExcel = async () => {
+    setExporting(true);
+    try {
+      const response = await productAPI.getProducts();
+      const filters = query.filters || {};
+      const filteredRows = (response.data || []).filter((item) => {
+        if (filters.materialCode && !String(item.materialCode || "").toLowerCase().includes(filters.materialCode.toLowerCase())) {
+          return false;
+        }
+        if (filters.productName && !String(item.productName || "").toLowerCase().includes(filters.productName.toLowerCase())) {
+          return false;
+        }
+        if (filters.productModel && !String(item.productModel || "").toLowerCase().includes(filters.productModel.toLowerCase())) {
+          return false;
+        }
+        if (filters.brandId != null && Number(item.brandId) !== Number(filters.brandId)) {
+          return false;
+        }
+        if (filters.isActive !== undefined && Boolean(item.isActive) !== Boolean(filters.isActive)) {
+          return false;
+        }
+        return true;
+      });
+      const rows = decorateRows(filteredRows);
+      downloadExcel(
+        `materials-${new Date().toISOString().slice(0, 10)}.xls`,
+        "物料主数据",
+        ["序号", "品牌", "大类", "分项", "名称", "型号", "规格参数", "物料编码", "其他说明", "启用状态"],
+        rows.map((item, index) => [
+          index + 1,
+          item.brandLabel || "",
+          item.categoryLabel || "",
+          item.subcategoryLabel || "",
+          item.productName || "",
+          item.productModel || "",
+          item.specification || "",
+          item.materialCode || "",
+          item.otherNote || "",
+          item.isActive ? "启用" : "停用",
+        ])
+      );
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handleDownloadTemplate = async () => {
@@ -157,7 +208,7 @@ export default function ProductInfo() {
     setImporting(true);
     try {
       const response = await productAPI.importProducts(formData, importMode);
-      await fetchProducts();
+      reloadCurrentPage();
       setImportResult(response.data || null);
       setImportResultVisible(true);
       message.success(`导入成功 ${response.data?.importedRows ?? 0} 行，失败 ${response.data?.failedRows ?? 0} 行`);
@@ -174,7 +225,13 @@ export default function ProductInfo() {
       <CRUDTable
         title="物料主数据"
         columns={[
-          { title: "序号", key: "serialNo", width: 80, render: (_, __, index) => index + 1, sorter: (left, right) => (left.id || 0) - (right.id || 0) },
+          {
+            title: "序号",
+            key: "serialNo",
+            width: 80,
+            render: (_, __, index) => (query.page - 1) * query.pageSize + index + 1,
+            sorter: (left, right) => (left.id || 0) - (right.id || 0),
+          },
           { title: "品牌", dataIndex: "brandLabel", key: "brandLabel", width: 180 },
           { title: "大类", dataIndex: "categoryLabel", key: "categoryLabel", width: 180 },
           { title: "分项", dataIndex: "subcategoryLabel", key: "subcategoryLabel", width: 180 },
@@ -192,15 +249,36 @@ export default function ProductInfo() {
         onUpdate={handleUpdate}
         onDelete={handleDelete}
         rowKey="uuid"
-        extraActions={({ filteredData, canManage, canExport }) => (
+        serverPagination={{
+          current: query.page,
+          pageSize: query.pageSize,
+          total,
+          onChange: (nextPage, nextPageSize) => setQuery((prev) => ({ ...prev, page: nextPage, pageSize: nextPageSize })),
+          onSearch: (values) => {
+            setQuery((prev) => ({
+              ...prev,
+              page: 1,
+              filters: {
+                materialCode: normalizeTextFilter(values.materialCode),
+                productName: normalizeTextFilter(values.productName),
+                productModel: normalizeTextFilter(values.productModel),
+                brandId: values.brandId != null ? Number(values.brandId) : undefined,
+                isActive: values.isActive !== undefined ? values.isActive : undefined,
+              },
+            }));
+          },
+          onReset: () => setQuery((prev) => ({ ...prev, page: 1, filters: {} })),
+        }}
+        extraActions={({ canManage, canExport }) => (
           <Space>
             <input ref={importInputRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleImportFileChange} />
             <Button icon={<UploadOutlined />} onClick={handleImportClick} disabled={!canManage}>导入 Excel</Button>
             <Button onClick={handleDownloadTemplate} disabled={!canManage}>下载模板</Button>
             <Button
               icon={<DownloadOutlined />}
-              onClick={() => handleExportExcel(filteredData)}
-              disabled={!canExport || !filteredData.length}
+              loading={exporting}
+              onClick={handleExportExcel}
+              disabled={!canExport || total === 0}
             >
               导出 Excel
             </Button>
@@ -210,7 +288,29 @@ export default function ProductInfo() {
           { name: "materialCode", label: "物料编码" },
           { name: "productName", label: "名称" },
           { name: "productModel", label: "型号" },
-          { name: "brandLabel", label: "品牌" },
+          {
+            name: "brandId",
+            label: "品牌",
+            component: (
+              <Select placeholder="请选择品牌" allowClear style={{ width: 160 }}>
+                {sortSelectItems(brands, ["sortOrder", "code"]).map((item) => (
+                  <Option key={item.id} value={item.id}>
+                    {item.code || "--"} {item.name}
+                  </Option>
+                ))}
+              </Select>
+            ),
+          },
+          {
+            name: "isActive",
+            label: "启用状态",
+            component: (
+              <Select placeholder="全部" allowClear style={{ width: 110 }}>
+                <Option value={true}>启用</Option>
+                <Option value={false}>停用</Option>
+              </Select>
+            ),
+          },
         ]}
         detailFields={[
           { key: "materialCode", label: "物料编码" },

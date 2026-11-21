@@ -56,6 +56,37 @@
         ORDER BY l.login_start_time DESC, l.id DESC
     </select>
 
+    <sql id="PageFromAndWhere">
+        FROM login_record l
+        LEFT JOIN sys_user u ON l.user_id = u.id
+        WHERE (u.username IS NULL OR LOWER(u.username) &lt;&gt; 'system')
+        <if test="userId != null">
+            AND l.user_id = #{userId}
+        </if>
+    </sql>
+
+    <select id="selectPage" resultType="com.jerry.salesmanagement.pojo.LoginRecord">
+        SELECT
+            l.id,
+            l.user_id AS userId,
+            l.login_start_time AS loginStartTime,
+            l.login_end_time AS loginEndTime,
+            l.duration_seconds AS durationSeconds,
+            l.login_ip AS loginIp,
+            l.user_agent AS userAgent,
+            l.last_seen_at AS lastSeenAt,
+            l.logout_reason AS logoutReason,
+            l.created_at AS createdAt
+        <include refid="PageFromAndWhere"/>
+        ORDER BY l.login_start_time DESC, l.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countPage" resultType="long">
+        SELECT COUNT(*)
+        <include refid="PageFromAndWhere"/>
+    </select>
+
     <select id="selectTimedOutActive" parameterType="java.util.Date" resultType="com.jerry.salesmanagement.pojo.LoginRecord">
         SELECT
             id,

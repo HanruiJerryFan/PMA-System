@@ -31,6 +31,67 @@
         ORDER BY COALESCE(txn_time, create_time) DESC, id DESC
     </select>
 
+    <sql id="PageWhere">
+        <where>
+            <if test="materialCode != null and materialCode.trim() != ''">
+                AND LOWER(COALESCE(material_code, '')) LIKE CONCAT('%', LOWER(TRIM(#{materialCode})), '%')
+            </if>
+            <if test="materialName != null and materialName.trim() != ''">
+                AND LOWER(COALESCE(material_name, '')) LIKE CONCAT('%', LOWER(TRIM(#{materialName})), '%')
+            </if>
+            <if test="category != null and category.trim() != ''">
+                AND UPPER(TRIM(category)) = UPPER(TRIM(#{category}))
+            </if>
+            <if test="txnType != null and txnType.trim() != ''">
+                AND UPPER(TRIM(txn_type)) = UPPER(TRIM(#{txnType}))
+            </if>
+            <if test="projectId != null and projectId.trim() != ''">
+                AND project_id = #{projectId}
+            </if>
+            <if test="warehouseId != null">
+                AND warehouse_id = #{warehouseId}
+            </if>
+            <if test="sourceRefId != null and sourceRefId.trim() != ''">
+                AND LOWER(COALESCE(source_ref_id, '')) LIKE CONCAT('%', LOWER(TRIM(#{sourceRefId})), '%')
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectPage" resultType="com.jerry.salesmanagement.pojo.InventoryTransaction">
+        SELECT
+            id,
+            uuid,
+            material_id AS materialId,
+            material_code AS materialCode,
+            material_name AS materialName,
+            model,
+            brand,
+            category,
+            project_id AS projectId,
+            warehouse_id AS warehouseId,
+            txn_type AS txnType,
+            txn_time AS txnTime,
+            quantity,
+            unit_price AS unitPrice,
+            amount,
+            source_ref_type AS sourceRefType,
+            source_ref_id AS sourceRefId,
+            create_time AS createdAt,
+            create_user AS createdBy,
+            update_time AS updatedAt,
+            update_user AS updatedBy
+        FROM goods_transaction_dynamic_info
+        <include refid="PageWhere"/>
+        ORDER BY COALESCE(txn_time, create_time) DESC, id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countPage" resultType="long">
+        SELECT COUNT(*)
+        FROM goods_transaction_dynamic_info
+        <include refid="PageWhere"/>
+    </select>
+
     <select id="selectByUuid" parameterType="string"
             resultType="com.jerry.salesmanagement.pojo.InventoryTransaction">
         SELECT

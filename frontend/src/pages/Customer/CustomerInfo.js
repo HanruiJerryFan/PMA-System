@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Cascader, Input, Select, Tag } from "antd";
 import { DownloadOutlined } from "@ant-design/icons";
 import CRUDTable from "../../components/Common/CRUDTable";
@@ -16,12 +16,19 @@ const ACTIVITY_STATUS_OPTIONS = [
   { value: "DORMANT", label: "沉睡" },
 ];
 
+function normalizeTextFilter(value) {
+  return typeof value === "string" ? value.trim() || undefined : undefined;
+}
+
 export default function CustomerInfo() {
   const [customers, setCustomers] = useState([]);
+  const [total, setTotal] = useState(0);
   const [customerTypes, setCustomerTypes] = useState([]);
   const [customerIndustries, setCustomerIndustries] = useState([]);
   const [regions, setRegions] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [query, setQuery] = useState({ page: 1, pageSize: 10, filters: {}, reloadKey: 0 });
 
   const customerTypeMap = useMemo(
     () => Object.fromEntries(customerTypes.map((item) => [item.id, `${item.typeCode} - ${item.typeName}`])),
@@ -55,95 +62,139 @@ export default function CustomerInfo() {
     [customerIndustries]
   );
 
-  const decoratedCustomers = useMemo(
-    () =>
-      customers.map((item) => ({
+  const decorateRows = useCallback(
+    (rows) =>
+      rows.map((item) => ({
         ...item,
         customerTypeLabel: customerTypeMap[item.customerTypeId] || "-",
         regionLabel: regionMap[item.regionId] || "-",
         activityStatusLabel: activityStatusMap[item.activityStatus] || item.activityStatus || "-",
       })),
-    [customers, customerTypeMap, regionMap, activityStatusMap]
+    [customerTypeMap, regionMap, activityStatusMap]
   );
 
-  const fetchCustomers = async () => {
+  const decoratedCustomers = useMemo(() => decorateRows(customers), [customers, decorateRows]);
+
+  const fetchCustomersPage = useCallback(async ({ page, pageSize, filters }) => {
     setLoading(true);
     try {
-      const response = await customerAPI.getCustomers();
-      setCustomers(response.data || []);
+      const response = await customerAPI.getCustomersPage({ page, pageSize, ...filters });
+      const pageData = response?.data || {};
+      const nextRecords = Array.isArray(pageData.records) ? pageData.records : [];
+      const nextTotal = Number(pageData.total ?? 0);
+      if (nextRecords.length === 0 && page > 1 && nextTotal > 0) {
+        const lastPage = Math.max(1, Math.ceil(nextTotal / pageSize));
+        setQuery((prev) => ({ ...prev, page: lastPage }));
+        return;
+      }
+      setCustomers(nextRecords);
+      setTotal(nextTotal);
     } finally {
       setLoading(false);
     }
-  };
-
-  const fetchDictionaries = async () => {
-    const [typeResponse, industryResponse, regionResponse] = await Promise.all([
-      customerAPI.getCustomerTypes(),
-      customerAPI.getCustomerIndustryDicts(),
-      regionAPI.getRegions(),
-    ]);
-    setCustomerTypes(typeResponse.data || []);
-    setCustomerIndustries(industryResponse.data || []);
-    setRegions(regionResponse.data || []);
-  };
+  }, []);
 
   useEffect(() => {
-    fetchCustomers();
+    fetchCustomersPage(query);
+  }, [fetchCustomersPage, query]);
+
+  useEffect(() => {
+    async function fetchDictionaries() {
+      const [typeResponse, industryResponse, regionResponse] = await Promise.all([
+        customerAPI.getCustomerTypes(),
+        customerAPI.getCustomerIndustryDicts(),
+        regionAPI.getRegions(),
+      ]);
+      setCustomerTypes(typeResponse.data || []);
+      setCustomerIndustries(industryResponse.data || []);
+      setRegions(regionResponse.data || []);
+    }
+
     fetchDictionaries();
   }, []);
 
+  const reloadCurrentPage = () => {
+    setQuery((prev) => ({ ...prev, reloadKey: prev.reloadKey + 1 }));
+  };
+
   const handleCreate = async (values) => {
     await customerAPI.createCustomer(values);
-    await fetchCustomers();
+    reloadCurrentPage();
   };
 
   const handleUpdate = async (uuid, values) => {
     await customerAPI.updateCustomer(uuid, values);
-    await fetchCustomers();
+    reloadCurrentPage();
   };
 
   const handleDelete = async (uuid) => {
     await customerAPI.deleteCustomer(uuid);
-    await fetchCustomers();
+    reloadCurrentPage();
   };
 
-  const handleExportExcel = (rows = decoratedCustomers) => {
-    downloadExcel(
-      `customers-${new Date().toISOString().slice(0, 10)}.xls`,
-      "客户台账",
-      [
-        "客户编码",
-        "客户名称",
-        "客户类型",
-        "地区",
-        "行业",
-        "活跃状态",
-        "最后活跃时间",
-        "注册地址",
-        "办公地址",
-        "税号",
-        "开户行",
-        "银行账号",
-        "备注",
-        "更新时间",
-      ],
-      rows.map((item) => [
-        item.customerCode || "",
-        item.customerName || "",
-        item.customerTypeLabel || "",
-        item.regionLabel || "",
-        item.industry || "",
-        item.activityStatusLabel || "",
-        item.lastActiveAt ? new Date(item.lastActiveAt).toLocaleString() : "",
-        item.registerAddress || "",
-        item.officeAddress || "",
-        item.taxIdentificationNumber || "",
-        item.bankName || "",
-        item.bankAccount || "",
-        item.remark || "",
-        item.updateTime ? new Date(item.updateTime).toLocaleString() : "",
-      ])
-    );
+  const handleExportExcel = async () => {
+    setExporting(true);
+    try {
+      const response = await customerAPI.getCustomers();
+      const filters = query.filters || {};
+      const filteredRows = (response.data || []).filter((item) => {
+        if (filters.customerCode && !String(item.customerCode || "").toLowerCase().includes(filters.customerCode.toLowerCase())) {
+          return false;
+        }
+        if (filters.customerName && !String(item.customerName || "").toLowerCase().includes(filters.customerName.toLowerCase())) {
+          return false;
+        }
+        if (filters.taxIdentificationNumber && !String(item.taxIdentificationNumber || "").toLowerCase().includes(filters.taxIdentificationNumber.toLowerCase())) {
+          return false;
+        }
+        if (filters.industry && !String(item.industry || "").toLowerCase().includes(filters.industry.toLowerCase())) {
+          return false;
+        }
+        if (filters.activityStatus && item.activityStatus !== filters.activityStatus) {
+          return false;
+        }
+        return true;
+      });
+      const rows = decorateRows(filteredRows);
+      downloadExcel(
+        `customers-${new Date().toISOString().slice(0, 10)}.xls`,
+        "客户台账",
+        [
+          "客户编码",
+          "客户名称",
+          "客户类型",
+          "地区",
+          "行业",
+          "活跃状态",
+          "最后活跃时间",
+          "注册地址",
+          "办公地址",
+          "税号",
+          "开户行",
+          "银行账号",
+          "备注",
+          "更新时间",
+        ],
+        rows.map((item) => [
+          item.customerCode || "",
+          item.customerName || "",
+          item.customerTypeLabel || "",
+          item.regionLabel || "",
+          item.industry || "",
+          item.activityStatusLabel || "",
+          item.lastActiveAt ? new Date(item.lastActiveAt).toLocaleString() : "",
+          item.registerAddress || "",
+          item.officeAddress || "",
+          item.taxIdentificationNumber || "",
+          item.bankName || "",
+          item.bankAccount || "",
+          item.remark || "",
+          item.updateTime ? new Date(item.updateTime).toLocaleString() : "",
+        ])
+      );
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -193,6 +244,26 @@ export default function CustomerInfo() {
       onCreate={handleCreate}
       onUpdate={handleUpdate}
       onDelete={handleDelete}
+      serverPagination={{
+        current: query.page,
+        pageSize: query.pageSize,
+        total,
+        onChange: (nextPage, nextPageSize) => setQuery((prev) => ({ ...prev, page: nextPage, pageSize: nextPageSize })),
+        onSearch: (values) => {
+          setQuery((prev) => ({
+            ...prev,
+            page: 1,
+            filters: {
+              customerCode: normalizeTextFilter(values.customerCode),
+              customerName: normalizeTextFilter(values.customerName),
+              taxIdentificationNumber: normalizeTextFilter(values.taxIdentificationNumber),
+              industry: normalizeTextFilter(values.industry),
+              activityStatus: values.activityStatus || undefined,
+            },
+          }));
+        },
+        onReset: () => setQuery((prev) => ({ ...prev, page: 1, filters: {} })),
+      }}
       formFields={[
         {
           name: "customerCode",
@@ -265,6 +336,19 @@ export default function CustomerInfo() {
         { name: "customerName", label: "客户名称" },
         { name: "taxIdentificationNumber", label: "税号" },
         { name: "industry", label: "行业" },
+        {
+          name: "activityStatus",
+          label: "活跃状态",
+          component: (
+            <Select placeholder="请选择活跃状态" allowClear style={{ width: 140 }}>
+              {ACTIVITY_STATUS_OPTIONS.map((item) => (
+                <Option key={item.value} value={item.value}>
+                  {item.label}
+                </Option>
+              ))}
+            </Select>
+          ),
+        },
       ]}
       rowKey="uuid"
       mapRecordToFormValues={(record) => ({
@@ -278,11 +362,12 @@ export default function CustomerInfo() {
         industry: values.industry || null,
         remark: values.remark || null,
       })}
-      extraActions={({ filteredData, canExport }) => (
+      extraActions={({ canExport }) => (
         <Button
           icon={<DownloadOutlined />}
-          onClick={() => handleExportExcel(filteredData)}
-          disabled={!canExport || !filteredData.length}
+          loading={exporting}
+          onClick={handleExportExcel}
+          disabled={!canExport || total === 0}
         >
           导出 Excel
         </Button>

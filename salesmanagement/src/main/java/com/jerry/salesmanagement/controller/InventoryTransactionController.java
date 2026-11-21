@@ -2,6 +2,7 @@ package com.jerry.salesmanagement.controller;
 
 import com.jerry.salesmanagement.common.ApiResponse;
 import com.jerry.salesmanagement.pojo.InventoryTransaction;
+import com.jerry.salesmanagement.pojo.dto.PageResult;
 import com.jerry.salesmanagement.service.InventoryTransactionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -33,6 +35,31 @@ public class InventoryTransactionController {
             return ApiResponse.success(transactions);
         } catch (Exception e) {
             return ApiResponse.error("Failed to query inventory transactions: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/page")
+    public ApiResponse<PageResult<InventoryTransaction>> getPage(
+            @RequestParam(required = false) String materialCode,
+            @RequestParam(required = false) String materialName,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String txnType,
+            @RequestParam(required = false) String projectId,
+            @RequestParam(required = false) Long warehouseId,
+            @RequestParam(required = false) String sourceRefId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int pageSize
+    ) {
+        try {
+            PageResult<InventoryTransaction> result = inventoryTransactionService.getPage(
+                    materialCode, materialName, category, txnType, projectId, warehouseId, sourceRefId, page, pageSize
+            );
+            for (InventoryTransaction transaction : result.getRecords()) {
+                ensureUuid(transaction);
+            }
+            return ApiResponse.success(result);
+        } catch (Exception e) {
+            return ApiResponse.error("Failed to query inventory transactions page: " + e.getMessage());
         }
     }
 

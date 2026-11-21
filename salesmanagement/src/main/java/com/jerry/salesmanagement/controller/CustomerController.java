@@ -2,6 +2,7 @@ package com.jerry.salesmanagement.controller;
 
 import com.jerry.salesmanagement.common.ApiResponse;
 import com.jerry.salesmanagement.pojo.Customer;
+import com.jerry.salesmanagement.pojo.dto.PageResult;
 import com.jerry.salesmanagement.service.CustomerService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -28,6 +30,25 @@ public class CustomerController {
             return ApiResponse.success(customerService.getAll());
         } catch (Exception e) {
             return ApiResponse.error("Failed to query customers: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/page")
+    public ApiResponse<PageResult<Customer>> getPage(
+            @RequestParam(required = false) String customerCode,
+            @RequestParam(required = false) String customerName,
+            @RequestParam(required = false) String taxIdentificationNumber,
+            @RequestParam(required = false) String industry,
+            @RequestParam(required = false) String activityStatus,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int pageSize
+    ) {
+        try {
+            return ApiResponse.success(customerService.getPage(
+                    customerCode, customerName, taxIdentificationNumber, industry, activityStatus, page, pageSize
+            ));
+        } catch (Exception e) {
+            return ApiResponse.error("Failed to query customers page: " + e.getMessage());
         }
     }
 

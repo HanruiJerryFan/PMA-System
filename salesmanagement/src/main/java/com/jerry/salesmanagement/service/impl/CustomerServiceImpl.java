@@ -9,6 +9,7 @@ import com.jerry.salesmanagement.pojo.Customer;
 import com.jerry.salesmanagement.pojo.CustomerIndustryDict;
 import com.jerry.salesmanagement.pojo.CustomerType;
 import com.jerry.salesmanagement.pojo.Region;
+import com.jerry.salesmanagement.pojo.dto.PageResult;
 import com.jerry.salesmanagement.service.CodeSequenceService;
 import com.jerry.salesmanagement.service.CustomerService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,6 +51,26 @@ public class CustomerServiceImpl implements CustomerService {
     @Override
     public List<Customer> getAll() {
         return customerMapper.selectAll();
+    }
+
+    @Override
+    public PageResult<Customer> getPage(
+            String customerCode,
+            String customerName,
+            String taxIdentificationNumber,
+            String industry,
+            String activityStatus,
+            int page,
+            int pageSize
+    ) {
+        return PageResult.paginate(
+                page,
+                pageSize,
+                () -> customerMapper.countPage(
+                        customerCode, customerName, taxIdentificationNumber, industry, activityStatus),
+                (offset, limit) -> customerMapper.selectPage(
+                        customerCode, customerName, taxIdentificationNumber, industry, activityStatus, offset, limit)
+        );
     }
 
     @Override

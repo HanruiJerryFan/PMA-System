@@ -12,29 +12,40 @@ function formatDateTime(value) {
 
 export default function AuditTrails() {
   const [records, setRecords] = useState([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [filters, setFilters] = useState({});
+  const [exporting, setExporting] = useState(false);
+  const [query, setQuery] = useState({ page: 1, pageSize: 10, filters: {}, reloadKey: 0 });
   const { currentUser } = useAuth();
   const [form] = Form.useForm();
   const canExport = hasAnyAuthority(currentUser, ["logs.view"]);
 
-  const fetchRecords = useCallback(async (nextFilters = filters) => {
+  const fetchRecords = useCallback(async ({ page, pageSize, filters }) => {
     setLoading(true);
     try {
-      const params = {};
-      if (nextFilters.userId) params.userId = nextFilters.userId;
-      if (nextFilters.module) params.module = nextFilters.module;
-      if (nextFilters.action) params.action = nextFilters.action;
-      const response = await logAPI.getAuditTrails(Object.keys(params).length > 0 ? params : undefined);
-      setRecords(Array.isArray(response?.data) ? response.data : []);
+      const params = { page, pageSize };
+      if (filters?.userId) params.userId = filters.userId;
+      if (filters?.module) params.module = filters.module;
+      if (filters?.action) params.action = filters.action;
+      const response = await logAPI.getAuditTrailsPage(params);
+      const pageData = response?.data || {};
+      const nextRecords = Array.isArray(pageData.records) ? pageData.records : [];
+      const nextTotal = Number(pageData.total ?? 0);
+      if (nextRecords.length === 0 && page > 1 && nextTotal > 0) {
+        const lastPage = Math.max(1, Math.ceil(nextTotal / pageSize));
+        setQuery((prev) => ({ ...prev, page: lastPage }));
+        return;
+      }
+      setRecords(nextRecords);
+      setTotal(nextTotal);
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, []);
 
   useEffect(() => {
-    fetchRecords({});
-  }, [fetchRecords]);
+    fetchRecords(query);
+  }, [fetchRecords, query]);
 
   const columns = useMemo(
     () => [
@@ -51,40 +62,48 @@ export default function AuditTrails() {
     []
   );
 
-  const handleSearch = async (values) => {
+  const handleSearch = (values) => {
     const nextFilters = {
       userId: values.userId ? Number(values.userId) : undefined,
       module: values.module?.trim() || undefined,
       action: values.action?.trim() || undefined,
     };
-    setFilters(nextFilters);
-    await fetchRecords(nextFilters);
+    setQuery((prev) => ({ ...prev, page: 1, filters: nextFilters }));
   };
 
-  const handleReset = async () => {
+  const handleReset = () => {
     form.resetFields();
-    const nextFilters = {};
-    setFilters(nextFilters);
-    await fetchRecords(nextFilters);
+    setQuery((prev) => ({ ...prev, page: 1, filters: {} }));
   };
 
-  const handleExportExcel = () => {
-    downloadExcel(
-      `审计日志-${new Date().toISOString().slice(0, 10)}.xls`,
-      "审计日志",
-      ["ID", "用户 ID", "用户名", "模块", "动作", "目标类型", "目标 ID", "详情", "发生时间"],
-      records.map((item) => [
-        item.id ?? "",
-        item.userId ?? "",
-        item.username || "",
-        item.module || "",
-        item.action || "",
-        item.targetType || "",
-        item.targetId || "",
-        item.detail || "",
-        item.occurredAt ? new Date(item.occurredAt).toLocaleString() : "",
-      ])
-    );
+  const handleExportExcel = async () => {
+    setExporting(true);
+    try {
+      const params = {};
+      if (query.filters?.userId) params.userId = query.filters.userId;
+      if (query.filters?.module) params.module = query.filters.module;
+      if (query.filters?.action) params.action = query.filters.action;
+      const response = await logAPI.getAuditTrails(Object.keys(params).length > 0 ? params : undefined);
+      const exportRows = Array.isArray(response?.data) ? response.data : [];
+      downloadExcel(
+        `审计日志-${new Date().toISOString().slice(0, 10)}.xls`,
+        "审计日志",
+        ["ID", "用户 ID", "用户名", "模块", "动作", "目标类型", "目标 ID", "详情", "发生时间"],
+        exportRows.map((item) => [
+          item.id ?? "",
+          item.userId ?? "",
+          item.username || "",
+          item.module || "",
+          item.action || "",
+          item.targetType || "",
+          item.targetId || "",
+          item.detail || "",
+          item.occurredAt ? new Date(item.occurredAt).toLocaleString() : "",
+        ])
+      );
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -92,10 +111,10 @@ export default function AuditTrails() {
       title="审计日志"
       extra={(
         <Space>
-          <Button icon={<DownloadOutlined />} onClick={handleExportExcel} disabled={!canExport || records.length === 0}>
+          <Button icon={<DownloadOutlined />} loading={exporting} onClick={handleExportExcel} disabled={!canExport || total === 0}>
             导出 Excel
           </Button>
-          <Button icon={<ReloadOutlined />} onClick={() => fetchRecords()}>
+          <Button icon={<ReloadOutlined />} onClick={() => setQuery((prev) => ({ ...prev, reloadKey: prev.reloadKey + 1 }))}>
             刷新
           </Button>
         </Space>
@@ -126,7 +145,14 @@ export default function AuditTrails() {
         columns={columns}
         dataSource={records}
         loading={loading}
-        pagination={{ pageSize: 10, showSizeChanger: true }}
+        pagination={{
+          current: query.page,
+          pageSize: query.pageSize,
+          total,
+          showSizeChanger: true,
+          showTotal: (count) => `共 ${count} 条`,
+          onChange: (nextPage, nextPageSize) => setQuery((prev) => ({ ...prev, page: nextPage, pageSize: nextPageSize })),
+        }}
         scroll={{ x: 1700 }}
       />
     </Card>

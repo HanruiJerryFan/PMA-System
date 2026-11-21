@@ -3,6 +3,7 @@ package com.jerry.salesmanagement.service.impl;
 import com.jerry.salesmanagement.mapper.AuditTrailMapper;
 import com.jerry.salesmanagement.pojo.AuditTrail;
 import com.jerry.salesmanagement.pojo.SysUser;
+import com.jerry.salesmanagement.pojo.dto.PageResult;
 import com.jerry.salesmanagement.service.AuditTrailService;
 import com.jerry.salesmanagement.service.SysUserService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +35,20 @@ public class AuditTrailServiceImpl implements AuditTrailService {
                 .filter(record -> !SYSTEM_USERNAME.equalsIgnoreCase(record.getUsername()))
                 .filter(record -> !StringUtils.hasText(canonicalModule) || canonicalModule.equals(record.getModule()))
                 .toList();
+    }
+
+    @Override
+    public PageResult<AuditTrail> getPage(Long userId, String module, String action, int page, int pageSize) {
+        String canonicalModule = canonicalizeResourceName(module);
+        return PageResult.paginate(
+                page,
+                pageSize,
+                () -> auditTrailMapper.countPage(userId, canonicalModule, action),
+                (offset, limit) -> auditTrailMapper.selectPage(userId, canonicalModule, action, offset, limit)
+                        .stream()
+                        .map(this::normalizeAuditTrail)
+                        .toList()
+        );
     }
 
     @Override

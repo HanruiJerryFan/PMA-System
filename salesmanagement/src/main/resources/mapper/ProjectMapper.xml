@@ -27,6 +27,56 @@
         FROM project_basic_info
     </select>
 
+    <sql id="PageWhere">
+        <where>
+            <if test="projectNumber != null and projectNumber.trim() != ''">
+                AND LOWER(COALESCE(project_number, '')) LIKE CONCAT('%', LOWER(TRIM(#{projectNumber})), '%')
+            </if>
+            <if test="projectName != null and projectName.trim() != ''">
+                AND LOWER(COALESCE(project_name, '')) LIKE CONCAT('%', LOWER(TRIM(#{projectName})), '%')
+            </if>
+            <if test="customerId != null and customerId.trim() != ''">
+                AND LOWER(COALESCE(customer_id, '')) LIKE CONCAT('%', LOWER(TRIM(#{customerId})), '%')
+            </if>
+            <if test="managerId != null">
+                AND manager_id = #{managerId}
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectPage" resultType="com.jerry.salesmanagement.pojo.Project">
+        SELECT
+            id,
+            uuid,
+            project_number AS projectNumber,
+            project_name AS projectName,
+            customer_id AS customerId,
+            manager_id AS managerId,
+            participant_1_user_id AS participant1UserId,
+            participant_2_user_id AS participant2UserId,
+            participant_3_user_id AS participant3UserId,
+            region_id AS regionId,
+            project_type_id AS projectTypeId,
+            warranty_until AS warrantyUntil,
+            plan_start_time AS planStartTime,
+            plan_end_time AS planEndTime,
+            sales_contract_attachment_uuid AS salesContractAttachmentUuid,
+            create_time AS createTime,
+            create_user AS createUser,
+            update_time AS updateTime,
+            update_user AS updateUser
+        FROM project_basic_info
+        <include refid="PageWhere"/>
+        ORDER BY id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countPage" resultType="long">
+        SELECT COUNT(*)
+        FROM project_basic_info
+        <include refid="PageWhere"/>
+    </select>
+
     <select id="selectByUuid" parameterType="string"
             resultType="com.jerry.salesmanagement.pojo.Project">
         SELECT
