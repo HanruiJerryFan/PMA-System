@@ -38,5 +38,18 @@ export function resolvePagePermissions(pathname = "") {
   if (pathname.startsWith("/logs")) {
     return { manageAuthorities: ["logs.manage"], exportAuthorities: ["logs.view"] };
   }
+  if (pathname.startsWith("/approvals")) {
+    return {
+      manageAuthorities: [
+        "project.list.audit",
+        "project.manage",
+        "inventory.warehouse-doc.audit",
+        "inventory.manage",
+        "finance.voucher.audit",
+        "finance.manage",
+      ],
+      exportAuthorities: [],
+    };
+  }
   return { manageAuthorities: [], exportAuthorities: [] };
 }

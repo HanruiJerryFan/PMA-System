@@ -23,6 +23,8 @@ import CustomerTypes from "./pages/Customer/CustomerTypes";
 import CustomerIndustries from "./pages/Customer/CustomerIndustries";
 import CustomerActivityRules from "./pages/Customer/CustomerActivityRules";
 import ProjectInfo from "./pages/Project/ProjectInfo";
+import ProjectTrackingBoard from "./pages/Project/ProjectTrackingBoard";
+import ApprovalWorkbench from "./pages/Approval/ApprovalWorkbench";
 import ProjectDashboard from "./pages/Project/ProjectDashboard";
 import ProjectListDashboard from "./pages/Project/ProjectListDashboard";
 import ProjectTypes from "./pages/Project/ProjectTypes";
@@ -94,6 +96,24 @@ function AppContent() {
           <MainLayout>
             <Routes>
               <Route path="/home" element={<HomePage />} />
+              <Route
+                path="/approvals/pending"
+                element={
+                  <PrivateRoute
+                    requiredAuthorities={[
+                      "project.list.audit",
+                      "project.manage",
+                      "inventory.warehouse-doc.audit",
+                      "inventory.manage",
+                      "finance.voucher.audit",
+                      "finance.manage",
+                    ]}
+                  >
+                    <ApprovalWorkbench />
+                  </PrivateRoute>
+                }
+              />
+              <Route path="/project/tracking-board" element={<PrivateRoute requiredAuthorities={["project.access", "project.manage"]}><ProjectTrackingBoard /></PrivateRoute>} />
               <Route path="/permission-denied" element={<PermissionDeniedPage />} />
               <Route path="/change-password" element={<ChangePasswordPage />} />
               <Route path="/permission/users" element={<PrivateRoute requiredAuthorities={["permission.users.manage"]}><UserManagement /></PrivateRoute>} />

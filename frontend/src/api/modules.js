@@ -58,6 +58,7 @@ export const customerAPI = {
 };
 
 export const projectAPI = {
+  getTrackingBoard: (params) => api.get("/projects/tracking-board", { params }),
   getProjects: () => api.get("/projects"),
   getProjectsPage: (params) => api.get("/projects/page", { params }),
   getProjectOptions: () => api.get("/projects/options"),
@@ -269,4 +270,8 @@ export const exportAPI = {
     api.post("/pdf-exports/table", data, {
       responseType: "blob",
     }),
+};
+
+export const approvalAPI = {
+  getPendingApprovals: () => api.get("/approvals/pending"),
 };

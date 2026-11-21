@@ -182,10 +182,23 @@ export default function HomePage() {
       items.push({ label: "地区查找", route: "/customer/regions" });
     }
     if (permissions.canViewProjects) {
+      items.push({ label: "项目跟踪看板", route: "/project/tracking-board" });
       items.push({
         label: permissions.canManageProjects ? "项目信息" : "项目清单",
         route: permissions.canManageProjects ? "/project/info" : "/project/lists",
       });
+    }
+    if (
+      hasAnyAuthority(currentUser, [
+        "project.list.audit",
+        "project.manage",
+        "inventory.warehouse-doc.audit",
+        "inventory.manage",
+        "finance.voucher.audit",
+        "finance.manage",
+      ])
+    ) {
+      items.push({ label: "待审核工作台", route: "/approvals/pending" });
     }
     if (permissions.canManageProducts) {
       items.push({ label: "物料主数据", route: "/product/info" });
@@ -200,7 +213,7 @@ export default function HomePage() {
       items.push({ label: "登录日志", route: "/logs/login" });
     }
     return items.slice(0, 6);
-  }, [permissions]);
+  }, [currentUser, permissions]);
 
   const recentProjects = useMemo(
     () =>

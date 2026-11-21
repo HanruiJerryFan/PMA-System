@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Avatar, Button, Dropdown, Layout, Menu, Space, Tooltip, Typography } from "antd";
 import {
+  AuditOutlined,
   DatabaseOutlined,
   DollarOutlined,
   FileTextOutlined,
@@ -85,6 +86,20 @@ export default function Sidebar() {
     () => [
       { key: "/home", icon: <HomeOutlined />, label: "首页", onClick: () => navigate("/home") },
       {
+        key: "/approvals/pending",
+        icon: <AuditOutlined />,
+        label: "待审核工作台",
+        onClick: () => navigate("/approvals/pending"),
+        requiredAuthorities: [
+          "project.list.audit",
+          "project.manage",
+          "inventory.warehouse-doc.audit",
+          "inventory.manage",
+          "finance.voucher.audit",
+          "finance.manage",
+        ],
+      },
+      {
         key: "customer",
         icon: <TeamOutlined />,
         label: "客户管理",
@@ -104,6 +119,7 @@ export default function Sidebar() {
         label: "项目管理",
         requiredAuthorities: ["project.access"],
         children: [
+          { key: "/project/tracking-board", label: "项目跟踪看板", onClick: () => navigate("/project/tracking-board"), requiredAuthorities: ["project.access", "project.manage"] },
           { key: "/project/info", label: "项目信息", onClick: () => navigate("/project/info"), requiredAuthorities: ["project.access"] },
           { key: "/project/status-history", label: "项目记录", onClick: () => navigate("/project/status-history"), requiredAuthorities: ["project.manage"] },
           { key: "/project/lists", label: "项目清单", onClick: () => navigate("/project/lists"), requiredAuthorities: ["project.access", "project.list.entry", "project.list.audit"] },
