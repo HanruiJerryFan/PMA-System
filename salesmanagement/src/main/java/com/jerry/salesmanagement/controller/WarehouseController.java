@@ -3,7 +3,6 @@ package com.jerry.salesmanagement.controller;
 import com.jerry.salesmanagement.pojo.Warehouse;
 import com.jerry.salesmanagement.service.WarehouseService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -17,7 +16,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/warehouses")
-@CrossOrigin
 public class WarehouseController {
 
     @Autowired

@@ -10,7 +10,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/customer-activity-rules")
-@CrossOrigin
 public class CustomerActivityRuleController {
 
     @Autowired

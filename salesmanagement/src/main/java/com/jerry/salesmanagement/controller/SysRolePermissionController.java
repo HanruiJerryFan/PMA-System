@@ -10,7 +10,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/sysrolepermission")
-@CrossOrigin
 @PreAuthorize("hasAuthority('permission.role-permissions.manage')")
 public class SysRolePermissionController {
 

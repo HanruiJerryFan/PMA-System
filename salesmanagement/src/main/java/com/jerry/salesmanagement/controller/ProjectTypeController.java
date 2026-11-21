@@ -9,7 +9,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/project-types")
-@CrossOrigin
 public class ProjectTypeController {
 
     @Autowired

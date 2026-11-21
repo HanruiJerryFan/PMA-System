@@ -13,7 +13,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/project-lists")
-@CrossOrigin
 public class ProjectListController {
 
     @Autowired

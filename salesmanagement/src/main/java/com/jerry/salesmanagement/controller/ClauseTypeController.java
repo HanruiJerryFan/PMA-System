@@ -9,7 +9,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/clausetype")
-@CrossOrigin
 public class ClauseTypeController {
 
     @Autowired

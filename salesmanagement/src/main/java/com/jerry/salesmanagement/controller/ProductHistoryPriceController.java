@@ -10,7 +10,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/product-prices")
-@CrossOrigin
 public class ProductHistoryPriceController {
 
     @Autowired

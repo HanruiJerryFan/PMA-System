@@ -11,7 +11,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/finance-subjects")
-@CrossOrigin
 public class FinanceSubjectController {
     private final FinanceSubjectService service;
     private final AuditTrailService auditTrailService;

@@ -14,7 +14,6 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/users")
-@CrossOrigin
 @PreAuthorize("hasAuthority('permission.users.manage')")
 public class SysUserController {
 

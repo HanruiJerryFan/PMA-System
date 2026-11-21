@@ -10,7 +10,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/tax-rate-dicts")
-@CrossOrigin
 public class TaxRateDictController {
 
     @Autowired

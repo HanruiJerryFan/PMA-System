@@ -10,7 +10,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/material-band-dicts")
-@CrossOrigin
 public class ProductBandController {
 
     @Autowired

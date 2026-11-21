@@ -4,7 +4,6 @@ import com.jerry.salesmanagement.common.ApiResponse;
 import com.jerry.salesmanagement.pojo.InventoryTransaction;
 import com.jerry.salesmanagement.service.InventoryTransactionService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,7 +18,6 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/inventory-transactions")
-@CrossOrigin
 public class InventoryTransactionController {
 
     @Autowired

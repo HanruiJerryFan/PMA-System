@@ -9,7 +9,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/contract-types")
-@CrossOrigin
 public class ContractTypeController {
 
     @Autowired

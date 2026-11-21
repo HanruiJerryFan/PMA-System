@@ -31,7 +31,6 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/attachments")
-@CrossOrigin(exposedHeaders = "Content-Disposition")
 public class AttachmentController {
 
     @Autowired

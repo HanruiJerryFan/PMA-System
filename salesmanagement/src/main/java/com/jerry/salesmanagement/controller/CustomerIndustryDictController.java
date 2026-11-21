@@ -9,7 +9,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/customer-industry-dicts")
-@CrossOrigin
 public class CustomerIndustryDictController {
 
     @Autowired

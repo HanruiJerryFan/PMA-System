@@ -10,7 +10,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/system-configs")
-@CrossOrigin
 public class SystemConfigController {
 
     @Autowired

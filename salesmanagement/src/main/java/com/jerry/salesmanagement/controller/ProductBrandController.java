@@ -9,7 +9,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/material-brand-dicts")
-@CrossOrigin
 public class ProductBrandController {
 
     @Autowired

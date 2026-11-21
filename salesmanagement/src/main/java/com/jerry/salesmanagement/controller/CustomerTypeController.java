@@ -9,7 +9,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/customer-types")
-@CrossOrigin
 public class CustomerTypeController {
 
     @Autowired

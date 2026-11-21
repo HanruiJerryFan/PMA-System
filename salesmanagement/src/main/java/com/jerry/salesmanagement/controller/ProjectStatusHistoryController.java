@@ -11,7 +11,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/project-status-history")
-@CrossOrigin
 public class ProjectStatusHistoryController {
 
     @Autowired

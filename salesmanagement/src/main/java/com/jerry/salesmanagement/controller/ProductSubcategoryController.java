@@ -10,7 +10,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/material-subcategory-dicts")
-@CrossOrigin
 public class ProductSubcategoryController {
 
     @Autowired

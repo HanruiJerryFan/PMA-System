@@ -9,7 +9,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/login-logs")
-@CrossOrigin
 public class LoginRecordController {
 
     @Autowired
