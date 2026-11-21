@@ -73,35 +73,45 @@ FROM goods_transaction_dynamic_info gtdi;
 DROP VIEW IF EXISTS `inventory_balance`;
 CREATE VIEW `inventory_balance` AS
 SELECT
-    CONCAT(
-        COALESCE(gtdi.material_id, ''),
-        ':',
-        COALESCE(CAST(gtdi.warehouse_id AS CHAR), ''),
-        ':',
-        COALESCE(gtdi.project_id, '')
-    ) AS uuid,
-    gtdi.material_id AS material_id,
-    gtdi.material_code AS material_code,
-    gtdi.material_name AS material_name,
-    gtdi.model AS model,
-    gtdi.brand AS brand,
-    gtdi.category AS category,
-    gtdi.warehouse_id AS warehouse_id,
-    gtdi.project_id AS project_id,
+    COALESCE(MAX(gtdi.material_id), MAX(gtdi.material_code)) AS uuid,
+    MAX(gtdi.material_id) AS material_id,
+    MAX(gtdi.material_code) AS material_code,
+    MAX(gtdi.material_name) AS material_name,
+    MAX(gtdi.model) AS model,
+    MAX(gtdi.brand) AS brand,
     ROUND(SUM(CASE WHEN gtdi.txn_type = 'IN' THEN gtdi.quantity ELSE 0 END), 2) AS inbound_quantity,
     ROUND(SUM(CASE WHEN gtdi.txn_type = 'OUT' THEN gtdi.quantity ELSE 0 END), 2) AS outbound_quantity,
     ROUND(SUM(CASE WHEN gtdi.txn_type = 'IN' THEN gtdi.quantity ELSE -gtdi.quantity END), 2) AS balance_quantity,
+    COALESCE(
+        SUM(CASE
+            WHEN gtdi.txn_type = 'IN' AND gtdi.category IN ('PROJECT_PURCHASE', 'CENTRALIZED_PURCHASE')
+                THEN COALESCE(gtdi.unit_price, 0) * gtdi.quantity
+            ELSE 0
+        END) / NULLIF(SUM(CASE
+            WHEN gtdi.txn_type = 'IN' AND gtdi.category IN ('PROJECT_PURCHASE', 'CENTRALIZED_PURCHASE')
+                THEN gtdi.quantity
+            ELSE 0
+        END), 0),
+        0
+    ) AS purchase_average_price,
+    ROUND(
+        COALESCE(
+            SUM(CASE
+                WHEN gtdi.txn_type = 'IN' AND gtdi.category IN ('PROJECT_PURCHASE', 'CENTRALIZED_PURCHASE')
+                    THEN COALESCE(gtdi.unit_price, 0) * gtdi.quantity
+                ELSE 0
+            END) / NULLIF(SUM(CASE
+                WHEN gtdi.txn_type = 'IN' AND gtdi.category IN ('PROJECT_PURCHASE', 'CENTRALIZED_PURCHASE')
+                    THEN gtdi.quantity
+                ELSE 0
+            END), 0),
+            0
+        ) * ROUND(SUM(CASE WHEN gtdi.txn_type = 'IN' THEN gtdi.quantity ELSE -gtdi.quantity END), 2),
+        2
+    ) AS inventory_amount,
     MAX(gtdi.txn_time) AS last_txn_time
 FROM goods_transaction_dynamic_info gtdi
-GROUP BY
-    gtdi.material_id,
-    gtdi.material_code,
-    gtdi.material_name,
-    gtdi.model,
-    gtdi.brand,
-    gtdi.category,
-    gtdi.warehouse_id,
-    gtdi.project_id;
+GROUP BY COALESCE(NULLIF(TRIM(gtdi.material_code), ''), gtdi.material_id);
 
 DROP VIEW IF EXISTS `material_master`;
 CREATE VIEW `material_master` AS
@@ -181,6 +191,8 @@ SELECT
     wd.handler_name AS handler_name,
     wd.source_ref_type AS source_ref_type,
     wd.source_ref_id AS source_ref_id,
+    wd.entry_user AS entry_user,
+    wd.auditor_user AS auditor_user,
     wd.remark AS remark,
     wd.create_time AS created_at,
     wd.create_user AS created_by,
