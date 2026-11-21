@@ -3,6 +3,7 @@ package com.jerry.salesmanagement.controller;
 import com.jerry.salesmanagement.common.ApiResponse;
 import com.jerry.salesmanagement.pojo.SysUser;
 import com.jerry.salesmanagement.service.AuditTrailService;
+import com.jerry.salesmanagement.service.CurrentUserService;
 import com.jerry.salesmanagement.service.SysUserService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -19,10 +20,16 @@ public class SysUserController {
 
     private final SysUserService sysUserService;
     private final AuditTrailService auditTrailService;
+    private final CurrentUserService currentUserService;
 
-    public SysUserController(SysUserService sysUserService, AuditTrailService auditTrailService) {
+    public SysUserController(
+            SysUserService sysUserService,
+            AuditTrailService auditTrailService,
+            CurrentUserService currentUserService
+    ) {
         this.sysUserService = sysUserService;
         this.auditTrailService = auditTrailService;
+        this.currentUserService = currentUserService;
     }
 
     @GetMapping("/{id:\\d+}")
@@ -105,9 +112,13 @@ public class SysUserController {
     }
 
     @PostMapping("/{id:\\d+}/reset-password")
-    public ApiResponse<Map<String, String>> resetPassword(@PathVariable Long id, @RequestParam Long operatorId) {
+    public ApiResponse<Map<String, String>> resetPassword(
+            @PathVariable Long id,
+            @RequestParam(required = false) Long operatorId
+    ) {
         try {
-            String temporaryPassword = sysUserService.adminResetPassword(id, operatorId);
+            Long currentOperatorId = currentUserService.requireCurrentUserId();
+            String temporaryPassword = sysUserService.adminResetPassword(id, currentOperatorId);
             auditTrailService.record("users", "RESET_PASSWORD", "users", String.valueOf(id), "Admin reset user password");
             return ApiResponse.success("Password reset successfully", Map.of("temporaryPassword", temporaryPassword));
         } catch (Exception e) {

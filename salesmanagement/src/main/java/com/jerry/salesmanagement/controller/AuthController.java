@@ -10,6 +10,7 @@ import com.jerry.salesmanagement.service.SysUserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -48,6 +49,9 @@ public class AuthController {
 
     @Autowired
     private LoginRecordService loginRecordService;
+
+    @Value("${app.auth.self-registration-enabled:false}")
+    private boolean selfRegistrationEnabled = false;
 
     @PostMapping("/login")
     public ResponseEntity<String> login(@RequestBody LoginRequest loginRequest, HttpServletRequest request) {
@@ -113,8 +117,17 @@ public class AuthController {
         return ResponseEntity.ok("Logout beacon success!");
     }
 
+    @GetMapping("/config")
+    public ResponseEntity<Map<String, Boolean>> getAuthConfig() {
+        return ResponseEntity.ok(Map.of("selfRegistrationEnabled", selfRegistrationEnabled));
+    }
+
     @PostMapping("/register")
     public ResponseEntity<String> register(@RequestBody RegisterRequest registerRequest) {
+        if (!selfRegistrationEnabled) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body("Self-registration is disabled. Please contact an administrator.");
+        }
         try {
             SysUser user = new SysUser();
             user.setUsername(registerRequest.getUsername());

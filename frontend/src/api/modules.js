@@ -5,8 +5,8 @@ export const permissionAPI = {
   getUserOptions: () => api.get("/users/options").then((response) => response?.data ?? response),
   createUser: (data) => api.post("/users", data),
   updateUser: (id, data) => api.put(`/users/${id}`, data),
-  resetUserPassword: (id, operatorId) =>
-    api.post(`/users/${id}/reset-password`, null, { params: { operatorId } }).then((response) => response?.data ?? response),
+  resetUserPassword: (id) =>
+    api.post(`/users/${id}/reset-password`).then((response) => response?.data ?? response),
   deleteUser: (id) => api.delete(`/users/${id}`),
 
   getRoles: () => api.get("/roles").then((response) => response?.data ?? response),

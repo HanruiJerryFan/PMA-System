@@ -2,18 +2,28 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Button, Card, Col, Form, Input, Row, Typography, message } from "antd";
 import { LockOutlined, LoginOutlined, UserAddOutlined, UserOutlined } from "@ant-design/icons";
 import { useLocation, useNavigate } from "react-router-dom";
-import { getCurrentUser, login } from "../api/auth";
+import { getAuthConfig, getCurrentUser, login } from "../api/auth";
 
 const { Title, Text } = Typography;
 
 export default function LoginPage({ setLoggedIn }) {
   const [loading, setLoading] = useState(false);
+  const [selfRegistrationEnabled, setSelfRegistrationEnabled] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
+    let active = true;
+
     async function checkAuth() {
-      const user = await getCurrentUser();
+      const [user, authConfig] = await Promise.all([
+        getCurrentUser(),
+        getAuthConfig(),
+      ]);
+      if (!active) {
+        return;
+      }
+      setSelfRegistrationEnabled(Boolean(authConfig?.selfRegistrationEnabled));
       if (user) {
         setLoggedIn(true, user);
         if (user.forcePasswordChange) {
@@ -26,6 +36,9 @@ export default function LoginPage({ setLoggedIn }) {
     }
 
     checkAuth();
+    return () => {
+      active = false;
+    };
   }, [location.state, navigate, setLoggedIn]);
 
   const handleSubmit = useCallback(async (values) => {
@@ -101,16 +114,18 @@ export default function LoginPage({ setLoggedIn }) {
                 </Button>
               </Form.Item>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 20 }}>
-                <Button
-                  type="link"
-                  icon={<UserAddOutlined />}
-                  onClick={() => navigate("/register")}
-                  style={{ paddingInline: 0 }}
-                >
-                  注册账号
-                </Button>
-              </div>
+              {selfRegistrationEnabled ? (
+                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 20 }}>
+                  <Button
+                    type="link"
+                    icon={<UserAddOutlined />}
+                    onClick={() => navigate("/register")}
+                    style={{ paddingInline: 0 }}
+                  >
+                    注册账号
+                  </Button>
+                </div>
+              ) : null}
             </Form>
           </Card>
         </Col>

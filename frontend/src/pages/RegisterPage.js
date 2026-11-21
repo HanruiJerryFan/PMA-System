@@ -1,14 +1,34 @@
-import React, { useState } from "react";
-import { Button, Card, Col, Form, Input, Row, Space, Typography, message } from "antd";
+import React, { useEffect, useState } from "react";
+import { Alert, Button, Card, Col, Form, Input, Row, Space, Spin, Typography, message } from "antd";
 import { LockOutlined, LoginOutlined, SafetyOutlined, UserAddOutlined, UserOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
-import { register } from "../api/auth";
+import { getAuthConfig, register } from "../api/auth";
 
 const { Title, Text } = Typography;
 
 export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
+  const [configLoading, setConfigLoading] = useState(true);
+  const [selfRegistrationEnabled, setSelfRegistrationEnabled] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadConfig() {
+      const config = await getAuthConfig();
+      if (!active) {
+        return;
+      }
+      setSelfRegistrationEnabled(Boolean(config?.selfRegistrationEnabled));
+      setConfigLoading(false);
+    }
+
+    loadConfig();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const validatePassword = (password) =>
     /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,20}$/.test(password);
@@ -47,105 +67,138 @@ export default function RegisterPage() {
               <Title level={2} style={{ color: "#001529", marginBottom: 8 }}>
                 用户注册
               </Title>
-              <Text type="secondary">创建一个新的系统账号</Text>
+              <Text type="secondary">
+                {configLoading
+                  ? "正在确认系统注册配置..."
+                  : selfRegistrationEnabled
+                    ? "创建一个新的系统账号"
+                    : "系统当前未开放自助注册"}
+              </Text>
             </div>
 
-            <Form name="register" onFinish={handleSubmit} layout="vertical" size="large">
-              <Form.Item
-                name="username"
-                rules={[
-                  { required: true, message: "请输入用户名" },
-                  { min: 3, message: "用户名至少 3 个字符" },
-                  { max: 20, message: "用户名不能超过 20 个字符" },
-                ]}
-              >
-                <Input prefix={<UserOutlined style={{ color: "#999" }} />} placeholder="请输入用户名" allowClear />
-              </Form.Item>
-
-              <Form.Item
-                name="realName"
-                rules={[
-                  { required: true, message: "请输入真实姓名" },
-                  { min: 2, message: "真实姓名至少 2 个字符" },
-                ]}
-              >
-                <Input prefix={<SafetyOutlined style={{ color: "#999" }} />} placeholder="请输入真实姓名" allowClear />
-              </Form.Item>
-
-              <Form.Item
-                name="password"
-                rules={[
-                  { required: true, message: "请输入密码" },
-                  {
-                    validator: (_, value) =>
-                      !value || validatePassword(value)
-                        ? Promise.resolve()
-                        : Promise.reject(new Error("密码需为 8-20 位，且同时包含大小写字母、数字和特殊字符")),
-                  },
-                ]}
-                hasFeedback
-              >
-                <Input.Password prefix={<LockOutlined style={{ color: "#999" }} />} placeholder="请输入密码" allowClear />
-              </Form.Item>
-
-              <Form.Item
-                name="confirmPassword"
-                dependencies={["password"]}
-                rules={[
-                  { required: true, message: "请再次输入密码" },
-                  ({ getFieldValue }) => ({
-                    validator(_, value) {
-                      if (!value || getFieldValue("password") === value) {
-                        return Promise.resolve();
-                      }
-                      return Promise.reject(new Error("两次输入的密码不一致"));
-                    },
-                  }),
-                ]}
-                hasFeedback
-              >
-                <Input.Password prefix={<LockOutlined style={{ color: "#999" }} />} placeholder="请再次输入密码" allowClear />
-              </Form.Item>
-
-              <Form.Item style={{ marginBottom: 16 }}>
+            {configLoading ? (
+              <div style={{ textAlign: "center", padding: "32px 0" }}>
+                <Spin />
+              </div>
+            ) : !selfRegistrationEnabled ? (
+              <Space direction="vertical" size={16} style={{ width: "100%" }}>
+                <Alert
+                  type="info"
+                  showIcon
+                  message="已关闭自助注册"
+                  description="系统已关闭自助注册，请联系管理员在用户管理中创建账号。"
+                />
                 <Button
                   type="primary"
-                  htmlType="submit"
-                  loading={loading}
-                  icon={<UserAddOutlined />}
+                  icon={<LoginOutlined />}
+                  onClick={() => navigate("/login")}
                   block
                   size="large"
                   style={{ height: 48, borderRadius: 8, fontSize: 16 }}
                 >
-                  注册
+                  返回登录
                 </Button>
-              </Form.Item>
+              </Space>
+            ) : (
+              <>
+                <Form name="register" onFinish={handleSubmit} layout="vertical" size="large">
+                  <Form.Item
+                    name="username"
+                    rules={[
+                      { required: true, message: "请输入用户名" },
+                      { min: 3, message: "用户名至少 3 个字符" },
+                      { max: 20, message: "用户名不能超过 20 个字符" },
+                    ]}
+                  >
+                    <Input prefix={<UserOutlined style={{ color: "#999" }} />} placeholder="请输入用户名" allowClear />
+                  </Form.Item>
 
-              <div style={{ textAlign: "center" }}>
-                <Space>
-                  <Text type="secondary">已有账号？</Text>
-                  <Button type="link" icon={<LoginOutlined />} onClick={() => navigate("/login")} style={{ padding: 0 }}>
-                    去登录
-                  </Button>
-                </Space>
-              </div>
-            </Form>
+                  <Form.Item
+                    name="realName"
+                    rules={[
+                      { required: true, message: "请输入真实姓名" },
+                      { min: 2, message: "真实姓名至少 2 个字符" },
+                    ]}
+                  >
+                    <Input prefix={<SafetyOutlined style={{ color: "#999" }} />} placeholder="请输入真实姓名" allowClear />
+                  </Form.Item>
 
-            <div style={{ marginTop: 24, padding: 16, backgroundColor: "#f5f5f5", borderRadius: 8 }}>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                <strong>密码规则：</strong>
-                <br />
-                1. 长度 8-20 位
-                <br />
-                2. 至少包含一个大写字母
-                <br />
-                3. 至少包含一个小写字母
-                <br />
-                4. 至少包含一个数字
-                <br />
-                5. 至少包含一个特殊字符：`@$!%*?&`
-              </Text>
-            </div>
+                  <Form.Item
+                    name="password"
+                    rules={[
+                      { required: true, message: "请输入密码" },
+                      {
+                        validator: (_, value) =>
+                          !value || validatePassword(value)
+                            ? Promise.resolve()
+                            : Promise.reject(new Error("密码需为 8-20 位，且同时包含大小写字母、数字和特殊字符")),
+                      },
+                    ]}
+                    hasFeedback
+                  >
+                    <Input.Password prefix={<LockOutlined style={{ color: "#999" }} />} placeholder="请输入密码" allowClear />
+                  </Form.Item>
+
+                  <Form.Item
+                    name="confirmPassword"
+                    dependencies={["password"]}
+                    rules={[
+                      { required: true, message: "请再次输入密码" },
+                      ({ getFieldValue }) => ({
+                        validator(_, value) {
+                          if (!value || getFieldValue("password") === value) {
+                            return Promise.resolve();
+                          }
+                          return Promise.reject(new Error("两次输入的密码不一致"));
+                        },
+                      }),
+                    ]}
+                    hasFeedback
+                  >
+                    <Input.Password prefix={<LockOutlined style={{ color: "#999" }} />} placeholder="请再次输入密码" allowClear />
+                  </Form.Item>
+
+                  <Form.Item style={{ marginBottom: 16 }}>
+                    <Button
+                      type="primary"
+                      htmlType="submit"
+                      loading={loading}
+                      icon={<UserAddOutlined />}
+                      block
+                      size="large"
+                      style={{ height: 48, borderRadius: 8, fontSize: 16 }}
+                    >
+                      注册
+                    </Button>
+                  </Form.Item>
+
+                  <div style={{ textAlign: "center" }}>
+                    <Space>
+                      <Text type="secondary">已有账号？</Text>
+                      <Button type="link" icon={<LoginOutlined />} onClick={() => navigate("/login")} style={{ padding: 0 }}>
+                        去登录
+                      </Button>
+                    </Space>
+                  </div>
+                </Form>
+
+                <div style={{ marginTop: 24, padding: 16, backgroundColor: "#f5f5f5", borderRadius: 8 }}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    <strong>密码规则：</strong>
+                    <br />
+                    1. 长度 8-20 位
+                    <br />
+                    2. 至少包含一个大写字母
+                    <br />
+                    3. 至少包含一个小写字母
+                    <br />
+                    4. 至少包含一个数字
+                    <br />
+                    5. 至少包含一个特殊字符：`@$!%*?&`
+                  </Text>
+                </div>
+              </>
+            )}
           </Card>
         </Col>
       </Row>

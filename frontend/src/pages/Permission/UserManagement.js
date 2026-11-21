@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import { Button, Input, Modal, Select, Tag, message } from "antd";
 import { LockOutlined } from "@ant-design/icons";
 import CRUDTable from "../../components/Common/CRUDTable";
-import { getCurrentUser } from "../../api/auth";
 import { permissionAPI } from "../../api/modules";
 
 const { Option } = Select;
@@ -16,7 +15,6 @@ const STATUS_OPTIONS = [
 export default function UserManagement() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -30,7 +28,6 @@ export default function UserManagement() {
 
   useEffect(() => {
     fetchUsers();
-    getCurrentUser().then(setCurrentUser).catch(() => setCurrentUser(null));
   }, []);
 
   const handleCreate = async (values) => {
@@ -49,12 +46,8 @@ export default function UserManagement() {
   };
 
   const handleResetPassword = async (record) => {
-    if (!currentUser?.id) {
-      message.error("当前登录用户信息未就绪，请稍后再试");
-      return;
-    }
     try {
-      const result = await permissionAPI.resetUserPassword(record.id, currentUser?.id);
+      const result = await permissionAPI.resetUserPassword(record.id);
       const temporaryPassword = result?.temporaryPassword || result?.data?.temporaryPassword;
       Modal.success({
         title: "临时密码已生成",

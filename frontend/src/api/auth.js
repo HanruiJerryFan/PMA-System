@@ -69,6 +69,15 @@ export async function register(username, password, realName) {
   return response.data;
 }
 
+export async function getAuthConfig() {
+  try {
+    const response = await axios.get(`${BASE_URL}/config`, { withCredentials: true });
+    return response.data || { selfRegistrationEnabled: false };
+  } catch (error) {
+    return { selfRegistrationEnabled: false };
+  }
+}
+
 export async function changePassword(oldPassword, newPassword) {
   const response = await axios.post(
     `${BASE_URL}/change-password`,
