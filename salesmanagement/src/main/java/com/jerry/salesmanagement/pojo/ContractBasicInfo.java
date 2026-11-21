@@ -2,6 +2,7 @@ package com.jerry.salesmanagement.pojo;
 
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.util.Date;
 
 @Data
@@ -16,7 +17,7 @@ public class ContractBasicInfo {
     private String clientId;           // references customer.uuid
     private String contactId;          // references customer_contact.uuid
     private Date signDate;
-    private Double contractAmount;
+    private BigDecimal contractAmount;
     private Date createTime;
     private Long createUser;
     private Date updateTime;

@@ -18,9 +18,9 @@ public class GoodsInventory {
     private String warehouseName;
     private String projectId;
     private String projectName;
-    private Double inboundQuantity;
-    private Double outboundQuantity;
-    private Double balanceQuantity;
+    private BigDecimal inboundQuantity;
+    private BigDecimal outboundQuantity;
+    private BigDecimal balanceQuantity;
     private BigDecimal purchaseAveragePrice;
     private BigDecimal inventoryAmount;
     private Date lastTxnTime;

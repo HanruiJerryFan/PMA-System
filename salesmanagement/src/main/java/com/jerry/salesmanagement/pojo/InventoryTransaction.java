@@ -2,6 +2,7 @@ package com.jerry.salesmanagement.pojo;
 
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.util.Date;
 
 @Data
@@ -18,9 +19,9 @@ public class InventoryTransaction {
     private Long warehouseId;
     private String txnType;
     private Date txnTime;
-    private Double quantity;
-    private Double unitPrice;
-    private Double amount;
+    private BigDecimal quantity;
+    private BigDecimal unitPrice;
+    private BigDecimal amount;
     private String sourceRefType;
     private String sourceRefId;
     private Date createdAt;

@@ -11,6 +11,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -214,46 +216,47 @@ public class WarehouseDocumentPdfExportServiceImpl extends PdfExportSupport impl
     }
 
     private String resolveAmountText(WarehouseDocumentItem item) {
-        Double amount = item.getAmount();
+        BigDecimal amount = item.getAmount();
         if (amount == null && item.getQuantity() != null && item.getUnitPrice() != null) {
-            amount = item.getQuantity() * item.getUnitPrice();
+            amount = item.getQuantity().multiply(item.getUnitPrice()).setScale(2, RoundingMode.HALF_UP);
         }
         return amount == null ? "" : formatMoney(amount);
     }
 
-    private Double resolveTotalAmount(WarehouseDocument warehouseDocument) {
+    private BigDecimal resolveTotalAmount(WarehouseDocument warehouseDocument) {
         if (warehouseDocument.getTotalAmount() != null) {
-            return warehouseDocument.getTotalAmount();
+            return warehouseDocument.getTotalAmount().setScale(2, RoundingMode.HALF_UP);
         }
-        double total = 0D;
+        BigDecimal total = BigDecimal.ZERO;
         if (warehouseDocument.getItems() != null) {
             for (WarehouseDocumentItem item : warehouseDocument.getItems()) {
-                Double amount = item.getAmount();
+                BigDecimal amount = item.getAmount();
                 if (amount == null && item.getQuantity() != null && item.getUnitPrice() != null) {
-                    amount = item.getQuantity() * item.getUnitPrice();
+                    amount = item.getQuantity().multiply(item.getUnitPrice()).setScale(2, RoundingMode.HALF_UP);
                 }
-                total += amount == null ? 0D : amount;
+                if (amount != null) {
+                    total = total.add(amount);
+                }
             }
         }
-        return total;
+        return total.setScale(2, RoundingMode.HALF_UP);
     }
 
-    private String trimTrailingZero(Double value) {
+    private String trimTrailingZero(BigDecimal value) {
         if (value == null) {
             return "";
         }
-        double normalized = value;
-        if (Math.abs(normalized - Math.rint(normalized)) < 0.0000001D) {
-            return String.valueOf((long) Math.rint(normalized));
+        if (value.compareTo(BigDecimal.ZERO) == 0) {
+            return "0";
         }
-        return value.toString();
+        return value.stripTrailingZeros().toPlainString();
     }
 
-    private String formatUnitPrice(Double value) {
+    private String formatUnitPrice(BigDecimal value) {
         if (value == null) {
             return "";
         }
-        return String.format(java.util.Locale.ROOT, "%.4f", value);
+        return value.setScale(4, RoundingMode.HALF_UP).toPlainString();
     }
 
     private String firstNonBlank(String first, String second) {

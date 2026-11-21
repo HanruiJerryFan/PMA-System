@@ -3,6 +3,7 @@ package com.jerry.salesmanagement.pojo;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -20,7 +21,7 @@ public class WarehouseDocument implements EntryAuditable {
     private String counterpartyContact;
     private String contractNumber;
     private Date docDate;
-    private Double totalAmount;
+    private BigDecimal totalAmount;
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     private String sourceRefType;
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)

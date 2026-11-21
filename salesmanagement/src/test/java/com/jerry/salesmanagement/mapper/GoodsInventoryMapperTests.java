@@ -55,9 +55,9 @@ class GoodsInventoryMapperTests {
             GoodsInventoryMapper mapper = session.getMapper(GoodsInventoryMapper.class);
             assertEquals(2, mapper.selectAll().size());
             GoodsInventory stock = mapper.selectByUuid("id-2");
-            assertEquals(40D, stock.getInboundQuantity());
-            assertEquals(5D, stock.getOutboundQuantity());
-            assertEquals(35D, stock.getBalanceQuantity());
+            assertDecimal("40", stock.getInboundQuantity());
+            assertDecimal("5", stock.getOutboundQuantity());
+            assertDecimal("35", stock.getBalanceQuantity());
             assertDecimal("175", stock.getPurchaseAveragePrice());
             assertDecimal("6125.00", stock.getInventoryAmount());
         }
@@ -95,7 +95,7 @@ class GoodsInventoryMapperTests {
         transaction("id-1", "M001", "PROJECT_SALES", "OUT", "0.5", "100");
         try (SqlSession session = factory.openSession(true)) {
             GoodsInventory stock = session.getMapper(GoodsInventoryMapper.class).selectByUuid("id-1");
-            assertEquals(2.5D, stock.getBalanceQuantity());
+            assertDecimal("2.5", stock.getBalanceQuantity());
             assertDecimal("4.17", stock.getInventoryAmount());
         }
     }

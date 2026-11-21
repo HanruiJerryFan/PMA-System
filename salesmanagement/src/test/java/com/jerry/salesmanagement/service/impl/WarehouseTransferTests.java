@@ -153,7 +153,7 @@ class WarehouseTransferTests {
         assertEquals(parent.getDocNumber(), inbound.getSourceRefId());
         assertNull(parent.getCounterpartyCustomerId());
         assertNull(inbound.getCounterpartyCustomerId());
-        assertEquals(parent.getTotalAmount(), inbound.getTotalAmount());
+        assertEquals(0, parent.getTotalAmount().compareTo(inbound.getTotalAmount()));
         assertNotEquals(parent.getItems().get(0).getUuid(), inbound.getItems().get(0).getUuid());
         assertEquals(2, count("warehouse_doc"));
         assertEquals(2, count("goods_transaction_dynamic_info"));
@@ -176,11 +176,11 @@ class WarehouseTransferTests {
     void editsAndAuditsBothSidesWithoutDuplicatingInbound() {
         WarehouseDocument parent = service.create(document("TRANSFER_JTX", "WAREHOUSE_TRANSFER_TO_PROJECT"));
         String inboundNumber = inbound(parent).getDocNumber();
-        parent.getItems().get(0).setQuantity(6D);
+        parent.getItems().get(0).setQuantity(new BigDecimal("6"));
         WarehouseDocument updated = service.update(parent);
-        assertEquals(600D, updated.getTotalAmount());
+        assertEquals(0, new BigDecimal("600.00").compareTo(updated.getTotalAmount()));
         assertEquals(inboundNumber, inbound(updated).getDocNumber());
-        assertEquals(6D, inbound(updated).getItems().get(0).getQuantity());
+        assertEquals(0, new BigDecimal("6").compareTo(inbound(updated).getItems().get(0).getQuantity()));
         assertEquals(2, count("warehouse_doc"));
         assertEquals(2, count("goods_transaction_dynamic_info"));
         service.audit(parent.getDocNumber());
@@ -235,10 +235,10 @@ class WarehouseTransferTests {
             return sql.getMapper(WarehouseDocumentMapper.class).update(incoming);
         }).when(mapper).update(any());
         ReflectionTestUtils.setField(target, "warehouseDocumentMapper", mapper);
-        parent.getItems().get(0).setQuantity(9D);
+        parent.getItems().get(0).setQuantity(new BigDecimal("9"));
         assertThrows(IllegalStateException.class, () -> service.update(parent));
-        assertEquals(2D, service.getByDocNumber(parent.getDocNumber()).getItems().get(0).getQuantity());
-        assertEquals(2D, service.getByDocNumber(inboundNumber).getItems().get(0).getQuantity());
+        assertEquals(0, new BigDecimal("2").compareTo(service.getByDocNumber(parent.getDocNumber()).getItems().get(0).getQuantity()));
+        assertEquals(0, new BigDecimal("2").compareTo(service.getByDocNumber(inboundNumber).getItems().get(0).getQuantity()));
         assertEquals(2, count("goods_transaction_dynamic_info"));
     }
 
@@ -298,7 +298,7 @@ class WarehouseTransferTests {
         service.create(document("TRANSFER_JTX", "WAREHOUSE_TRANSFER_TO_PROJECT"));
         service.create(document("TRANSFER_XTJ", "PROJECT_TRANSFER_TO_WAREHOUSE"));
         GoodsInventory stock = sql.getMapper(GoodsInventoryMapper.class).selectAll().get(0);
-        assertEquals(2D, stock.getBalanceQuantity());
+        assertEquals(0, new BigDecimal("2").compareTo(stock.getBalanceQuantity()));
         assertEquals(0, new BigDecimal("100").compareTo(stock.getPurchaseAveragePrice()));
         assertEquals(0, new BigDecimal("200").compareTo(stock.getInventoryAmount()));
     }
@@ -318,7 +318,9 @@ class WarehouseTransferTests {
         document.setDocType(type); document.setBusinessCategory(category); document.setProjectId("project");
         document.setDocDate(new java.util.Date(Date.valueOf("2026-10-19").getTime()));
         WarehouseDocumentItem item = new WarehouseDocumentItem();
-        item.setMaterialId("material"); item.setQuantity(2D); item.setUnitPrice(100D);
+        item.setMaterialId("material");
+        item.setQuantity(new BigDecimal("2"));
+        item.setUnitPrice(new BigDecimal("100"));
         document.setItems(new ArrayList<>(List.of(item)));
         return document;
     }

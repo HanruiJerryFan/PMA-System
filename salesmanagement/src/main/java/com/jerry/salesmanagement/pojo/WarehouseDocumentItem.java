@@ -2,6 +2,7 @@ package com.jerry.salesmanagement.pojo;
 
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.util.Date;
 
 @Data
@@ -18,9 +19,9 @@ public class WarehouseDocumentItem {
     private String displayModel;
     private String brand;
     private String unit;
-    private Double quantity;
-    private Double unitPrice;
-    private Double amount;
+    private BigDecimal quantity;
+    private BigDecimal unitPrice;
+    private BigDecimal amount;
     private String remark;
     private Date createTime;
     private Long createUser;

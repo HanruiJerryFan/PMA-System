@@ -31,6 +31,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
@@ -348,13 +350,15 @@ public class WarehouseDocumentServiceImpl implements WarehouseDocumentService {
             throw new IllegalArgumentException("At least one document item is required");
         }
 
-        double totalAmount = 0D;
+        BigDecimal totalAmount = BigDecimal.ZERO;
         for (int index = 0; index < warehouseDocument.getItems().size(); index++) {
             WarehouseDocumentItem item = warehouseDocument.getItems().get(index);
             hydrateItem(warehouseDocument, item, index + 1);
-            totalAmount += item.getAmount() != null ? item.getAmount() : 0D;
+            if (item.getAmount() != null) {
+                totalAmount = totalAmount.add(item.getAmount());
+            }
         }
-        warehouseDocument.setTotalAmount(totalAmount);
+        warehouseDocument.setTotalAmount(totalAmount.setScale(2, RoundingMode.HALF_UP));
     }
 
     private void hydrateItem(WarehouseDocument warehouseDocument, WarehouseDocumentItem item, int lineNo) {
@@ -365,10 +369,10 @@ public class WarehouseDocumentServiceImpl implements WarehouseDocumentService {
         if (materialMaster == null) {
             throw new IllegalArgumentException("Material does not exist");
         }
-        if (item.getQuantity() == null || item.getQuantity() <= 0) {
+        if (item.getQuantity() == null || item.getQuantity().compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Quantity must be greater than 0");
         }
-        if (item.getUnitPrice() != null && item.getUnitPrice() < 0) {
+        if (item.getUnitPrice() != null && item.getUnitPrice().compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("Unit price cannot be negative");
         }
         ProductBrand brand = materialMaster.getBrandId() != null ? productBrandMapper.selectById(materialMaster.getBrandId()) : null;
@@ -395,11 +399,13 @@ public class WarehouseDocumentServiceImpl implements WarehouseDocumentService {
         item.setAmount(calculateAmount(item));
     }
 
-    private Double calculateAmount(WarehouseDocumentItem item) {
+    private BigDecimal calculateAmount(WarehouseDocumentItem item) {
         if (item.getUnitPrice() == null || item.getQuantity() == null) {
             return null;
         }
-        return item.getUnitPrice() * item.getQuantity();
+        return item.getUnitPrice()
+                .multiply(item.getQuantity())
+                .setScale(2, RoundingMode.HALF_UP);
     }
 
     private void persistItemsAndTransactions(WarehouseDocument warehouseDocument) {

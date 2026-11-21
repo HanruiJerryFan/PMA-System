@@ -13,6 +13,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
@@ -107,10 +109,10 @@ public class InventoryTransactionServiceImpl implements InventoryTransactionServ
         if (!ALLOWED_TXN_TYPES.contains(inventoryTransaction.getTxnType())) {
             throw new IllegalArgumentException("Transaction type must be IN or OUT");
         }
-        if (inventoryTransaction.getQuantity() == null || inventoryTransaction.getQuantity() <= 0) {
+        if (inventoryTransaction.getQuantity() == null || inventoryTransaction.getQuantity().compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Quantity must be greater than 0");
         }
-        if (inventoryTransaction.getUnitPrice() != null && inventoryTransaction.getUnitPrice() < 0) {
+        if (inventoryTransaction.getUnitPrice() != null && inventoryTransaction.getUnitPrice().compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("Unit price cannot be negative");
         }
         if (StringUtils.hasText(inventoryTransaction.getProjectId())
@@ -133,10 +135,12 @@ public class InventoryTransactionServiceImpl implements InventoryTransactionServ
         inventoryTransaction.setAmount(calculateAmount(inventoryTransaction));
     }
 
-    private Double calculateAmount(InventoryTransaction inventoryTransaction) {
+    private BigDecimal calculateAmount(InventoryTransaction inventoryTransaction) {
         if (inventoryTransaction.getUnitPrice() == null || inventoryTransaction.getQuantity() == null) {
             return null;
         }
-        return inventoryTransaction.getUnitPrice() * inventoryTransaction.getQuantity();
+        return inventoryTransaction.getUnitPrice()
+                .multiply(inventoryTransaction.getQuantity())
+                .setScale(2, RoundingMode.HALF_UP);
     }
 }

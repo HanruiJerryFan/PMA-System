@@ -96,8 +96,8 @@ public abstract class PdfExportSupport {
         return value == null ? "" : value;
     }
 
-    protected String formatMoney(Double value) {
-        return value == null ? "" : MONEY_FORMAT.get().format(value);
+    protected String formatMoney(BigDecimal value) {
+        return value == null ? "" : MONEY_FORMAT.get().format(value.setScale(2, RoundingMode.HALF_UP));
     }
 
     protected String formatChineseDate(Date value) {
@@ -110,18 +110,21 @@ public abstract class PdfExportSupport {
                 .format(CHINESE_DATE_FORMATTER);
     }
 
-    protected String toChineseUppercaseRmb(Double value) {
-        BigDecimal amount = BigDecimal.valueOf(value == null ? 0D : value).setScale(2, RoundingMode.HALF_UP);
+    protected String toChineseUppercaseRmb(BigDecimal value) {
+        BigDecimal amount = (value == null ? BigDecimal.ZERO : value).setScale(2, RoundingMode.HALF_UP);
         if (amount.compareTo(BigDecimal.ZERO) == 0) {
             return "人民币零元整";
         }
-        long normalizedAmount = amount.movePointRight(2).longValue();
+        boolean negative = amount.compareTo(BigDecimal.ZERO) < 0;
+        long normalizedAmount = amount.abs().movePointRight(2).longValue();
         long integerPart = normalizedAmount / 100;
         int fractionPart = (int) (normalizedAmount % 100);
         int jiao = fractionPart / 10;
         int fen = fractionPart % 10;
 
-        StringBuilder result = new StringBuilder("人民币").append(formatIntegerPart(integerPart)).append("元");
+        StringBuilder result = new StringBuilder(negative ? "负人民币" : "人民币")
+                .append(formatIntegerPart(integerPart))
+                .append("元");
         if (jiao == 0 && fen == 0) {
             return result.append("整").toString();
         }

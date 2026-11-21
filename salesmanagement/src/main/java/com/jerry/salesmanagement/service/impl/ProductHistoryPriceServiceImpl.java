@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Service
@@ -83,7 +84,7 @@ public class ProductHistoryPriceServiceImpl implements ProductHistoryPriceServic
         if (materialMaster == null) {
             throw new IllegalArgumentException("Product does not exist");
         }
-        if (historyPrice.getReferencePrice() == null || historyPrice.getReferencePrice() < 0) {
+        if (historyPrice.getReferencePrice() == null || historyPrice.getReferencePrice().compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("Reference price must be greater than or equal to 0");
         }
         if (!StringUtils.hasText(historyPrice.getSupplierCustomerId())) {
