@@ -31,6 +31,7 @@ import {
   LinkOutlined,
   PlusOutlined,
   ProfileOutlined,
+  ReconciliationOutlined,
   UnorderedListOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -1067,6 +1068,9 @@ export default function ProjectDashboard() {
                 ) : null}
                 <Button icon={<EyeOutlined />} onClick={() => openAggregateProjectListDashboard("FINAL_ALL")}>
                   最终清单总览
+                </Button>
+                <Button icon={<ReconciliationOutlined />} onClick={() => navigate(`/project/reconciliation?projectUuid=${project.uuid}`)}>
+                  采发对账
                 </Button>
                 <Button icon={<UnorderedListOutlined />} onClick={() => navigate(`/project/lists?projectUuid=${project.uuid}`)}>
                   查看当前项目全部清单

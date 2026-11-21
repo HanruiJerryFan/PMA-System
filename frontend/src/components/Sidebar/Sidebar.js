@@ -120,6 +120,7 @@ export default function Sidebar() {
         requiredAuthorities: ["project.access"],
         children: [
           { key: "/project/tracking-board", label: "项目跟踪看板", onClick: () => navigate("/project/tracking-board"), requiredAuthorities: ["project.access", "project.manage"] },
+          { key: "/project/reconciliation", label: "采发对账", onClick: () => navigate("/project/reconciliation"), requiredAuthorities: ["project.access", "project.manage"] },
           { key: "/project/info", label: "项目信息", onClick: () => navigate("/project/info"), requiredAuthorities: ["project.access"] },
           { key: "/project/status-history", label: "项目记录", onClick: () => navigate("/project/status-history"), requiredAuthorities: ["project.manage"] },
           { key: "/project/lists", label: "项目清单", onClick: () => navigate("/project/lists"), requiredAuthorities: ["project.access", "project.list.entry", "project.list.audit"] },
@@ -169,6 +170,7 @@ export default function Sidebar() {
         label: "财务管理",
         requiredAuthorities: ["finance.access"],
         children: [
+          { key: "/finance/analytics", label: "利润与账龄分析", onClick: () => navigate("/finance/analytics"), requiredAuthorities: ["finance.access", "finance.manage"] },
           { key: "/finance/vouchers", label: "财务凭证", onClick: () => navigate("/finance/vouchers"), requiredAuthorities: ["finance.access", "finance.voucher.entry", "finance.voucher.audit"] },
           { key: "/finance/tax-rates", label: "税率字典", onClick: () => navigate("/finance/tax-rates"), requiredAuthorities: ["finance.manage"] },
           { key: "/finance/subjects", label: "科目管理", onClick: () => navigate("/finance/subjects"), requiredAuthorities: ["finance.manage"] },

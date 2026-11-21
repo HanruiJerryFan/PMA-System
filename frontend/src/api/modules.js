@@ -71,6 +71,8 @@ export const projectAPI = {
   getProjectListsByProject: (projectId) => api.get(`/project-lists/byProject/${projectId}`),
   getProjectListAggregate: (projectId, aggregateType) =>
     api.get(`/project-lists/aggregate/${projectId}`, { params: { aggregateType } }),
+  getMaterialReconciliationSummary: () => api.get("/projects/material-reconciliation/summary"),
+  getMaterialReconciliation: (projectUuid) => api.get(`/projects/${projectUuid}/material-reconciliation`),
   createProjectList: (data) => api.post("/project-lists", data),
   updateProjectList: (uuid, data) => api.put(`/project-lists/${uuid}`, data),
   auditProjectList: (uuid) => api.post(`/project-lists/${uuid}/audit`),
@@ -204,6 +206,7 @@ export const inventoryAPI = {
 };
 
 export const financeAPI = {
+  getFinanceAnalyticsOverview: () => api.get("/finance/analytics/overview"),
   getFinanceSubjects: () => api.get("/finance-subjects"),
   createFinanceSubject: (data) => api.post("/finance-subjects", data),
   updateFinanceSubject: (id, data) => api.put(`/finance-subjects/${id}`, data),

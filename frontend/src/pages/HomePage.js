@@ -183,10 +183,14 @@ export default function HomePage() {
     }
     if (permissions.canViewProjects) {
       items.push({ label: "项目跟踪看板", route: "/project/tracking-board" });
+      items.push({ label: "采发对账", route: "/project/reconciliation" });
       items.push({
         label: permissions.canManageProjects ? "项目信息" : "项目清单",
         route: permissions.canManageProjects ? "/project/info" : "/project/lists",
       });
+    }
+    if (hasAnyAuthority(currentUser, ["finance.access", "finance.manage"])) {
+      items.push({ label: "利润与账龄分析", route: "/finance/analytics" });
     }
     if (
       hasAnyAuthority(currentUser, [
@@ -212,7 +216,7 @@ export default function HomePage() {
     if (permissions.canViewLogs) {
       items.push({ label: "登录日志", route: "/logs/login" });
     }
-    return items.slice(0, 6);
+    return items.slice(0, 8);
   }, [currentUser, permissions]);
 
   const recentProjects = useMemo(

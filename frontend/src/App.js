@@ -24,7 +24,9 @@ import CustomerIndustries from "./pages/Customer/CustomerIndustries";
 import CustomerActivityRules from "./pages/Customer/CustomerActivityRules";
 import ProjectInfo from "./pages/Project/ProjectInfo";
 import ProjectTrackingBoard from "./pages/Project/ProjectTrackingBoard";
+import ProjectMaterialReconciliation from "./pages/Project/ProjectMaterialReconciliation";
 import ApprovalWorkbench from "./pages/Approval/ApprovalWorkbench";
+import FinanceAnalytics from "./pages/Finance/FinanceAnalytics";
 import ProjectDashboard from "./pages/Project/ProjectDashboard";
 import ProjectListDashboard from "./pages/Project/ProjectListDashboard";
 import ProjectTypes from "./pages/Project/ProjectTypes";
@@ -114,6 +116,7 @@ function AppContent() {
                 }
               />
               <Route path="/project/tracking-board" element={<PrivateRoute requiredAuthorities={["project.access", "project.manage"]}><ProjectTrackingBoard /></PrivateRoute>} />
+              <Route path="/project/reconciliation" element={<PrivateRoute requiredAuthorities={["project.access", "project.manage"]}><ProjectMaterialReconciliation /></PrivateRoute>} />
               <Route path="/permission-denied" element={<PermissionDeniedPage />} />
               <Route path="/change-password" element={<ChangePasswordPage />} />
               <Route path="/permission/users" element={<PrivateRoute requiredAuthorities={["permission.users.manage"]}><UserManagement /></PrivateRoute>} />
@@ -146,6 +149,7 @@ function AppContent() {
               <Route path="/inventory/transactions" element={<PrivateRoute requiredAuthorities={["inventory.access"]}><InventoryTransactions /></PrivateRoute>} />
               <Route path="/inventory/warehouses" element={<PrivateRoute requiredAuthorities={["inventory.manage"]}><Warehouses /></PrivateRoute>} />
               <Route path="/inventory/warehouse" element={<PrivateRoute requiredAuthorities={["inventory.access", "inventory.warehouse-doc.entry", "inventory.warehouse-doc.audit"]}><WarehouseDoc /></PrivateRoute>} />
+              <Route path="/finance/analytics" element={<PrivateRoute requiredAuthorities={["finance.access", "finance.manage"]}><FinanceAnalytics /></PrivateRoute>} />
               <Route path="/finance/vouchers" element={<PrivateRoute requiredAuthorities={["finance.access", "finance.voucher.entry", "finance.voucher.audit"]}><FinanceVouchers /></PrivateRoute>} />
               <Route path="/finance/tax-rates" element={<PrivateRoute requiredAuthorities={["finance.manage"]}><TaxRateManagement /></PrivateRoute>} />
               <Route path="/finance/subjects" element={<PrivateRoute requiredAuthorities={["finance.manage"]}><FinanceSubjectManagement /></PrivateRoute>} />
