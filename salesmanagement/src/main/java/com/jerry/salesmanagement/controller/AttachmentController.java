@@ -7,6 +7,7 @@ import com.jerry.salesmanagement.service.AttachmentService;
 import com.jerry.salesmanagement.service.AuditTrailService;
 import com.jerry.salesmanagement.service.SysUserService;
 import com.jerry.salesmanagement.service.SystemConfigService;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
@@ -90,21 +91,25 @@ public class AttachmentController {
             @RequestParam(required = false) String businessUuid,
             @RequestPart("file") MultipartFile file
     ) {
+        Path copiedTarget = null;
         try {
             if (file == null || file.isEmpty()) {
                 return ApiResponse.badRequest("File is required");
             }
 
             String uuid = UUID.randomUUID().toString();
-            String originalFileName = file.getOriginalFilename();
-            String safeFileName = originalFileName == null ? "file" : Paths.get(originalFileName).getFileName().toString();
+            String safeFileName = sanitizeUploadFileName(file.getOriginalFilename());
             String fileExt = extractFileExt(safeFileName);
-            Path rootPath = Paths.get(resolveStorageRoot()).toAbsolutePath().normalize();
+            Path rootPath = resolveStorageRootPath();
             Files.createDirectories(rootPath);
 
             String storedFileName = uuid + "-" + safeFileName;
             Path targetPath = rootPath.resolve(storedFileName).normalize();
+            if (!targetPath.startsWith(rootPath)) {
+                throw new SecurityException("Invalid attachment storage path");
+            }
             Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
+            copiedTarget = targetPath;
 
             Attachment attachment = new Attachment();
             attachment.setUuid(uuid);
@@ -115,13 +120,20 @@ public class AttachmentController {
             attachment.setFileExt(fileExt);
             attachment.setMimeType(file.getContentType());
             attachment.setFileSize(file.getSize());
-            attachment.setStoragePath(targetPath.toString());
+            attachment.setStoragePath(storedFileName);
             attachment.setUploadedBy(resolveCurrentUserId());
 
             Attachment created = service.create(attachment);
+            copiedTarget = null;
             auditTrailService.record("attachments", "UPLOAD", "attachments", created.getUuid(), "Uploaded attachment file");
             return ApiResponse.success("Attachment uploaded", sanitizeAttachment(created));
         } catch (Exception e) {
+            if (copiedTarget != null) {
+                try {
+                    Files.deleteIfExists(copiedTarget);
+                } catch (Exception ignored) {
+                }
+            }
             return ApiResponse.error("Failed to upload attachment: " + e.getMessage());
         }
     }
@@ -133,24 +145,9 @@ public class AttachmentController {
             if (attachment == null) {
                 return ResponseEntity.notFound().build();
             }
-
-            Path filePath = Paths.get(attachment.getStoragePath()).toAbsolutePath().normalize();
-            Resource resource = new UrlResource(filePath.toUri());
-            if (!resource.exists()) {
-                return ResponseEntity.notFound().build();
-            }
-
-            String downloadName = attachment.getOriginalFileName() != null
-                    ? attachment.getOriginalFileName()
-                    : attachment.getFileName();
-
-            return ResponseEntity.ok()
-                    .contentType(parseMediaType(attachment.getMimeType()))
-                    .header(
-                            HttpHeaders.CONTENT_DISPOSITION,
-                            "attachment; filename*=UTF-8''" + URLEncoder.encode(downloadName, StandardCharsets.UTF_8)
-                    )
-                    .body(resource);
+            return buildFileResponse(attachment, parseMediaType(attachment.getMimeType()), false);
+        } catch (SecurityException e) {
+            return ResponseEntity.notFound().build();
         } catch (Exception e) {
             return ResponseEntity.internalServerError().build();
         }
@@ -163,24 +160,9 @@ public class AttachmentController {
             if (attachment == null || !isPdf(attachment)) {
                 return ResponseEntity.notFound().build();
             }
-
-            Path filePath = Paths.get(attachment.getStoragePath()).toAbsolutePath().normalize();
-            Resource resource = new UrlResource(filePath.toUri());
-            if (!resource.exists()) {
-                return ResponseEntity.notFound().build();
-            }
-
-            String previewName = attachment.getOriginalFileName() != null
-                    ? attachment.getOriginalFileName()
-                    : attachment.getFileName();
-
-            return ResponseEntity.ok()
-                    .contentType(MediaType.APPLICATION_PDF)
-                    .header(
-                            HttpHeaders.CONTENT_DISPOSITION,
-                            "inline; filename*=UTF-8''" + URLEncoder.encode(previewName, StandardCharsets.UTF_8)
-                    )
-                    .body(resource);
+            return buildFileResponse(attachment, MediaType.APPLICATION_PDF, true);
+        } catch (SecurityException e) {
+            return ResponseEntity.notFound().build();
         } catch (Exception e) {
             return ResponseEntity.internalServerError().build();
         }
@@ -208,15 +190,92 @@ public class AttachmentController {
     public ApiResponse<Void> delete(@PathVariable String uuid) {
         try {
             Attachment attachment = service.getByUuid(uuid);
-            if (attachment != null && attachment.getStoragePath() != null) {
-                Files.deleteIfExists(Paths.get(attachment.getStoragePath()));
-            }
+            Path filePath = attachment != null ? resolveAttachmentPath(attachment) : null;
             service.delete(uuid);
+            if (filePath != null) {
+                Files.deleteIfExists(filePath);
+            }
             auditTrailService.record("attachments", "DELETE", "attachments", uuid, "Deleted attachment");
             return ApiResponse.success("Attachment deleted", null);
         } catch (Exception e) {
             return ApiResponse.error("Failed to delete attachment: " + e.getMessage());
         }
+    }
+
+    private ResponseEntity<Resource> buildFileResponse(Attachment attachment, MediaType mediaType, boolean inline)
+            throws Exception {
+        Path filePath = resolveAttachmentPath(attachment);
+        if (filePath == null) {
+            return ResponseEntity.notFound().build();
+        }
+        Resource resource = new UrlResource(filePath.toUri());
+        if (!resource.exists()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        String displayName = attachment.getOriginalFileName() != null
+                ? attachment.getOriginalFileName()
+                : attachment.getFileName();
+        if (!StringUtils.hasText(displayName)) {
+            displayName = filePath.getFileName().toString();
+        }
+        String dispositionType = inline ? "inline" : "attachment";
+
+        return ResponseEntity.ok()
+                .contentType(mediaType)
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        dispositionType + "; filename*=UTF-8''" + URLEncoder.encode(displayName, StandardCharsets.UTF_8)
+                )
+                .body(resource);
+    }
+
+    private Path resolveStorageRootPath() {
+        return Paths.get(resolveStorageRoot()).toAbsolutePath().normalize();
+    }
+
+    private Path resolveAttachmentPath(Attachment attachment) {
+        if (attachment == null || !StringUtils.hasText(attachment.getStoragePath())) {
+            return null;
+        }
+        Path rootPath = resolveStorageRootPath();
+        Path storedPath = Paths.get(attachment.getStoragePath().trim());
+
+        if (!storedPath.isAbsolute()) {
+            Path resolved = rootPath.resolve(storedPath).normalize();
+            if (!resolved.startsWith(rootPath)) {
+                throw new SecurityException("Invalid attachment storage path");
+            }
+            return resolved;
+        }
+
+        Path candidate = storedPath.normalize();
+        if (candidate.startsWith(rootPath) && Files.exists(candidate)) {
+            return candidate;
+        }
+        Path fileName = candidate.getFileName();
+        if (fileName != null) {
+            Path migrated = rootPath.resolve(fileName).normalize();
+            if (migrated.startsWith(rootPath) && Files.exists(migrated)) {
+                return migrated;
+            }
+        }
+        if (candidate.startsWith(rootPath)) {
+            return candidate;
+        }
+        throw new SecurityException("Invalid attachment storage path");
+    }
+
+    private String sanitizeUploadFileName(String originalFileName) {
+        if (!StringUtils.hasText(originalFileName)) {
+            return "file";
+        }
+        String normalized = originalFileName.replace('\\', '/');
+        String baseName = Paths.get(normalized).getFileName().toString().trim();
+        if (!StringUtils.hasText(baseName) || ".".equals(baseName) || "..".equals(baseName)) {
+            return "file";
+        }
+        return baseName;
     }
 
     private MediaType parseMediaType(String mimeType) {
@@ -253,11 +312,14 @@ public class AttachmentController {
     }
 
     private Attachment sanitizeAttachment(Attachment attachment) {
-        if (attachment != null) {
-            attachment.setFileName(null);
-            attachment.setStoragePath(null);
+        if (attachment == null) {
+            return null;
         }
-        return attachment;
+        Attachment sanitized = new Attachment();
+        BeanUtils.copyProperties(attachment, sanitized);
+        sanitized.setFileName(null);
+        sanitized.setStoragePath(null);
+        return sanitized;
     }
 
     private String extractFileExt(String fileName) {
