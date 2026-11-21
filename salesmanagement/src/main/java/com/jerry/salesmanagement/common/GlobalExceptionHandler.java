@@ -21,6 +21,13 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(413, "上传文件过大，当前单文件上限为 " + maxFileSize));
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalArgumentException(IllegalArgumentException exception) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.badRequest(exception.getMessage()));
+    }
+
     @ExceptionHandler(MultipartException.class)
     public ResponseEntity<ApiResponse<Void>> handleMultipartException(MultipartException exception) {
         return ResponseEntity

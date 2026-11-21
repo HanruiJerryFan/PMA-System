@@ -1,12 +1,14 @@
 package com.jerry.salesmanagement.service.impl;
 
 import com.jerry.salesmanagement.mapper.ContractBasicInfoMapper;
+import com.jerry.salesmanagement.mapper.ReferenceCheckMapper;
 import com.jerry.salesmanagement.pojo.ContractBasicInfo;
 import com.jerry.salesmanagement.service.ContractBasicInfoService;
 import com.jerry.salesmanagement.service.CustomerService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 import java.util.UUID;
@@ -19,6 +21,9 @@ public class ContractBasicInfoServiceImpl implements ContractBasicInfoService {
 
     @Autowired
     private CustomerService customerService;
+
+    @Autowired(required = false)
+    private ReferenceCheckMapper referenceCheckMapper;
 
     @Override
     public List<ContractBasicInfo> getAll() {
@@ -52,7 +57,14 @@ public class ContractBasicInfoServiceImpl implements ContractBasicInfoService {
     }
 
     @Override
+    @Transactional
     public void delete(String uuid) {
+        if (referenceCheckMapper != null && StringUtils.hasText(uuid)) {
+            ReferenceCheckMapper.ensureNotReferenced(
+                    "合同",
+                    new ReferenceCheckMapper.ReferenceUsage("合同条款", referenceCheckMapper.countContractClausesByContractUuid(uuid))
+            );
+        }
         contractbasicInfoMapper.deleteByUuid(uuid);
     }
 

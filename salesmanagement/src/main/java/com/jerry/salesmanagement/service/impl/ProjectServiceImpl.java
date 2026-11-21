@@ -3,6 +3,7 @@ package com.jerry.salesmanagement.service.impl;
 import com.jerry.salesmanagement.mapper.ProjectMapper;
 import com.jerry.salesmanagement.mapper.ProjectStatusHistoryMapper;
 import com.jerry.salesmanagement.mapper.ProjectTypeMapper;
+import com.jerry.salesmanagement.mapper.ReferenceCheckMapper;
 import com.jerry.salesmanagement.pojo.Project;
 import com.jerry.salesmanagement.pojo.ProjectType;
 import com.jerry.salesmanagement.service.CustomerService;
@@ -38,6 +39,9 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Autowired
     private CustomerService customerService;
+
+    @Autowired(required = false)
+    private ReferenceCheckMapper referenceCheckMapper;
 
     @Override
     public Project getByUuid(String uuid) {
@@ -75,6 +79,7 @@ public class ProjectServiceImpl implements ProjectService {
     }
 
     @Override
+    @Transactional
     public void delete(String uuid) {
         Project project = projectMapper.selectByUuid(uuid);
         if (project == null) {
@@ -83,6 +88,16 @@ public class ProjectServiceImpl implements ProjectService {
         enrichDeletionState(project);
         if (!Boolean.TRUE.equals(project.getCanDelete())) {
             throw new IllegalArgumentException("Project cannot be deleted after reaching the configured locked stage");
+        }
+        if (referenceCheckMapper != null) {
+            ReferenceCheckMapper.ensureNotReferenced(
+                    "项目",
+                    new ReferenceCheckMapper.ReferenceUsage("项目清单", referenceCheckMapper.countProjectListsByProjectUuid(uuid)),
+                    new ReferenceCheckMapper.ReferenceUsage("合同", referenceCheckMapper.countContractsByProjectUuid(uuid)),
+                    new ReferenceCheckMapper.ReferenceUsage("财务凭证", referenceCheckMapper.countFinanceVouchersByProjectUuid(uuid)),
+                    new ReferenceCheckMapper.ReferenceUsage("出入库单", referenceCheckMapper.countWarehouseDocsByProjectUuid(uuid)),
+                    new ReferenceCheckMapper.ReferenceUsage("库存流水", referenceCheckMapper.countInventoryTransactionsByProjectUuid(uuid))
+            );
         }
         projectMapper.deleteByUuid(uuid);
     }

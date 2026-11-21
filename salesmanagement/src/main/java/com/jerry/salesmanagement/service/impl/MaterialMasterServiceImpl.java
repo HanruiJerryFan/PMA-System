@@ -5,6 +5,7 @@ import com.jerry.salesmanagement.mapper.ProductBandMapper;
 import com.jerry.salesmanagement.mapper.ProductBrandMapper;
 import com.jerry.salesmanagement.mapper.ProductCategoryMapper;
 import com.jerry.salesmanagement.mapper.ProductSubcategoryMapper;
+import com.jerry.salesmanagement.mapper.ReferenceCheckMapper;
 import com.jerry.salesmanagement.pojo.MaterialMaster;
 import com.jerry.salesmanagement.pojo.ProductBand;
 import com.jerry.salesmanagement.pojo.ProductBrand;
@@ -95,6 +96,9 @@ public class MaterialMasterServiceImpl implements MaterialMasterService {
     @Autowired
     private CodeSequenceService codeSequenceService;
 
+    @Autowired(required = false)
+    private ReferenceCheckMapper referenceCheckMapper;
+
     @Override
     public List<MaterialMaster> getAll() {
         return materialMasterMapper.selectAll();
@@ -135,6 +139,15 @@ public class MaterialMasterServiceImpl implements MaterialMasterService {
         MaterialMaster existing = materialMasterMapper.selectByUuid(uuid);
         if (existing == null) {
             return;
+        }
+        if (referenceCheckMapper != null) {
+            ReferenceCheckMapper.ensureNotReferenced(
+                    "物料",
+                    new ReferenceCheckMapper.ReferenceUsage("项目清单明细", referenceCheckMapper.countProjectListItemsByMaterialUuid(uuid)),
+                    new ReferenceCheckMapper.ReferenceUsage("出入库单明细", referenceCheckMapper.countWarehouseDocItemsByMaterialUuid(uuid)),
+                    new ReferenceCheckMapper.ReferenceUsage("库存流水", referenceCheckMapper.countInventoryTransactionsByMaterialUuid(uuid)),
+                    new ReferenceCheckMapper.ReferenceUsage("物料历史价格", referenceCheckMapper.countProductHistoryPricesByMaterialUuid(uuid))
+            );
         }
         if (!StringUtils.hasText(existing.getCategoryCode()) || !StringUtils.hasText(existing.getSubcategoryCode())
                 || !StringUtils.hasText(existing.getBrandCode()) || !StringUtils.hasText(existing.getBandCode())

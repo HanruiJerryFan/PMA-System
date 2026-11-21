@@ -3,6 +3,7 @@ package com.jerry.salesmanagement.service.impl;
 import com.jerry.salesmanagement.mapper.CustomerMapper;
 import com.jerry.salesmanagement.mapper.CustomerIndustryDictMapper;
 import com.jerry.salesmanagement.mapper.CustomerTypeMapper;
+import com.jerry.salesmanagement.mapper.ReferenceCheckMapper;
 import com.jerry.salesmanagement.mapper.RegionMapper;
 import com.jerry.salesmanagement.pojo.Customer;
 import com.jerry.salesmanagement.pojo.CustomerIndustryDict;
@@ -42,6 +43,9 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Autowired
     private CodeSequenceService codeSequenceService;
+
+    @Autowired(required = false)
+    private ReferenceCheckMapper referenceCheckMapper;
 
     @Override
     public List<Customer> getAll() {
@@ -109,6 +113,17 @@ public class CustomerServiceImpl implements CustomerService {
         Customer existing = customerMapper.selectByUuid(uuid);
         if (existing == null) {
             return;
+        }
+        if (referenceCheckMapper != null) {
+            ReferenceCheckMapper.ensureNotReferenced(
+                    "客户",
+                    new ReferenceCheckMapper.ReferenceUsage("客户联系人", referenceCheckMapper.countCustomerContactsByCustomerUuid(uuid)),
+                    new ReferenceCheckMapper.ReferenceUsage("项目", referenceCheckMapper.countProjectsByCustomerUuid(uuid)),
+                    new ReferenceCheckMapper.ReferenceUsage("合同", referenceCheckMapper.countContractsByCustomerUuid(uuid)),
+                    new ReferenceCheckMapper.ReferenceUsage("财务凭证", referenceCheckMapper.countFinanceVouchersByCustomerUuid(uuid)),
+                    new ReferenceCheckMapper.ReferenceUsage("出入库单", referenceCheckMapper.countWarehouseDocsByCustomerUuid(uuid)),
+                    new ReferenceCheckMapper.ReferenceUsage("物料历史价格", referenceCheckMapper.countProductHistoryPricesByCustomerUuid(uuid))
+            );
         }
         String code = existing.getCustomerCode();
         if (!StringUtils.hasText(code) || !CUSTOMER_CODE_PATTERN.matcher(code).matches()) {

@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "classpath://org/mybatis/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.jerry.salesmanagement.mapper.ReferenceCheckMapper">
+
+    <select id="countCustomerContactsByCustomerUuid" parameterType="string" resultType="long">
+        SELECT COUNT(*)
+        FROM customer_contact
+        WHERE client_id = #{customerUuid}
+    </select>
+
+    <select id="countProjectsByCustomerUuid" parameterType="string" resultType="long">
+        SELECT COUNT(*)
+        FROM project_basic_info
+        WHERE customer_id = #{customerUuid}
+           OR customer_uuid = #{customerUuid}
+    </select>
+
+    <select id="countContractsByCustomerUuid" parameterType="string" resultType="long">
+        SELECT COUNT(*)
+        FROM contract_basic_info
+        WHERE client_id = #{customerUuid}
+    </select>
+
+    <select id="countFinanceVouchersByCustomerUuid" parameterType="string" resultType="long">
+        SELECT COUNT(*)
+        FROM finance_voucher
+        WHERE counterparty_customer_id = #{customerUuid}
+    </select>
+
+    <select id="countWarehouseDocsByCustomerUuid" parameterType="string" resultType="long">
+        SELECT COUNT(*)
+        FROM warehouse_doc
+        WHERE counterparty_customer_id = #{customerUuid}
+    </select>
+
+    <select id="countProductHistoryPricesByCustomerUuid" parameterType="string" resultType="long">
+        SELECT COUNT(*)
+        FROM product_history_price
+        WHERE supplier_customer_id = #{customerUuid}
+    </select>
+
+    <select id="countProjectListItemsByMaterialUuid" parameterType="string" resultType="long">
+        SELECT COUNT(*)
+        FROM project_list_item
+        WHERE material_id = #{materialUuid}
+    </select>
+
+    <select id="countWarehouseDocItemsByMaterialUuid" parameterType="string" resultType="long">
+        SELECT COUNT(*)
+        FROM warehouse_doc_item
+        WHERE material_id = #{materialUuid}
+    </select>
+
+    <select id="countInventoryTransactionsByMaterialUuid" parameterType="string" resultType="long">
+        SELECT COUNT(*)
+        FROM goods_transaction_dynamic_info
+        WHERE material_id = #{materialUuid}
+    </select>
+
+    <select id="countProductHistoryPricesByMaterialUuid" parameterType="string" resultType="long">
+        SELECT COUNT(*)
+        FROM product_history_price
+        WHERE product_basic_info_uuid = #{materialUuid}
+    </select>
+
+    <select id="countWarehouseDocsByWarehouseId" parameterType="long" resultType="long">
+        SELECT COUNT(*)
+        FROM warehouse_doc
+        WHERE warehouse_id = #{warehouseId}
+    </select>
+
+    <select id="countInventoryTransactionsByWarehouseId" parameterType="long" resultType="long">
+        SELECT COUNT(*)
+        FROM goods_transaction_dynamic_info
+        WHERE warehouse_id = #{warehouseId}
+    </select>
+
+    <select id="countProjectListsByProjectUuid" parameterType="string" resultType="long">
+        SELECT COUNT(*)
+        FROM project_list
+        WHERE project_id = #{projectUuid}
+    </select>
+
+    <select id="countContractsByProjectUuid" parameterType="string" resultType="long">
+        SELECT COUNT(*)
+        FROM contract_basic_info
+        WHERE project_basic_info_id = #{projectUuid}
+    </select>
+
+    <select id="countFinanceVouchersByProjectUuid" parameterType="string" resultType="long">
+        SELECT COUNT(*)
+        FROM finance_voucher
+        WHERE project_id = #{projectUuid}
+    </select>
+
+    <select id="countWarehouseDocsByProjectUuid" parameterType="string" resultType="long">
+        SELECT COUNT(*)
+        FROM warehouse_doc
+        WHERE project_id = #{projectUuid}
+    </select>
+
+    <select id="countInventoryTransactionsByProjectUuid" parameterType="string" resultType="long">
+        SELECT COUNT(*)
+        FROM goods_transaction_dynamic_info
+        WHERE project_id = #{projectUuid}
+    </select>
+
+    <select id="countContractClausesByContractUuid" parameterType="string" resultType="long">
+        SELECT COUNT(*)
+        FROM contract_clause
+        WHERE contract_basic_info_id = #{contractUuid}
+    </select>
+
+</mapper>
