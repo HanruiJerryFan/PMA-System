@@ -1,38 +1,31 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { Button, Card, Form, Input, Space, Typography, message } from "antd";
 import { ArrowLeftOutlined, LockOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
-import { changePassword, getCurrentUser } from "../api/auth";
+import { changePassword } from "../api/auth";
+import { useAuth } from "../context/AuthContext";
 
 const { Paragraph, Title } = Typography;
 
 export default function ChangePasswordPage({ forced = false }) {
   const [loading, setLoading] = useState(false);
-  const [forcePasswordChange, setForcePasswordChange] = useState(forced);
+  const { currentUser, clearAuth } = useAuth();
+  const forcePasswordChange = forced || Boolean(currentUser?.forcePasswordChange);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    async function loadCurrentUser() {
-      const user = await getCurrentUser().catch(() => null);
-      setForcePasswordChange(forced || Boolean(user?.forcePasswordChange));
-    }
-
-    loadCurrentUser();
-  }, [forced]);
 
   const handleSubmit = useCallback(async (values) => {
     setLoading(true);
     try {
       await changePassword(values.oldPassword, values.newPassword);
+      clearAuth();
       message.success("密码修改成功，请重新登录。");
       navigate("/login", { replace: true });
-      window.location.reload();
     } catch (error) {
       message.error(error?.response?.data || error.message || "密码修改失败");
     } finally {
       setLoading(false);
     }
-  }, [navigate]);
+  }, [clearAuth, navigate]);
 
   const card = (
     <Card bordered={false} style={{ width: "100%", maxWidth: 560, margin: "0 auto" }}>

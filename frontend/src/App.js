@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
-import { getCurrentUser, heartbeat, sendLogoutBeacon } from "./api/auth";
+import { heartbeat, sendLogoutBeacon } from "./api/auth";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 import MainLayout from "./components/Layout/MainLayout";
 import PrivateRoute from "./components/PrivateRoute";
 import HomePage from "./pages/HomePage";
@@ -47,32 +48,8 @@ import AttachmentCenter from "./pages/Attachment/AttachmentCenter";
 import LoginLogs from "./pages/Logs/LoginLogs";
 import AuditTrails from "./pages/Logs/AuditTrails";
 
-function App() {
-  const [loggedIn, setLoggedIn] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function checkLoginStatus() {
-      try {
-        const user = await getCurrentUser();
-        setCurrentUser(user);
-        setLoggedIn(Boolean(user));
-      } catch (error) {
-        setCurrentUser(null);
-        setLoggedIn(false);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    checkLoginStatus();
-  }, []);
-
-  const handleLoggedInChange = (nextLoggedIn, user = null) => {
-    setLoggedIn(nextLoggedIn);
-    setCurrentUser(nextLoggedIn ? user : null);
-  };
+function AppContent() {
+  const { currentUser, loggedIn, loading, clearAuth } = useAuth();
 
   useEffect(() => {
     if (!loggedIn) {
@@ -83,8 +60,7 @@ function App() {
       heartbeat()
         .catch((error) => {
           if (error.response?.status === 401) {
-            setCurrentUser(null);
-            setLoggedIn(false);
+            clearAuth();
           }
         });
     }, 2 * 60 * 1000);
@@ -101,15 +77,14 @@ function App() {
       window.removeEventListener("pagehide", handlePageHide);
       window.removeEventListener("beforeunload", handlePageHide);
     };
-  }, [loggedIn]);
+  }, [clearAuth, loggedIn]);
 
   if (loading) {
     return <div>加载中...</div>;
   }
 
   return (
-    <ConfigProvider locale={zhCN}>
-      <BrowserRouter>
+    <BrowserRouter>
         {loggedIn && currentUser?.forcePasswordChange ? (
           <Routes>
             <Route path="/change-password" element={<ChangePasswordPage forced />} />
@@ -163,12 +138,21 @@ function App() {
           </MainLayout>
         ) : (
           <Routes>
-            <Route path="/login" element={<LoginPage setLoggedIn={handleLoggedInChange} />} />
+            <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
         )}
       </BrowserRouter>
+  );
+}
+
+function App() {
+  return (
+    <ConfigProvider locale={zhCN}>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
     </ConfigProvider>
   );
 }

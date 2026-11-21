@@ -34,7 +34,7 @@ import {
   UnorderedListOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { getCurrentUser } from "../../api/auth";
+import { useAuth } from "../../context/AuthContext";
 import BusinessAttachmentUpload from "../../components/Common/BusinessAttachmentUpload";
 import {
   attachmentAPI,
@@ -277,7 +277,7 @@ export default function ProjectDashboard() {
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
+  const { currentUser, loading: authLoading } = useAuth();
   const [projects, setProjects] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [projectTypes, setProjectTypes] = useState([]);
@@ -424,6 +424,9 @@ export default function ProjectDashboard() {
   );
 
   const loadAll = useCallback(async () => {
+    if (authLoading) {
+      return;
+    }
     if (!projectUuid) {
       setLoading(false);
       return;
@@ -431,15 +434,14 @@ export default function ProjectDashboard() {
 
     setLoading(true);
     try {
-      const user = await getCurrentUser().catch(() => null);
-      const allowContract = hasAnyAuthority(user, ["contract.access"]);
-      const allowFinance = hasAnyAuthority(user, [
+      const allowContract = hasAnyAuthority(currentUser, ["contract.access"]);
+      const allowFinance = hasAnyAuthority(currentUser, [
         "finance.access",
         "finance.manage",
         "finance.voucher.entry",
         "finance.voucher.audit",
       ]);
-      const allowAttachment = hasAnyAuthority(user, ["attachment.access"]);
+      const allowAttachment = hasAnyAuthority(currentUser, ["attachment.access"]);
 
       const [
         projectResponse,
@@ -473,7 +475,6 @@ export default function ProjectDashboard() {
         allowAttachment ? attachmentAPI.getAttachmentsByBusiness("projects", projectUuid) : Promise.resolve([]),
       ]);
 
-      setCurrentUser(user);
       setProjects(normalizeResponseData(projectResponse));
       setCustomers(normalizeResponseData(customerResponse));
       setProjectTypes(normalizeResponseData(projectTypeResponse));
@@ -491,7 +492,7 @@ export default function ProjectDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [projectUuid]);
+  }, [authLoading, currentUser, projectUuid]);
 
   useEffect(() => {
     loadAll();

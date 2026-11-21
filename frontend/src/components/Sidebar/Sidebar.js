@@ -16,30 +16,19 @@ import {
   TeamOutlined,
   UserOutlined,
 } from "@ant-design/icons";
-import { getCurrentUser, logout } from "../../api/auth";
+import { logout } from "../../api/auth";
+import { useAuth } from "../../context/AuthContext";
 import { hasAnyAuthority } from "../../utils/authorities";
 
 const { Sider } = Layout;
 const { Text } = Typography;
 
 export default function Sidebar() {
-  const [currentUser, setCurrentUser] = useState(null);
+  const { currentUser, clearAuth } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [openKeys, setOpenKeys] = useState([]);
   const navigate = useNavigate();
   const location = useLocation();
-
-  useEffect(() => {
-    async function fetchUser() {
-      try {
-        setCurrentUser(await getCurrentUser());
-      } catch (error) {
-        setCurrentUser(null);
-      }
-    }
-
-    fetchUser();
-  }, []);
 
   const displayName = useMemo(() => {
     if (!currentUser) {
@@ -54,8 +43,8 @@ export default function Sidebar() {
 
   const handleLogout = async () => {
     await logout();
-    navigate("/login");
-    window.location.reload();
+    clearAuth();
+    navigate("/login", { replace: true });
   };
 
   const userMenuItems = [

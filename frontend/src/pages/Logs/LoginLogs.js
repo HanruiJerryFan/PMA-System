@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Card, Form, Input, Space, Table, Tag } from "antd";
 import { DownloadOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
-import { getCurrentUser } from "../../api/auth";
+import { useAuth } from "../../context/AuthContext";
 import { logAPI } from "../../api/modules";
 import { hasAnyAuthority } from "../../utils/authorities";
 import { downloadExcel } from "../../utils/exporters";
@@ -42,7 +42,7 @@ export default function LoginLogs() {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState({});
-  const [currentUser, setCurrentUser] = useState(null);
+  const { currentUser } = useAuth();
   const [form] = Form.useForm();
   const canExport = hasAnyAuthority(currentUser, ["logs.view"]);
 
@@ -60,18 +60,6 @@ export default function LoginLogs() {
   useEffect(() => {
     fetchRecords({});
   }, [fetchRecords]);
-
-  useEffect(() => {
-    async function fetchCurrentUser() {
-      try {
-        setCurrentUser(await getCurrentUser());
-      } catch (error) {
-        setCurrentUser(null);
-      }
-    }
-
-    fetchCurrentUser();
-  }, []);
 
   const columns = useMemo(
     () => [

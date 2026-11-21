@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Button, Card, Descriptions, Form, Input, Modal, Popconfirm, Space, Table, message } from "antd";
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
-import { getCurrentUser } from "../../api/auth";
+import { useAuth } from "../../context/AuthContext";
 import { hasAnyAuthority } from "../../utils/authorities";
 import { resolvePagePermissions } from "../../utils/pagePermissions";
 
@@ -73,7 +73,7 @@ export default function CRUDTable({
   const [editingRecord, setEditingRecord] = useState(null);
   const [viewingRecord, setViewingRecord] = useState(null);
   const [filteredData, setFilteredData] = useState(dataSource);
-  const [currentUser, setCurrentUser] = useState(null);
+  const { currentUser } = useAuth();
   const [initialFormValues, setInitialFormValues] = useState({});
   const [modalInitKey, setModalInitKey] = useState(0);
   const [form] = Form.useForm();
@@ -84,18 +84,6 @@ export default function CRUDTable({
     () => searchFields.map((field) => (typeof field === "string" ? { name: field, label: field } : field)),
     [searchFields]
   );
-
-  useEffect(() => {
-    async function fetchCurrentUser() {
-      try {
-        setCurrentUser(await getCurrentUser());
-      } catch (error) {
-        setCurrentUser(null);
-      }
-    }
-
-    fetchCurrentUser();
-  }, []);
 
   const effectiveCreateAuthorities = createAuthorities ?? pagePermissions.manageAuthorities;
   const effectiveUpdateAuthorities = updateAuthorities ?? pagePermissions.manageAuthorities;

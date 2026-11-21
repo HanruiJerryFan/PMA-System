@@ -22,7 +22,7 @@ import {
   UnorderedListOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { getCurrentUser } from "../../api/auth";
+import { useAuth } from "../../context/AuthContext";
 import { attachmentAPI, exportAPI, projectAPI } from "../../api/modules";
 import { hasAnyAuthority } from "../../utils/authorities";
 import { downloadApiFile, downloadExcel, resolveBlobErrorMessage } from "../../utils/exporters";
@@ -228,7 +228,7 @@ export default function ProjectListDashboard() {
   const from = searchParams.get("from") || "dashboard";
 
   const [loading, setLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState(null);
+  const { currentUser, loading: authLoading } = useAuth();
   const [project, setProject] = useState(null);
   const [projectList, setProjectList] = useState(null);
   const [aggregateView, setAggregateView] = useState(null);
@@ -318,6 +318,9 @@ export default function ProjectListDashboard() {
 
   useEffect(() => {
     async function loadData() {
+      if (authLoading) {
+        return;
+      }
       if (!projectUuid || (!listUuid && !aggregateType)) {
         setLoading(false);
         return;
@@ -325,8 +328,7 @@ export default function ProjectListDashboard() {
 
       setLoading(true);
       try {
-        const user = await getCurrentUser().catch(() => null);
-        const allowAttachment = hasAnyAuthority(user, ["attachment.access"]);
+        const allowAttachment = hasAnyAuthority(currentUser, ["attachment.access"]);
         const aggregateRequest = aggregateType
           ? isCombinedAggregateView
             ? Promise.all(FINAL_AGGREGATE_TYPES.map((type) => projectAPI.getProjectListAggregate(projectUuid, type)))
@@ -352,7 +354,6 @@ export default function ProjectListDashboard() {
             )
           : normalizeResponseData(aggregateResponse);
 
-        setCurrentUser(user);
         setProject(projectRows.find((item) => item.uuid === projectUuid) || null);
         setProjectList(aggregateType ? null : projectListRows.find((item) => item.uuid === listUuid) || null);
         setAggregateView(aggregateType ? aggregateData : null);
@@ -364,7 +365,7 @@ export default function ProjectListDashboard() {
     }
 
     loadData();
-  }, [aggregateType, isCombinedAggregateView, listUuid, projectUuid]);
+  }, [aggregateType, authLoading, currentUser, isCombinedAggregateView, listUuid, projectUuid]);
 
   const buildItemColumns = (listType, options = {}) => {
     const aggregate = options.aggregate ?? isAggregateView;

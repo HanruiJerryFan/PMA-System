@@ -3,7 +3,7 @@ import dayjs from "dayjs";
 import { Button, DatePicker, Input, InputNumber, Select, message } from "antd";
 import { DownloadOutlined, FilePdfOutlined, LinkOutlined } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { getCurrentUser } from "../../api/auth";
+import { useAuth } from "../../context/AuthContext";
 import BusinessAttachmentUpload from "../../components/Common/BusinessAttachmentUpload";
 import CRUDTable from "../../components/Common/CRUDTable";
 import { contractAPI, customerAPI, exportAPI, projectAPI } from "../../api/modules";
@@ -37,7 +37,7 @@ export default function ContractInfo() {
   const [contacts, setContacts] = useState([]);
   const [contractTypes, setContractTypes] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
+  const { currentUser } = useAuth();
   const [pendingContractAttachmentFiles, setPendingContractAttachmentFiles] = useState([]);
   const contractAttachmentInputRef = useRef(null);
   const canAccessAttachments = hasAnyAuthority(currentUser, ["attachment.access"]);
@@ -106,18 +106,6 @@ export default function ContractInfo() {
   useEffect(() => {
     fetchContracts();
     fetchOptions();
-  }, []);
-
-  useEffect(() => {
-    async function fetchCurrent() {
-      try {
-        setCurrentUser(await getCurrentUser());
-      } catch (error) {
-        setCurrentUser(null);
-      }
-    }
-
-    fetchCurrent();
   }, []);
 
   const resetPendingContractAttachment = () => {

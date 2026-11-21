@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { Alert, Button, Form, Input, Modal, Select, Space, Spin, Tag, message } from "antd";
 import { DeleteOutlined, DownloadOutlined, EyeOutlined, UploadOutlined } from "@ant-design/icons";
 import CRUDTable from "../../components/Common/CRUDTable";
-import { getCurrentUser } from "../../api/auth";
+import { useAuth } from "../../context/AuthContext";
 import { attachmentAPI, contractAPI, customerAPI, financeAPI, inventoryAPI, projectAPI } from "../../api/modules";
 import { hasAnyAuthority } from "../../utils/authorities";
 import { downloadApiFile, resolveBlobErrorMessage } from "../../utils/exporters";
@@ -129,7 +129,7 @@ export default function AttachmentCenter() {
   const [uploadVisible, setUploadVisible] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
-  const [currentUser, setCurrentUser] = useState(null);
+  const { currentUser } = useAuth();
   const [businessOptionsLoading, setBusinessOptionsLoading] = useState(false);
   const [businessOptions, setBusinessOptions] = useState([]);
   const [businessLabelLoading, setBusinessLabelLoading] = useState(false);
@@ -200,18 +200,6 @@ export default function AttachmentCenter() {
     fetchAttachments();
     resetUploadForm();
   }, [fetchAttachments, resetUploadForm]);
-
-  useEffect(() => {
-    async function fetchCurrentUser() {
-      try {
-        setCurrentUser(await getCurrentUser());
-      } catch (error) {
-        setCurrentUser(null);
-      }
-    }
-
-    fetchCurrentUser();
-  }, []);
 
   useEffect(
     () => () => {

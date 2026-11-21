@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Button, Card, Col, List, Progress, Row, Space, Statistic, Tag, Typography } from "antd";
 import {
   ApiOutlined,
@@ -12,7 +12,7 @@ import {
   UserOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
-import { getCurrentUser } from "../api/auth";
+import { useAuth } from "../context/AuthContext";
 import {
   contractAPI,
   customerAPI,
@@ -42,7 +42,7 @@ function formatDateTime(value) {
 export default function HomePage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
+  const { currentUser, loading: authLoading } = useAuth();
   const [dashboard, setDashboard] = useState({
     users: [],
     customers: [],
@@ -73,11 +73,10 @@ export default function HomePage() {
     [currentUser]
   );
 
-  const loadDashboard = async () => {
+  const loadDashboard = useCallback(async () => {
     setLoading(true);
     try {
-      const user = await getCurrentUser();
-      setCurrentUser(user);
+      const user = currentUser;
 
       const loaders = [];
       if (hasAnyAuthority(user, ["permission.users.manage"])) {
@@ -135,11 +134,13 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUser]);
 
   useEffect(() => {
-    loadDashboard();
-  }, []);
+    if (!authLoading) {
+      loadDashboard();
+    }
+  }, [authLoading, loadDashboard]);
 
   const overviewCards = useMemo(() => {
     const items = [];

@@ -1,46 +1,25 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import { getCurrentUser } from "../api/auth";
+import { useAuth } from "../context/AuthContext";
 import { hasAnyAuthority } from "../utils/authorities";
 
 function PrivateRoute({ children, requiredAuthorities = [] }) {
   const location = useLocation();
-  const [authenticated, setAuthenticated] = useState(null);
-  const [authorized, setAuthorized] = useState(true);
-  const [forcePasswordChange, setForcePasswordChange] = useState(false);
-  const requiredAuthoritiesKey = requiredAuthorities.join("|");
+  const { currentUser, loggedIn, loading } = useAuth();
 
-  useEffect(() => {
-    const authorityList = requiredAuthoritiesKey ? requiredAuthoritiesKey.split("|") : [];
-
-    async function checkAuth() {
-      try {
-        const user = await getCurrentUser();
-        setAuthenticated(!!user);
-        setForcePasswordChange(Boolean(user?.forcePasswordChange));
-        setAuthorized(hasAnyAuthority(user, authorityList));
-      } catch (error) {
-        setAuthenticated(false);
-        setAuthorized(false);
-        setForcePasswordChange(false);
-      }
-    }
-
-    checkAuth();
-  }, [requiredAuthoritiesKey]);
-
-  if (authenticated === null) {
+  if (loading) {
     return <div>Loading...</div>;
   }
 
-  if (!authenticated) {
+  if (!loggedIn || !currentUser) {
     return <Navigate to="/login" />;
   }
 
-  if (forcePasswordChange) {
+  if (currentUser?.forcePasswordChange) {
     return <Navigate to="/change-password" replace />;
   }
 
+  const authorized = hasAnyAuthority(currentUser, requiredAuthorities);
   return authorized ? children : (
     <Navigate
       to="/permission-denied"

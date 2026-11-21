@@ -19,7 +19,7 @@ import {
   message,
 } from "antd";
 import { CheckCircleOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, FilePdfOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
-import { getCurrentUser } from "../../api/auth";
+import { useAuth } from "../../context/AuthContext";
 import { inventoryAPI, permissionAPI } from "../../api/modules";
 import { downloadApiFile, downloadExcel, downloadHtmlExcel, resolveBlobErrorMessage } from "../../utils/exporters";
 import { formatProjectOptionLabel } from "../../utils/projectLabels";
@@ -42,7 +42,7 @@ import {
 } from "./warehouseDocumentUtils";
 
 export default function WarehouseDoc() {
-  const [currentUser, setCurrentUser] = useState(null);
+  const { currentUser } = useAuth();
   const [documents, setDocuments] = useState([]);
   const [projects, setProjects] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
@@ -128,7 +128,6 @@ export default function WarehouseDoc() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const user = await getCurrentUser().catch(() => null);
       const [docResponse, projectResponse, warehouseResponse, materialResponse, customerResponse, userResponse] =
         await Promise.all([
           inventoryAPI.getWarehouseDocs(),
@@ -139,7 +138,6 @@ export default function WarehouseDoc() {
           permissionAPI.getUserOptions().catch(() => []),
         ]);
       const docData = normalize(docResponse);
-      setCurrentUser(user);
       setDocuments(docData);
       setProjects(normalize(projectResponse));
       setWarehouses(normalize(warehouseResponse));

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
 import { Button, Card, Empty, Input, InputNumber, Select, Space, Tag, message } from "antd";
 import { DownloadOutlined, FilePdfOutlined } from "@ant-design/icons";
-import { getCurrentUser } from "../../api/auth";
+import { useAuth } from "../../context/AuthContext";
 import CRUDTable from "../../components/Common/CRUDTable";
 import { contractAPI, customerAPI, exportAPI, projectAPI } from "../../api/modules";
 import { hasAnyAuthority } from "../../utils/authorities";
@@ -27,7 +27,7 @@ export default function ContractClauses() {
   const [clauses, setClauses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [clausesLoading, setClausesLoading] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
+  const { currentUser } = useAuth();
   const pagePermissions = useMemo(() => resolvePagePermissions("/contract/clauses"), []);
   const canExport = hasAnyAuthority(currentUser, pagePermissions.exportAuthorities);
 
@@ -120,18 +120,6 @@ export default function ContractClauses() {
 
   useEffect(() => {
     fetchContracts();
-  }, []);
-
-  useEffect(() => {
-    async function fetchCurrent() {
-      try {
-        setCurrentUser(await getCurrentUser());
-      } catch (error) {
-        setCurrentUser(null);
-      }
-    }
-
-    fetchCurrent();
   }, []);
 
   useEffect(() => {

@@ -32,7 +32,7 @@ import {
   WalletOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { getCurrentUser } from "../../api/auth";
+import { useAuth } from "../../context/AuthContext";
 import BusinessAttachmentUpload from "../../components/Common/BusinessAttachmentUpload";
 import CRUDTable from "../../components/Common/CRUDTable";
 import { customerAPI, exportAPI, financeAPI, permissionAPI, projectAPI } from "../../api/modules";
@@ -348,7 +348,7 @@ export default function FinanceVouchers() {
   const level2Options = useMemo(() => getFinanceSubjectOptions(subjects, 2), [subjects]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
+  const { currentUser } = useAuth();
   const [pendingVoucherAttachmentFiles, setPendingVoucherAttachmentFiles] = useState([]);
   const [filteredVisibleVouchers, setFilteredVisibleVouchers] = useState([]);
   const voucherAttachmentInputRef = useRef(null);
@@ -599,18 +599,6 @@ export default function FinanceVouchers() {
     fetchTaxRates();
     fetchSubjects().catch((error) => message.error(error?.message || "加载财务科目失败"));
     fetchUsers();
-  }, []);
-
-  useEffect(() => {
-    async function fetchCurrent() {
-      try {
-        setCurrentUser(await getCurrentUser());
-      } catch (error) {
-        setCurrentUser(null);
-      }
-    }
-
-    fetchCurrent();
   }, []);
 
   const resetPendingVoucherAttachment = () => {

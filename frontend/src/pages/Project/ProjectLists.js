@@ -34,7 +34,7 @@ import {
   PlusOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { getCurrentUser } from "../../api/auth";
+import { useAuth } from "../../context/AuthContext";
 import BusinessAttachmentUpload from "../../components/Common/BusinessAttachmentUpload";
 import { exportAPI, permissionAPI, productAPI, projectAPI } from "../../api/modules";
 import { hasAnyAuthority } from "../../utils/authorities";
@@ -96,7 +96,7 @@ export default function ProjectLists() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const projectUuidFilter = searchParams.get("projectUuid") || "";
-  const [currentUser, setCurrentUser] = useState(null);
+  const { currentUser } = useAuth();
   const [projects, setProjects] = useState([]);
   const [projectLists, setProjectLists] = useState([]);
   const [listItems, setListItems] = useState([]);
@@ -247,9 +247,6 @@ export default function ProjectLists() {
   }, []);
 
   useEffect(() => {
-    (async () => {
-      try { setCurrentUser(await getCurrentUser()); } catch { setCurrentUser(null); }
-    })();
     fetchProjectLists();
     fetchOptions();
   }, [fetchOptions, fetchProjectLists]);

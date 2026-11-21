@@ -2,53 +2,56 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Button, Card, Col, Form, Input, Row, Typography, message } from "antd";
 import { LockOutlined, LoginOutlined, UserAddOutlined, UserOutlined } from "@ant-design/icons";
 import { useLocation, useNavigate } from "react-router-dom";
-import { getAuthConfig, getCurrentUser, login } from "../api/auth";
+import { getAuthConfig, login } from "../api/auth";
+import { useAuth } from "../context/AuthContext";
 
 const { Title, Text } = Typography;
 
 export default function LoginPage({ setLoggedIn }) {
   const [loading, setLoading] = useState(false);
   const [selfRegistrationEnabled, setSelfRegistrationEnabled] = useState(false);
+  const { currentUser, loggedIn, refreshCurrentUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
     let active = true;
 
-    async function checkAuth() {
-      const [user, authConfig] = await Promise.all([
-        getCurrentUser(),
-        getAuthConfig(),
-      ]);
+    async function loadConfig() {
+      const authConfig = await getAuthConfig();
       if (!active) {
         return;
       }
       setSelfRegistrationEnabled(Boolean(authConfig?.selfRegistrationEnabled));
-      if (user) {
-        setLoggedIn(true, user);
-        if (user.forcePasswordChange) {
-          navigate("/change-password", { replace: true });
-        } else {
-          const from = location.state?.from?.pathname || "/home";
-          navigate(from, { replace: true });
-        }
-      }
     }
 
-    checkAuth();
+    loadConfig();
     return () => {
       active = false;
     };
-  }, [location.state, navigate, setLoggedIn]);
+  }, []);
+
+  useEffect(() => {
+    if (!loggedIn || !currentUser) {
+      return;
+    }
+    setLoggedIn?.(true, currentUser);
+    if (currentUser.forcePasswordChange) {
+      navigate("/change-password", { replace: true });
+    } else {
+      const from = location.state?.from?.pathname || "/home";
+      navigate(from, { replace: true });
+    }
+  }, [currentUser, location.state, loggedIn, navigate, setLoggedIn]);
 
   const handleSubmit = useCallback(async (values) => {
     setLoading(true);
     try {
       await login(values.username, values.password);
-      const currentUser = await getCurrentUser();
+      const nextUser = await refreshCurrentUser();
       message.success("登录成功");
-      setLoggedIn(true, currentUser);
-      if (currentUser?.forcePasswordChange) {
+      setLoggedIn?.(Boolean(nextUser), nextUser);
+      if (nextUser?.forcePasswordChange) {
         navigate("/change-password", { replace: true });
       } else {
         navigate("/home", { replace: true });
@@ -64,7 +67,7 @@ export default function LoginPage({ setLoggedIn }) {
     } finally {
       setLoading(false);
     }
-  }, [navigate, setLoggedIn]);
+  }, [navigate, refreshCurrentUser, setLoggedIn]);
 
   return (
     <div
