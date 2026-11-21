@@ -10,6 +10,7 @@ import java.util.List;
 public interface ProjectListItemMapper {
     ProjectListItem selectByUuid(String uuid);
     List<ProjectListItem> selectByProjectListId(String projectListId);
+    List<ProjectListItem> selectByProjectListIds(@Param("projectListIds") List<String> projectListIds);
     int insert(ProjectListItem item);
     int updateByUuid(ProjectListItem item);
     int updateAuditorByUuid(

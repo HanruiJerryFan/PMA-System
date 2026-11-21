@@ -121,6 +121,14 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
     }
 
     @Override
+    public List<ProjectListItem> getByProjectListIds(List<String> projectListIds) {
+        if (projectListIds == null || projectListIds.isEmpty()) {
+            return List.of();
+        }
+        return mapper.selectByProjectListIds(projectListIds);
+    }
+
+    @Override
     @Transactional
     public ProjectListItem create(ProjectListItem item) {
         ProjectList projectList = validateItem(item);

@@ -65,6 +65,48 @@
         ORDER BY pli.id ASC
     </select>
 
+    <select id="selectByProjectListIds" resultType="com.jerry.salesmanagement.pojo.ProjectListItem">
+        SELECT
+            pli.id,
+            pli.uuid,
+            pli.project_list_id AS projectListId,
+            pli.material_id AS materialId,
+            pli.material_code AS materialCode,
+            pli.item_name AS itemName,
+            pli.model,
+            pli.brand,
+            pli.unit,
+            pli.quantity,
+            pli.unit_price AS unitPrice,
+            pli.total_amount AS totalAmount,
+            pli.source_type AS sourceType,
+            pli.remark,
+            pli.entry_user AS entryUser,
+            COALESCE(NULLIF(eu.real_name, ''), eu.username) AS entryUserName,
+            pli.auditor_user AS auditorUser,
+            COALESCE(NULLIF(au.real_name, ''), au.username) AS auditorUserName,
+            pli.create_time AS createTime,
+            pli.create_user AS createUser,
+            pli.update_time AS updateTime,
+            pli.update_user AS updateUser
+        FROM project_list_item pli
+        LEFT JOIN sys_user eu ON pli.entry_user = eu.id
+        LEFT JOIN sys_user au ON pli.auditor_user = au.id
+        WHERE
+        <choose>
+            <when test="projectListIds != null and projectListIds.size() > 0">
+                pli.project_list_id IN
+                <foreach collection="projectListIds" item="listId" open="(" separator="," close=")">
+                    #{listId}
+                </foreach>
+            </when>
+            <otherwise>
+                1 = 0
+            </otherwise>
+        </choose>
+        ORDER BY pli.project_list_id ASC, pli.id ASC
+    </select>
+
     <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.ProjectListItem">
         INSERT INTO project_list_item (
             uuid,

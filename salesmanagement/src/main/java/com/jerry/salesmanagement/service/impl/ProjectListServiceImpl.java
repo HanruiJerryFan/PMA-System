@@ -110,8 +110,18 @@ public class ProjectListServiceImpl implements ProjectListService {
         }
 
         Map<String, ProjectListAggregateItem> aggregateMap = new LinkedHashMap<>();
+        List<String> sourceListIds = sourceLists.stream()
+                .map(ProjectList::getUuid)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .toList();
+        Map<String, List<ProjectListItem>> itemsByListId = sourceListIds.isEmpty()
+                ? Map.of()
+                : projectListItemService.getByProjectListIds(sourceListIds).stream()
+                        .collect(Collectors.groupingBy(ProjectListItem::getProjectListId));
+
         for (ProjectList list : sourceLists) {
-            List<ProjectListItem> items = projectListItemService.getByProjectListId(list.getUuid());
+            List<ProjectListItem> items = itemsByListId.getOrDefault(list.getUuid(), List.of());
             for (ProjectListItem item : items) {
                 String aggregateKey = buildAggregateKey(item);
                 ProjectListAggregateItem aggregateItem = aggregateMap.computeIfAbsent(aggregateKey, key -> createAggregateItem(item));

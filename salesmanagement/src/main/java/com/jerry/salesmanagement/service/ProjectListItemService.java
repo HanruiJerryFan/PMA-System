@@ -9,6 +9,7 @@ import java.util.List;
 public interface ProjectListItemService {
     ProjectListItem getByUuid(String uuid);
     List<ProjectListItem> getByProjectListId(String projectListId);
+    List<ProjectListItem> getByProjectListIds(List<String> projectListIds);
     ProjectListItem create(ProjectListItem item);
     ProjectListItem update(ProjectListItem item);
     ProjectListItem audit(String uuid);

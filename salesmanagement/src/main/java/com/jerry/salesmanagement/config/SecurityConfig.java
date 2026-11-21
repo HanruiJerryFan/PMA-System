@@ -65,7 +65,8 @@ public class SecurityConfig {
     private static final String[] FINANCE_PATHS = {
             "/api/finance-vouchers/**",
             "/api/tax-rate-dicts/**",
-            "/api/finance-subjects/**"
+            "/api/finance-subjects/**",
+            "/api/finance/analytics/**"
     };
 
     private final CustomUserDetailsService customUserDetailsService;
