@@ -21,6 +21,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -238,9 +239,14 @@ public class AttachmentController {
         if (attachment == null || !StringUtils.hasText(attachment.getStoragePath())) {
             return null;
         }
+        String rawStoragePath = attachment.getStoragePath().trim();
         Path rootPath = resolveStorageRootPath();
-        Path storedPath = Paths.get(attachment.getStoragePath().trim());
 
+        if (isWindowsDrivePath(rawStoragePath)) {
+            return resolveLegacyAbsolutePath(rawStoragePath, rootPath);
+        }
+
+        Path storedPath = Paths.get(rawStoragePath);
         if (!storedPath.isAbsolute()) {
             Path resolved = rootPath.resolve(storedPath).normalize();
             if (!resolved.startsWith(rootPath)) {
@@ -249,21 +255,51 @@ public class AttachmentController {
             return resolved;
         }
 
-        Path candidate = storedPath.normalize();
-        if (candidate.startsWith(rootPath) && Files.exists(candidate)) {
-            return candidate;
+        return resolveLegacyAbsolutePath(rawStoragePath, rootPath);
+    }
+
+    private Path resolveLegacyAbsolutePath(String rawStoragePath, Path rootPath) {
+        if (containsParentTraversalSegment(rawStoragePath)) {
+            throw new SecurityException("Invalid attachment storage path");
         }
-        Path fileName = candidate.getFileName();
-        if (fileName != null) {
+        if (!isWindowsDrivePath(rawStoragePath) || File.separatorChar == '\\') {
+            Path candidate = Paths.get(rawStoragePath).normalize();
+            if (candidate.startsWith(rootPath) && Files.exists(candidate)) {
+                return candidate;
+            }
+        }
+        String normalized = rawStoragePath.replace('\\', '/');
+        int lastSlash = normalized.lastIndexOf('/');
+        String fileName = lastSlash >= 0 ? normalized.substring(lastSlash + 1).trim() : normalized.trim();
+        if (StringUtils.hasText(fileName) && !".".equals(fileName) && !"..".equals(fileName)) {
             Path migrated = rootPath.resolve(fileName).normalize();
             if (migrated.startsWith(rootPath) && Files.exists(migrated)) {
                 return migrated;
             }
         }
-        if (candidate.startsWith(rootPath)) {
-            return candidate;
+        if (!isWindowsDrivePath(rawStoragePath) || File.separatorChar == '\\') {
+            Path candidate = Paths.get(rawStoragePath).normalize();
+            if (candidate.startsWith(rootPath)) {
+                return candidate;
+            }
         }
         throw new SecurityException("Invalid attachment storage path");
+    }
+
+    private boolean isWindowsDrivePath(String path) {
+        return path.length() >= 3
+                && Character.isLetter(path.charAt(0))
+                && path.charAt(1) == ':'
+                && (path.charAt(2) == '\\' || path.charAt(2) == '/');
+    }
+
+    private boolean containsParentTraversalSegment(String path) {
+        for (String segment : path.replace('\\', '/').split("/")) {
+            if ("..".equals(segment.trim())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String sanitizeUploadFileName(String originalFileName) {

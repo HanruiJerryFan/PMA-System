@@ -110,10 +110,19 @@ class AttachmentControllerStorageTests {
         migratedLegacyAttachment.setMimeType("application/pdf");
         migratedLegacyAttachment.setStoragePath(tempDir.resolve("old-server/u2-legacy.pdf").toAbsolutePath().toString());
 
+        Attachment windowsCrossOsLegacyAttachment = new Attachment();
+        windowsCrossOsLegacyAttachment.setUuid("u2-win");
+        windowsCrossOsLegacyAttachment.setFileName("u2-legacy.pdf");
+        windowsCrossOsLegacyAttachment.setOriginalFileName("legacy.pdf");
+        windowsCrossOsLegacyAttachment.setFileExt("pdf");
+        windowsCrossOsLegacyAttachment.setMimeType("application/pdf");
+        windowsCrossOsLegacyAttachment.setStoragePath("Z:\\other-machine\\uploads\\u2-legacy.pdf");
+
         AttachmentService service = mock(AttachmentService.class);
         when(service.getByUuid("u0")).thenReturn(insideLegacyAttachment);
         when(service.getByUuid("u1")).thenReturn(relativeAttachment);
         when(service.getByUuid("u2")).thenReturn(migratedLegacyAttachment);
+        when(service.getByUuid("u2-win")).thenReturn(windowsCrossOsLegacyAttachment);
 
         AttachmentController controller = createController(root, service);
 
@@ -131,6 +140,11 @@ class AttachmentControllerStorageTests {
         assertEquals(HttpStatus.OK, previewResponse.getStatusCode());
         assertNotNull(previewResponse.getBody());
         assertEquals("migrated-content", previewResponse.getBody().getContentAsString(StandardCharsets.UTF_8));
+
+        ResponseEntity<Resource> winPreviewResponse = controller.previewPdf("u2-win");
+        assertEquals(HttpStatus.OK, winPreviewResponse.getStatusCode());
+        assertNotNull(winPreviewResponse.getBody());
+        assertEquals("migrated-content", winPreviewResponse.getBody().getContentAsString(StandardCharsets.UTF_8));
     }
 
     @Test
@@ -152,9 +166,16 @@ class AttachmentControllerStorageTests {
         absoluteOutside.setFileExt("pdf");
         absoluteOutside.setStoragePath(outsideSecret.toAbsolutePath().toString());
 
+        Attachment windowsDriveTraversal = new Attachment();
+        windowsDriveTraversal.setUuid("t3");
+        windowsDriveTraversal.setOriginalFileName("u1-doc.pdf");
+        windowsDriveTraversal.setFileExt("pdf");
+        windowsDriveTraversal.setStoragePath("Z:\\legacy-pc\\..\\u2-legacy.pdf");
+
         AttachmentService service = mock(AttachmentService.class);
         when(service.getByUuid("t1")).thenReturn(relativeTraversal);
         when(service.getByUuid("t2")).thenReturn(absoluteOutside);
+        when(service.getByUuid("t3")).thenReturn(windowsDriveTraversal);
 
         AttachmentController controller = createController(root, service);
 
@@ -162,11 +183,14 @@ class AttachmentControllerStorageTests {
         assertEquals(HttpStatus.NOT_FOUND, controller.previewPdf("t1").getStatusCode());
         assertEquals(HttpStatus.NOT_FOUND, controller.download("t2").getStatusCode());
         assertEquals(HttpStatus.NOT_FOUND, controller.previewPdf("t2").getStatusCode());
+        assertEquals(HttpStatus.NOT_FOUND, controller.download("t3").getStatusCode());
 
         assertEquals(500, controller.delete("t1").getCode());
         assertEquals(500, controller.delete("t2").getCode());
+        assertEquals(500, controller.delete("t3").getCode());
         verify(service, never()).delete("t1");
         verify(service, never()).delete("t2");
+        verify(service, never()).delete("t3");
         assertTrue(Files.exists(outsideSecret));
     }
 

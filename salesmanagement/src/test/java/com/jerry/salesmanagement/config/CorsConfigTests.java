@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class CorsConfigTests {
 
     @Test
-    void defaultsToLocalhostOriginWithCredentialsAndContentDispositionExposed() {
+    void defaultsToLocalhostAndLoopbackOriginsWithCredentialsAndContentDispositionExposed() {
         CorsConfig config = new CorsConfig();
         CorsConfigurationSource source = config.corsConfigurationSource();
 
@@ -24,25 +24,25 @@ class CorsConfigTests {
         CorsConfiguration cors = source.getCorsConfiguration(request);
 
         assertNotNull(cors);
-        assertEquals(List.of("http://localhost:3000"), cors.getAllowedOrigins());
-        assertFalse(cors.getAllowedOrigins().contains("*"));
+        assertEquals(List.of("http://localhost:3000", "http://127.0.0.1:3000"), cors.getAllowedOriginPatterns());
+        assertFalse(cors.getAllowedOriginPatterns().contains("*"));
         assertTrue(Boolean.TRUE.equals(cors.getAllowCredentials()));
         assertEquals(List.of("Content-Disposition"), cors.getExposedHeaders());
         assertEquals(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"), cors.getAllowedMethods());
     }
 
     @Test
-    void parsesMultipleCommaSeparatedOriginsAndFallsBackWhenBlank() {
+    void parsesMultipleCommaSeparatedOriginPatternsAndFallsBackWhenBlank() {
         CorsConfig config = new CorsConfig();
         ReflectionTestUtils.setField(
                 config,
                 "allowedOrigins",
-                " https://erp.example.com , http://localhost:3000 , "
+                " https://erp.example.com , http://192.168.*:3000 , "
         );
 
-        assertEquals(List.of("https://erp.example.com", "http://localhost:3000"), config.resolveAllowedOrigins());
+        assertEquals(List.of("https://erp.example.com", "http://192.168.*:3000"), config.resolveAllowedOrigins());
 
         ReflectionTestUtils.setField(config, "allowedOrigins", "   ");
-        assertEquals(List.of("http://localhost:3000"), config.resolveAllowedOrigins());
+        assertEquals(List.of("http://localhost:3000", "http://127.0.0.1:3000"), config.resolveAllowedOrigins());
     }
 }

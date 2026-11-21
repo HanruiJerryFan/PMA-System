@@ -16,11 +16,14 @@ import java.util.List;
 @Configuration
 public class CorsConfig {
 
-    private static final List<String> DEFAULT_ALLOWED_ORIGINS = List.of("http://localhost:3000");
+    private static final List<String> DEFAULT_ALLOWED_ORIGINS = List.of(
+            "http://localhost:3000",
+            "http://127.0.0.1:3000"
+    );
     private static final List<String> ALLOWED_METHODS = List.of("GET", "POST", "PUT", "DELETE", "OPTIONS");
 
-    @Value("${app.cors.allowed-origins:http://localhost:3000}")
-    private String allowedOrigins = "http://localhost:3000";
+    @Value("${app.cors.allowed-origins:http://localhost:3000,http://127.0.0.1:3000}")
+    private String allowedOrigins = "http://localhost:3000,http://127.0.0.1:3000";
 
     public List<String> resolveAllowedOrigins() {
         if (!StringUtils.hasText(allowedOrigins)) {
@@ -36,7 +39,7 @@ public class CorsConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(resolveAllowedOrigins());
+        configuration.setAllowedOriginPatterns(resolveAllowedOrigins());
         configuration.setAllowedMethods(ALLOWED_METHODS);
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setExposedHeaders(List.of("Content-Disposition"));
@@ -54,7 +57,7 @@ public class CorsConfig {
             @Override
             public void addCorsMappings(CorsRegistry registry) {
                 registry.addMapping("/api/**")
-                        .allowedOrigins(resolveAllowedOrigins().toArray(String[]::new))
+                        .allowedOriginPatterns(resolveAllowedOrigins().toArray(String[]::new))
                         .allowedMethods(ALLOWED_METHODS.toArray(String[]::new))
                         .allowCredentials(true)
                         .allowedHeaders("*")
