@@ -215,6 +215,15 @@ public class SecurityConfig {
 
                         .requestMatchers(HttpMethod.GET, "/api/finance-vouchers/**")
                         .hasAnyAuthority("finance.access", "finance.manage", "finance.voucher.entry", "finance.voucher.audit")
+                        .requestMatchers(HttpMethod.GET, "/api/approvals/**")
+                        .hasAnyAuthority(
+                                "project.list.audit",
+                                "project.manage",
+                                "inventory.warehouse-doc.audit",
+                                "inventory.manage",
+                                "finance.voucher.audit",
+                                "finance.manage"
+                        )
                         .requestMatchers(HttpMethod.GET, "/api/tax-rate-dicts/**")
                         .hasAnyAuthority("finance.access", "finance.manage", "finance.voucher.entry", "finance.voucher.audit")
                         .requestMatchers(HttpMethod.GET, "/api/finance-subjects/**")
