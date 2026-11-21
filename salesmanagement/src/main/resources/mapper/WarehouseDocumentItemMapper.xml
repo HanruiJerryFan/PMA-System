@@ -32,6 +32,44 @@
         ORDER BY line_no ASC, id ASC
     </select>
 
+    <select id="selectByDocNumbers" resultType="com.jerry.salesmanagement.pojo.WarehouseDocumentItem">
+        SELECT
+            id,
+            uuid,
+            doc_number AS docNumber,
+            line_no AS lineNo,
+            material_id AS materialId,
+            material_code AS materialCode,
+            material_name AS materialName,
+            model,
+            display_name AS displayName,
+            display_model AS displayModel,
+            brand,
+            unit,
+            quantity,
+            unit_price AS unitPrice,
+            amount,
+            remark,
+            create_time AS createTime,
+            create_user AS createUser,
+            update_time AS updateTime,
+            update_user AS updateUser
+        FROM warehouse_doc_item
+        WHERE
+        <choose>
+            <when test="docNumbers != null and docNumbers.size() > 0">
+                doc_number IN
+                <foreach collection="docNumbers" item="docNumber" open="(" separator="," close=")">
+                    #{docNumber}
+                </foreach>
+            </when>
+            <otherwise>
+                1 = 0
+            </otherwise>
+        </choose>
+        ORDER BY doc_number ASC, line_no ASC, id ASC
+    </select>
+
     <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.WarehouseDocumentItem"
             useGeneratedKeys="true" keyProperty="id">
         INSERT INTO warehouse_doc_item (

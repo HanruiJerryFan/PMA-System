@@ -35,10 +35,13 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class WarehouseDocumentServiceImpl implements WarehouseDocumentService {
@@ -100,7 +103,25 @@ public class WarehouseDocumentServiceImpl implements WarehouseDocumentService {
     @Override
     public List<WarehouseDocument> getAll() {
         List<WarehouseDocument> documents = warehouseDocumentMapper.selectAll();
-        documents.forEach(this::attachItems);
+        if (documents.isEmpty()) {
+            return documents;
+        }
+        List<String> docNumbers = documents.stream()
+                .map(WarehouseDocument::getDocNumber)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .toList();
+        if (docNumbers.isEmpty()) {
+            documents.forEach(document -> document.setItems(new ArrayList<>()));
+            return documents;
+        }
+        Map<String, List<WarehouseDocumentItem>> itemsByDocNumber = warehouseDocumentItemMapper
+                .selectByDocNumbers(docNumbers)
+                .stream()
+                .collect(Collectors.groupingBy(WarehouseDocumentItem::getDocNumber));
+        documents.forEach(document -> document.setItems(
+                new ArrayList<>(itemsByDocNumber.getOrDefault(document.getDocNumber(), List.of()))
+        ));
         return documents;
     }
 

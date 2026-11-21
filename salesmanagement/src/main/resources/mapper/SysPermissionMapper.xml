@@ -42,6 +42,17 @@
         FROM sys_permission
     </select>
 
+    <select id="selectPermissionCodesByUserId" parameterType="long" resultType="string">
+        SELECT DISTINCT p.permission_code
+        FROM sys_permission p
+        INNER JOIN sys_role_permission rp ON rp.permission_id = p.id
+        INNER JOIN sys_user_role ur ON ur.role_id = rp.role_id
+        WHERE ur.user_id = #{userId}
+          AND p.permission_code IS NOT NULL
+          AND TRIM(p.permission_code) &lt;&gt; ''
+        ORDER BY p.permission_code ASC
+    </select>
+
     <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.SysPermission"
             useGeneratedKeys="true" keyProperty="id">
         INSERT INTO sys_permission (

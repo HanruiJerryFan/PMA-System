@@ -25,6 +25,14 @@ public class SysRoleServiceImpl implements SysRoleService {
     }
 
     @Override
+    public List<String> getRoleNamesByUserId(Long userId) {
+        if (userId == null) {
+            return List.of();
+        }
+        return roleMapper.selectRoleNamesByUserId(userId);
+    }
+
+    @Override
     public SysRole create(SysRole role) {
         roleMapper.insert(role);
         return role;

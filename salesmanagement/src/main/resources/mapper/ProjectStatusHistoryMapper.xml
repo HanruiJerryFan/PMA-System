@@ -39,6 +39,27 @@
         WHERE h.project_id = #{projectId}
     </select>
 
+    <select id="selectCurrentStageSortOrdersByProjectIds" resultType="com.jerry.salesmanagement.pojo.dto.ProjectStageSortOrder">
+        SELECT
+            h.project_id AS projectId,
+            MAX(s.sort_order) AS maxSortOrder
+        FROM project_status_history h
+        INNER JOIN stage s ON h.stage_id = s.id
+        WHERE
+        <choose>
+            <when test="projectIds != null and projectIds.size() > 0">
+                h.project_id IN
+                <foreach collection="projectIds" item="projectId" open="(" separator="," close=")">
+                    #{projectId}
+                </foreach>
+            </when>
+            <otherwise>
+                1 = 0
+            </otherwise>
+        </choose>
+        GROUP BY h.project_id
+    </select>
+
     <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.ProjectStatusHistory" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO project_status_history (
             uuid,

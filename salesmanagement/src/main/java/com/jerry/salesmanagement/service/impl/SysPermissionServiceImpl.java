@@ -34,6 +34,14 @@ public class SysPermissionServiceImpl implements SysPermissionService {
     }
 
     @Override
+    public List<String> getPermissionCodesByUserId(Long userId) {
+        if (userId == null) {
+            return List.of();
+        }
+        return permissionMapper.selectPermissionCodesByUserId(userId);
+    }
+
+    @Override
     public SysPermission create(SysPermission permission) {
         validate(permission, false);
         permissionMapper.insert(permission);

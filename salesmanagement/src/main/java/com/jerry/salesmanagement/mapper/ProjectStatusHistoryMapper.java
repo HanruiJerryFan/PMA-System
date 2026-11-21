@@ -1,6 +1,7 @@
 package com.jerry.salesmanagement.mapper;
 
 import com.jerry.salesmanagement.pojo.ProjectStatusHistory;
+import com.jerry.salesmanagement.pojo.dto.ProjectStageSortOrder;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -15,6 +16,8 @@ public interface ProjectStatusHistoryMapper {
     List<ProjectStatusHistory> selectByProjectId(@Param("projectId") String projectId);
 
     Integer selectCurrentStageSortOrderByProjectId(@Param("projectId") String projectId);
+
+    List<ProjectStageSortOrder> selectCurrentStageSortOrdersByProjectIds(@Param("projectIds") List<String> projectIds);
 
     int insert(ProjectStatusHistory history);
 

@@ -29,9 +29,9 @@ public class AuditTrailServiceImpl implements AuditTrailService {
     @Override
     public List<AuditTrail> getAll(Long userId, String module, String action) {
         String canonicalModule = canonicalizeResourceName(module);
-        return auditTrailMapper.selectAll(userId, null, action).stream()
+        return auditTrailMapper.selectAll(userId, canonicalModule, action).stream()
                 .map(this::normalizeAuditTrail)
-                .filter(record -> !isSystemUserId(record.getUserId()))
+                .filter(record -> !SYSTEM_USERNAME.equalsIgnoreCase(record.getUsername()))
                 .filter(record -> !StringUtils.hasText(canonicalModule) || canonicalModule.equals(record.getModule()))
                 .toList();
     }
@@ -39,7 +39,13 @@ public class AuditTrailServiceImpl implements AuditTrailService {
     @Override
     public AuditTrail getById(Long id) {
         AuditTrail auditTrail = normalizeAuditTrail(auditTrailMapper.selectById(id));
-        return auditTrail != null && isSystemUserId(auditTrail.getUserId()) ? null : auditTrail;
+        if (auditTrail == null) {
+            return null;
+        }
+        if (StringUtils.hasText(auditTrail.getUsername())) {
+            return SYSTEM_USERNAME.equalsIgnoreCase(auditTrail.getUsername()) ? null : auditTrail;
+        }
+        return isSystemUserId(auditTrail.getUserId()) ? null : auditTrail;
     }
 
     @Override

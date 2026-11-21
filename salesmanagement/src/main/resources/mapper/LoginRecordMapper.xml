@@ -1,22 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper
   PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "classpath://org/mybatis/mybatis-3-mapper.dtd">
-  
+
 <mapper namespace="com.jerry.salesmanagement.mapper.LoginRecordMapper">
     <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.LoginRecord">
         SELECT
-            id,
-            user_id AS userId,
-            login_start_time AS loginStartTime,
-            login_end_time AS loginEndTime,
-            duration_seconds AS durationSeconds,
-            login_ip AS loginIp,
-            user_agent AS userAgent,
-            last_seen_at AS lastSeenAt,
-            logout_reason AS logoutReason,
-            created_at AS createdAt
-        FROM login_record
-        ORDER BY login_start_time DESC, id DESC
+            l.id,
+            l.user_id AS userId,
+            l.login_start_time AS loginStartTime,
+            l.login_end_time AS loginEndTime,
+            l.duration_seconds AS durationSeconds,
+            l.login_ip AS loginIp,
+            l.user_agent AS userAgent,
+            l.last_seen_at AS lastSeenAt,
+            l.logout_reason AS logoutReason,
+            l.created_at AS createdAt
+        FROM login_record l
+        LEFT JOIN sys_user u ON l.user_id = u.id
+        WHERE (u.username IS NULL OR LOWER(u.username) &lt;&gt; 'system')
+        ORDER BY l.login_start_time DESC, l.id DESC
     </select>
 
     <select id="selectById" parameterType="long" resultType="com.jerry.salesmanagement.pojo.LoginRecord">
@@ -37,19 +39,21 @@
 
     <select id="selectByUserId" parameterType="long" resultType="com.jerry.salesmanagement.pojo.LoginRecord">
         SELECT
-            id,
-            user_id AS userId,
-            login_start_time AS loginStartTime,
-            login_end_time AS loginEndTime,
-            duration_seconds AS durationSeconds,
-            login_ip AS loginIp,
-            user_agent AS userAgent,
-            last_seen_at AS lastSeenAt,
-            logout_reason AS logoutReason,
-            created_at AS createdAt
-        FROM login_record
-        WHERE user_id = #{userId}
-        ORDER BY login_start_time DESC, id DESC
+            l.id,
+            l.user_id AS userId,
+            l.login_start_time AS loginStartTime,
+            l.login_end_time AS loginEndTime,
+            l.duration_seconds AS durationSeconds,
+            l.login_ip AS loginIp,
+            l.user_agent AS userAgent,
+            l.last_seen_at AS lastSeenAt,
+            l.logout_reason AS logoutReason,
+            l.created_at AS createdAt
+        FROM login_record l
+        LEFT JOIN sys_user u ON l.user_id = u.id
+        WHERE l.user_id = #{userId}
+          AND (u.username IS NULL OR LOWER(u.username) &lt;&gt; 'system')
+        ORDER BY l.login_start_time DESC, l.id DESC
     </select>
 
     <select id="selectTimedOutActive" parameterType="java.util.Date" resultType="com.jerry.salesmanagement.pojo.LoginRecord">

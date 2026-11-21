@@ -6,6 +6,7 @@ import com.jerry.salesmanagement.mapper.ProjectTypeMapper;
 import com.jerry.salesmanagement.mapper.ReferenceCheckMapper;
 import com.jerry.salesmanagement.pojo.Project;
 import com.jerry.salesmanagement.pojo.ProjectType;
+import com.jerry.salesmanagement.pojo.dto.ProjectStageSortOrder;
 import com.jerry.salesmanagement.service.CustomerService;
 import com.jerry.salesmanagement.service.ProjectService;
 import com.jerry.salesmanagement.service.SystemConfigService;
@@ -14,7 +15,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -53,7 +56,7 @@ public class ProjectServiceImpl implements ProjectService {
     @Override
     public List<Project> getAll() {
         List<Project> projects = projectMapper.selectAll();
-        projects.forEach(this::enrichDeletionState);
+        enrichDeletionStates(projects);
         return projects;
     }
 
@@ -155,6 +158,41 @@ public class ProjectServiceImpl implements ProjectService {
         project.setCanDelete(isProjectDeletable(currentStageSortOrder));
     }
 
+    void enrichDeletionStates(List<Project> projects) {
+        if (projects == null || projects.isEmpty()) {
+            return;
+        }
+        List<String> projectIds = projects.stream()
+                .filter(project -> project != null && StringUtils.hasText(project.getUuid()))
+                .map(Project::getUuid)
+                .distinct()
+                .toList();
+        if (projectIds.isEmpty()) {
+            return;
+        }
+        int lockStageSortOrder = systemConfigService.getInt(
+                PROJECT_DELETE_LOCK_STAGE_SORT_ORDER_KEY,
+                DEFAULT_PROJECT_DELETE_LOCK_STAGE_SORT_ORDER
+        );
+        Map<String, Integer> sortOrderByProjectId = new HashMap<>();
+        List<ProjectStageSortOrder> stageSortOrders = projectStatusHistoryMapper.selectCurrentStageSortOrdersByProjectIds(projectIds);
+        if (stageSortOrders != null) {
+            for (ProjectStageSortOrder item : stageSortOrders) {
+                if (item != null && StringUtils.hasText(item.getProjectId())) {
+                    sortOrderByProjectId.put(item.getProjectId(), item.getMaxSortOrder());
+                }
+            }
+        }
+        for (Project project : projects) {
+            if (project == null || !StringUtils.hasText(project.getUuid())) {
+                continue;
+            }
+            Integer currentStageSortOrder = sortOrderByProjectId.get(project.getUuid());
+            project.setCurrentStageSortOrder(currentStageSortOrder);
+            project.setCanDelete(isProjectDeletable(currentStageSortOrder, lockStageSortOrder));
+        }
+    }
+
     private boolean isProjectDeletable(Integer currentStageSortOrder) {
         if (currentStageSortOrder == null) {
             return true;
@@ -163,6 +201,10 @@ public class ProjectServiceImpl implements ProjectService {
                 PROJECT_DELETE_LOCK_STAGE_SORT_ORDER_KEY,
                 DEFAULT_PROJECT_DELETE_LOCK_STAGE_SORT_ORDER
         );
-        return currentStageSortOrder < lockStageSortOrder;
+        return isProjectDeletable(currentStageSortOrder, lockStageSortOrder);
+    }
+
+    private boolean isProjectDeletable(Integer currentStageSortOrder, int lockStageSortOrder) {
+        return currentStageSortOrder == null || currentStageSortOrder < lockStageSortOrder;
     }
 }

@@ -17,11 +17,12 @@
         FROM audit_trail a
         LEFT JOIN sys_user u ON a.user_id = u.id
         <where>
+            (u.username IS NULL OR LOWER(u.username) &lt;&gt; 'system')
             <if test="userId != null">
-                a.user_id = #{userId}
+                AND a.user_id = #{userId}
             </if>
             <if test="module != null and module != ''">
-                AND a.module = #{module}
+                AND LOWER(TRIM(a.module)) = LOWER(TRIM(#{module}))
             </if>
             <if test="action != null and action != ''">
                 AND a.action = #{action}

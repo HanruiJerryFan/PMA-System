@@ -35,9 +35,7 @@ public class LoginRecordServiceImpl implements LoginRecordService {
 
     @Override
     public List<LoginRecord> getAll() {
-        return loginRecordMapper.selectAll().stream()
-                .filter(record -> !isSystemUserId(record.getUserId()))
-                .toList();
+        return loginRecordMapper.selectAll();
     }
 
     @Override

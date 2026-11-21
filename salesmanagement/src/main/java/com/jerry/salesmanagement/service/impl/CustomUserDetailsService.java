@@ -1,13 +1,8 @@
 package com.jerry.salesmanagement.service.impl;
 
 import com.jerry.salesmanagement.pojo.SysUser;
-import com.jerry.salesmanagement.pojo.SysPermission;
-import com.jerry.salesmanagement.pojo.SysRolePermission;
-import com.jerry.salesmanagement.pojo.SysUserRole;
 import com.jerry.salesmanagement.service.SysPermissionService;
-import com.jerry.salesmanagement.service.SysRolePermissionService;
 import com.jerry.salesmanagement.service.SysRoleService;
-import com.jerry.salesmanagement.service.SysUserRoleService;
 import com.jerry.salesmanagement.service.SysUserService;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.GrantedAuthority;
@@ -22,28 +17,21 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 @Service
 public class CustomUserDetailsService implements UserDetailsService {
 
     private final SysUserService sysUserService;
-    private final SysUserRoleService sysUserRoleService;
     private final SysRoleService sysRoleService;
-    private final SysRolePermissionService sysRolePermissionService;
     private final SysPermissionService sysPermissionService;
 
     public CustomUserDetailsService(
             SysUserService sysUserService,
-            SysUserRoleService sysUserRoleService,
             SysRoleService sysRoleService,
-            SysRolePermissionService sysRolePermissionService,
             SysPermissionService sysPermissionService
     ) {
         this.sysUserService = sysUserService;
-        this.sysUserRoleService = sysUserRoleService;
         this.sysRoleService = sysRoleService;
-        this.sysRolePermissionService = sysRolePermissionService;
         this.sysPermissionService = sysPermissionService;
     }
 
@@ -57,23 +45,22 @@ public class CustomUserDetailsService implements UserDetailsService {
             throw new DisabledException("User status is " + sysUser.getStatus());
         }
 
-        List<SysUserRole> userRoles = sysUserRoleService.getByUserId(sysUser.getId());
-        List<String> roleList = userRoles.stream()
-                .map(userRole -> "ROLE_" + sysRoleService.getById(userRole.getRoleId()).getRoleName())
-                .collect(Collectors.toList());
-        Set<String> permissionSet = new LinkedHashSet<>();
-        for (SysUserRole userRole : userRoles) {
-            List<SysRolePermission> rolePermissions = sysRolePermissionService.getByRoleId(userRole.getRoleId());
-            for (SysRolePermission rolePermission : rolePermissions) {
-                SysPermission permission = sysPermissionService.getById(rolePermission.getPermissionId());
-                if (permission != null && permission.getPermissionCode() != null && !permission.getPermissionCode().isBlank()) {
-                    permissionSet.add(permission.getPermissionCode().trim());
-                }
+        Set<String> roleSet = new LinkedHashSet<>();
+        for (String roleName : sysRoleService.getRoleNamesByUserId(sysUser.getId())) {
+            if (roleName != null && !roleName.isBlank()) {
+                roleSet.add("ROLE_" + roleName.trim());
             }
         }
 
-        List<GrantedAuthority> authorities = new ArrayList<>();
-        for (String role : roleList) {
+        Set<String> permissionSet = new LinkedHashSet<>();
+        for (String permissionCode : sysPermissionService.getPermissionCodesByUserId(sysUser.getId())) {
+            if (permissionCode != null && !permissionCode.isBlank()) {
+                permissionSet.add(permissionCode.trim());
+            }
+        }
+
+        List<GrantedAuthority> authorities = new ArrayList<>(roleSet.size() + permissionSet.size());
+        for (String role : roleSet) {
             authorities.add(new SimpleGrantedAuthority(role));
         }
         for (String permission : permissionSet) {

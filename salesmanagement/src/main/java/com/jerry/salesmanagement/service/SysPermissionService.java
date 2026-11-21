@@ -8,6 +8,7 @@ public interface SysPermissionService {
     SysPermission getById(Long id);
     SysPermission getByPermissionCode(String permissionCode);
     List<SysPermission> getAll();
+    List<String> getPermissionCodesByUserId(Long userId);
     SysPermission create(SysPermission permission);
     SysPermission update(SysPermission permission);
     void delete(Long id);
