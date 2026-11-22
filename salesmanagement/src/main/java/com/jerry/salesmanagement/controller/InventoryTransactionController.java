@@ -3,6 +3,7 @@ package com.jerry.salesmanagement.controller;
 import com.jerry.salesmanagement.common.ApiResponse;
 import com.jerry.salesmanagement.pojo.InventoryTransaction;
 import com.jerry.salesmanagement.pojo.dto.PageResult;
+import com.jerry.salesmanagement.service.AuditTrailService;
 import com.jerry.salesmanagement.service.InventoryTransactionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -24,6 +25,9 @@ public class InventoryTransactionController {
 
     @Autowired
     private InventoryTransactionService inventoryTransactionService;
+
+    @Autowired(required = false)
+    private AuditTrailService auditTrailService;
 
     @GetMapping
     public ApiResponse<List<InventoryTransaction>> getAll() {
@@ -91,7 +95,11 @@ public class InventoryTransactionController {
     public ApiResponse<InventoryTransaction> create(@RequestBody InventoryTransaction inventoryTransaction) {
         try {
             ensureUuid(inventoryTransaction);
-            return ApiResponse.success(inventoryTransactionService.create(inventoryTransaction));
+            InventoryTransaction created = inventoryTransactionService.create(inventoryTransaction);
+            if (auditTrailService != null && created != null) {
+                auditTrailService.record("inventory-transactions", "CREATE", "inventory-transactions", created.getUuid(), "Created inventory transaction");
+            }
+            return ApiResponse.success(created);
         } catch (Exception e) {
             return ApiResponse.error("Failed to create inventory transaction: " + e.getMessage());
         }
@@ -101,7 +109,11 @@ public class InventoryTransactionController {
     public ApiResponse<InventoryTransaction> update(@PathVariable String uuid, @RequestBody InventoryTransaction inventoryTransaction) {
         try {
             inventoryTransaction.setUuid(uuid);
-            return ApiResponse.success(inventoryTransactionService.update(inventoryTransaction));
+            InventoryTransaction updated = inventoryTransactionService.update(inventoryTransaction);
+            if (auditTrailService != null) {
+                auditTrailService.record("inventory-transactions", "UPDATE", "inventory-transactions", uuid, "Updated inventory transaction");
+            }
+            return ApiResponse.success(updated);
         } catch (Exception e) {
             return ApiResponse.error("Failed to update inventory transaction: " + e.getMessage());
         }
@@ -111,6 +123,9 @@ public class InventoryTransactionController {
     public ApiResponse<Void> delete(@PathVariable String uuid) {
         try {
             inventoryTransactionService.delete(uuid);
+            if (auditTrailService != null) {
+                auditTrailService.record("inventory-transactions", "DELETE", "inventory-transactions", uuid, "Deleted inventory transaction");
+            }
             return ApiResponse.success(null);
         } catch (Exception e) {
             return ApiResponse.error("Failed to delete inventory transaction: " + e.getMessage());

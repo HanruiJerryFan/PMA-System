@@ -10,40 +10,98 @@
             ROUND(purchaseAveragePrice * balanceQuantity, 2) AS inventoryAmount
         FROM (
             SELECT
-                COALESCE(MAX(material_id), MAX(material_code)) AS uuid,
-                MAX(material_id) AS materialId,
-                MAX(material_code) AS materialCode,
+                COALESCE(MAX(NULLIF(TRIM(material_code), '')), MAX(NULLIF(material_id, ''))) AS groupKey,
+                COALESCE(MAX(NULLIF(material_id, '')), MAX(NULLIF(TRIM(material_code), ''))) AS uuid,
+                MAX(NULLIF(material_id, '')) AS materialId,
+                MAX(NULLIF(TRIM(material_code), '')) AS materialCode,
                 MAX(material_name) AS materialName,
                 MAX(model) AS model,
                 MAX(brand) AS brand,
-                ROUND(SUM(CASE WHEN txn_type = 'IN' THEN quantity ELSE 0 END), 2) AS inboundQuantity,
-                ROUND(SUM(CASE WHEN txn_type = 'OUT' THEN quantity ELSE 0 END), 2) AS outboundQuantity,
-                ROUND(SUM(CASE WHEN txn_type = 'IN' THEN quantity ELSE -quantity END), 2) AS balanceQuantity,
+                ROUND(SUM(CASE
+                    WHEN txn_type = 'IN'
+                         AND category NOT IN ('WAREHOUSE_TRANSFER_TO_PROJECT', 'PROJECT_TRANSFER_TO_WAREHOUSE')
+                        THEN quantity
+                    ELSE 0
+                END), 4) AS inboundQuantity,
+                ROUND(SUM(CASE
+                    WHEN txn_type = 'OUT'
+                         AND category NOT IN ('WAREHOUSE_TRANSFER_TO_PROJECT', 'PROJECT_TRANSFER_TO_WAREHOUSE')
+                        THEN quantity
+                    ELSE 0
+                END), 4) AS outboundQuantity,
+                ROUND(SUM(CASE
+                    WHEN txn_type = 'IN' THEN quantity
+                    WHEN txn_type = 'OUT' THEN -quantity
+                    ELSE 0
+                END), 4) AS balanceQuantity,
                 COALESCE(
                     SUM(CASE
-                        WHEN txn_type = 'IN' AND category IN ('PROJECT_PURCHASE', 'CENTRALIZED_PURCHASE')
-                            THEN COALESCE(unit_price, 0) * quantity
+                        WHEN txn_type = 'IN'
+                             AND category IN ('PROJECT_PURCHASE', 'CENTRALIZED_PURCHASE')
+                             AND unit_price IS NOT NULL
+                            THEN unit_price * quantity
                         ELSE 0
                     END) / NULLIF(SUM(CASE
-                        WHEN txn_type = 'IN' AND category IN ('PROJECT_PURCHASE', 'CENTRALIZED_PURCHASE') THEN quantity
-                        ELSE 0 END), 0),
+                        WHEN txn_type = 'IN'
+                             AND category IN ('PROJECT_PURCHASE', 'CENTRALIZED_PURCHASE')
+                             AND unit_price IS NOT NULL
+                            THEN quantity
+                        ELSE 0
+                    END), 0),
                     0
-                ) AS purchaseAveragePrice
+                ) AS purchaseAveragePrice,
+                MAX(txn_time) AS lastTxnTime
             FROM goods_transaction_dynamic_info
             GROUP BY COALESCE(NULLIF(TRIM(material_code), ''), material_id)
         ) inventory_balance
     </sql>
 
     <select id="selectByUuid" parameterType="string" resultType="com.jerry.salesmanagement.pojo.GoodsInventory">
-        SELECT *
+        SELECT
+            uuid,
+            materialId,
+            materialCode,
+            materialName,
+            model,
+            brand,
+            inboundQuantity,
+            outboundQuantity,
+            balanceQuantity,
+            purchaseAveragePrice,
+            lastTxnTime,
+            inventoryAmount
         FROM (
             <include refid="balanceSelect"/>
         ) inventory_balance
         WHERE uuid = #{uuid}
+           OR materialId = #{uuid}
+           OR materialCode = #{uuid}
+           OR groupKey IN (
+               SELECT COALESCE(NULLIF(TRIM(material_code), ''), material_id)
+               FROM goods_transaction_dynamic_info
+               WHERE material_id = #{uuid}
+                  OR material_code = #{uuid}
+           )
+        LIMIT 1
     </select>
 
     <select id="selectAll" resultType="com.jerry.salesmanagement.pojo.GoodsInventory">
-        <include refid="balanceSelect"/>
+        SELECT
+            uuid,
+            materialId,
+            materialCode,
+            materialName,
+            model,
+            brand,
+            inboundQuantity,
+            outboundQuantity,
+            balanceQuantity,
+            purchaseAveragePrice,
+            lastTxnTime,
+            inventoryAmount
+        FROM (
+            <include refid="balanceSelect"/>
+        ) inventory_balance
         ORDER BY materialCode ASC
     </select>
 

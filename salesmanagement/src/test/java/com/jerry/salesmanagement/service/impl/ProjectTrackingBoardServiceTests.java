@@ -1,7 +1,9 @@
 package com.jerry.salesmanagement.service.impl;
 
 import com.jerry.salesmanagement.mapper.ContractBasicInfoMapper;
+import com.jerry.salesmanagement.mapper.ContractTypeMapper;
 import com.jerry.salesmanagement.mapper.CustomerMapper;
+import com.jerry.salesmanagement.mapper.FinanceSubjectMapper;
 import com.jerry.salesmanagement.mapper.FinanceVoucherMapper;
 import com.jerry.salesmanagement.mapper.ProjectListMapper;
 import com.jerry.salesmanagement.mapper.ProjectMapper;
@@ -56,6 +58,7 @@ class ProjectTrackingBoardServiceTests {
         jdbc.execute("CREATE TABLE project_basic_info (id BIGINT AUTO_INCREMENT PRIMARY KEY, uuid VARCHAR(36), project_number VARCHAR(10), project_name VARCHAR(200), customer_id VARCHAR(36), customer_uuid VARCHAR(36), manager_id BIGINT, participant_1_user_id BIGINT, participant_2_user_id BIGINT, participant_3_user_id BIGINT, region_id BIGINT, project_type_id BIGINT, warranty_until DATE, plan_start_time TIMESTAMP, plan_end_time TIMESTAMP, sales_contract_attachment_uuid VARCHAR(36), create_time TIMESTAMP, create_user BIGINT, update_time TIMESTAMP, update_user BIGINT)");
         jdbc.execute("CREATE TABLE project_status_history (id BIGINT AUTO_INCREMENT PRIMARY KEY, uuid VARCHAR(64), project_id VARCHAR(64), stage_id BIGINT, created_at TIMESTAMP, created_by BIGINT)");
         jdbc.execute("CREATE TABLE project_list (id BIGINT AUTO_INCREMENT PRIMARY KEY, uuid VARCHAR(36), project_id VARCHAR(36), list_name VARCHAR(128), list_type VARCHAR(32), entry_date DATE, entry_user BIGINT, auditor_user BIGINT, pdf_attachment_id VARCHAR(36), create_time TIMESTAMP, create_user BIGINT, update_time TIMESTAMP, update_user BIGINT)");
+        jdbc.execute("CREATE TABLE contract_type (id BIGINT PRIMARY KEY, type_code VARCHAR(16), type_name VARCHAR(64))");
         jdbc.execute("CREATE TABLE contract_basic_info (id BIGINT AUTO_INCREMENT PRIMARY KEY, uuid VARCHAR(36), project_basic_info_id VARCHAR(36), sub_item_no VARCHAR(2), contract_type_id BIGINT, sub_item_content TEXT, contract_number VARCHAR(50), client_id VARCHAR(36), contact_id VARCHAR(36), sign_date DATE, contract_amount DECIMAL(15,2), create_time TIMESTAMP, create_user BIGINT, update_time TIMESTAMP, update_user BIGINT)");
         jdbc.execute("CREATE TABLE finance_subject (id BIGINT PRIMARY KEY, subject_level TINYINT, subject_code VARCHAR(64), subject_name VARCHAR(64), sort_order INT)");
         jdbc.execute("CREATE TABLE finance_voucher (id BIGINT AUTO_INCREMENT PRIMARY KEY, uuid VARCHAR(36), voucher_no VARCHAR(10), occurred_on DATE, project_id VARCHAR(36), level_1_subject_id BIGINT, level_2_subject_id BIGINT, summary VARCHAR(500), transaction_direction VARCHAR(16), tax_rate DECIMAL(5,4), counterparty_customer_id VARCHAR(36), counterparty_name_snapshot VARCHAR(255), invoice_status VARCHAR(32), invoice_type VARCHAR(32), invoice_no VARCHAR(128), invoice_amount DECIMAL(18,2), actual_income_amount DECIMAL(18,2), actual_expense_amount DECIMAL(18,2), booked_amount DECIMAL(18,2), is_completed BOOLEAN, entry_user BIGINT, auditor_user BIGINT, remark TEXT, created_at TIMESTAMP, created_by BIGINT, updated_at TIMESTAMP, updated_by BIGINT)");
@@ -72,7 +75,9 @@ class ProjectTrackingBoardServiceTests {
                 new ClassPathResource("mapper/ProjectMapper.xml"),
                 new ClassPathResource("mapper/ProjectStatusHistoryMapper.xml"),
                 new ClassPathResource("mapper/ProjectListMapper.xml"),
+                new ClassPathResource("mapper/ContractTypeMapper.xml"),
                 new ClassPathResource("mapper/ContractBasicInfoMapper.xml"),
+                new ClassPathResource("mapper/FinanceSubjectMapper.xml"),
                 new ClassPathResource("mapper/FinanceVoucherMapper.xml"),
                 new ClassPathResource("mapper/WarehouseDocumentMapper.xml")
         });
@@ -89,6 +94,8 @@ class ProjectTrackingBoardServiceTests {
         jdbc.update("INSERT INTO stage(id, stage_code, description, sort_order, is_active) VALUES (1, '1.1', '发现', 1, true), (2, '3.3', '执行中-供货', 9, true), (3, '4.2', '执行完毕', 14, true)");
 
         jdbc.update("INSERT INTO finance_subject(id, subject_level, subject_code, subject_name, sort_order) VALUES (1, 1, 'PROJECT', '项目', 1), (2, 2, 'PROJECT_RECEIPT', '项目回款', 1), (3, 2, 'EQUIPMENT_PURCHASE', '设备采购', 2)");
+        // finance_subject re-seeded cleanly below alongside contract_type
+        jdbc.update("DELETE FROM finance_subject");
 
         // p1: overdue + stalled (entered stage 2 45 days ago before 2026-06-15) + warranty expiring in 10 days + low collection + pending audit
         jdbc.update("INSERT INTO project_basic_info(uuid, project_number, project_name, customer_id, customer_uuid, manager_id, region_id, project_type_id, warranty_until, plan_start_time, plan_end_time) " +
@@ -101,12 +108,16 @@ class ProjectTrackingBoardServiceTests {
         jdbc.update("INSERT INTO project_list(uuid, project_id, list_name, list_type, entry_user, auditor_user) VALUES " +
                 "('pl1', 'p1', '初始清单', 'INITIAL_SALES', 1, NULL)");
 
+        jdbc.update("INSERT INTO contract_type(id, type_code, type_name) VALUES (1, 'XS', '产品销售'), (2, 'C', '采购合同')");
         jdbc.update("INSERT INTO contract_basic_info(uuid, project_basic_info_id, sub_item_no, contract_type_id, contract_number, client_id, contract_amount) VALUES " +
-                "('ct1', 'p1', '01', 1, 'HT-001', 'c1', 1000.00)");
+                "('ct1', 'p1', '01', 1, 'HT-001', 'c1', 1000.00), " +
+                "('ct2', 'p1', '02', 2, 'CG-001', 'c1', 700.00)");
 
+        jdbc.update("INSERT INTO finance_subject(id, subject_level, subject_code, subject_name, sort_order) VALUES (1, 1, 'PROJECT', '项目', 1), (2, 1, 'NON_PROJECT', '非项目', 2), (3, 2, 'PROJECT_RECEIPT', '项目回款', 1), (4, 2, 'EQUIPMENT_PURCHASE', '设备采购', 2)");
         jdbc.update("INSERT INTO finance_voucher(uuid, voucher_no, occurred_on, project_id, level_1_subject_id, level_2_subject_id, summary, transaction_direction, tax_rate, counterparty_customer_id, counterparty_name_snapshot, invoice_status, invoice_amount, actual_income_amount, actual_expense_amount, booked_amount, is_completed, entry_user, auditor_user) VALUES " +
-                "('fv1', '2026060101', '2026-06-01', 'p1', 1, 2, '首付款', 'RECEIVE', 0.1300, 'c1', '华东客户A', 'INVOICED', 500.00, 200.00, NULL, 200.00, true, 1, NULL), " +
-                "('fv2', '2026060201', '2026-06-02', 'p1', 1, 3, '采购支出', 'PAY', 0.1300, 'c1', '华东客户A', 'NOT_INVOICED', NULL, NULL, 250.00, 250.00, true, 1, 1)");
+                "('fv1', '2026060101', '2026-06-01', 'p1', 1, 3, '首付款', 'RECEIVE', 0.1300, 'c1', '华东客户A', 'INVOICED', 500.00, 200.00, NULL, 200.00, true, 1, NULL), " +
+                "('fv2', '2026060201', '2026-06-02', 'p1', 1, 4, '采购支出', 'PAY', 0.1300, 'c1', '华东客户A', 'NOT_INVOICED', NULL, NULL, 250.00, 250.00, true, 1, 1), " +
+                "('fv3', '2026060301', '2026-06-03', 'p1', 2, 4, '非项目挂错支出', 'PAY', 0.1300, 'c1', '华东客户A', 'NOT_INVOICED', NULL, NULL, 900.00, 900.00, true, 1, 1)");
 
         // Include both a normal outbound doc and a WAREHOUSE_TRANSFER auto inbound doc (which must be excluded from pending audit count)
         jdbc.update("INSERT INTO warehouse_doc(doc_number, doc_type, business_category, project_id, counterparty_name, total_amount, source_ref_type, source_ref_id, entry_user, auditor_user) VALUES " +
@@ -128,6 +139,7 @@ class ProjectTrackingBoardServiceTests {
         SystemConfigService configService = mock(SystemConfigService.class);
         when(configService.getInt("project.tracking.stalled_days", 30)).thenReturn(30);
         when(configService.getInt("project.delete.lock_stage_sort_order", 5)).thenReturn(5);
+        when(configService.getInt("project.tracking.low_collection_stage_sort_order", 9)).thenReturn(9);
 
         ProjectTrackingBoardServiceImpl service = new ProjectTrackingBoardServiceImpl();
         ReflectionTestUtils.setField(service, "projectMapper", sql.getMapper(ProjectMapper.class));
@@ -138,7 +150,9 @@ class ProjectTrackingBoardServiceTests {
         ReflectionTestUtils.setField(service, "regionMapper", sql.getMapper(RegionMapper.class));
         ReflectionTestUtils.setField(service, "projectTypeMapper", sql.getMapper(ProjectTypeMapper.class));
         ReflectionTestUtils.setField(service, "projectListMapper", sql.getMapper(ProjectListMapper.class));
+        ReflectionTestUtils.setField(service, "contractTypeMapper", sql.getMapper(ContractTypeMapper.class));
         ReflectionTestUtils.setField(service, "contractBasicInfoMapper", sql.getMapper(ContractBasicInfoMapper.class));
+        ReflectionTestUtils.setField(service, "financeSubjectMapper", sql.getMapper(FinanceSubjectMapper.class));
         ReflectionTestUtils.setField(service, "financeVoucherMapper", sql.getMapper(FinanceVoucherMapper.class));
         ReflectionTestUtils.setField(service, "warehouseDocumentMapper", sql.getMapper(WarehouseDocumentMapper.class));
         ReflectionTestUtils.setField(service, "currentUserService", currentUserService);

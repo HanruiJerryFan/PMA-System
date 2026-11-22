@@ -4,6 +4,7 @@ import com.jerry.salesmanagement.common.ApiResponse;
 import com.jerry.salesmanagement.common.DownloadResponseBuilder;
 import com.jerry.salesmanagement.pojo.ProjectListItem;
 import com.jerry.salesmanagement.pojo.dto.ExcelImportResult;
+import com.jerry.salesmanagement.service.AuditTrailService;
 import com.jerry.salesmanagement.service.ExcelImportTemplateService;
 import com.jerry.salesmanagement.service.ProjectListItemService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +36,9 @@ public class ProjectListItemController {
     @Autowired
     private ExcelImportTemplateService excelImportTemplateService;
 
+    @Autowired(required = false)
+    private AuditTrailService auditTrailService;
+
     @GetMapping("/byList/{projectListId}")
     public ApiResponse<List<ProjectListItem>> getByProjectListId(@PathVariable String projectListId) {
         try {
@@ -48,7 +52,11 @@ public class ProjectListItemController {
     @PreAuthorize("hasAnyAuthority('project.list.entry', 'project.manage')")
     public ApiResponse<ProjectListItem> create(@RequestBody ProjectListItem item) {
         try {
-            return ApiResponse.success("Project list item created successfully", service.create(item));
+            ProjectListItem created = service.create(item);
+            if (auditTrailService != null && created != null) {
+                auditTrailService.record("project-list-items", "CREATE", "project-list-items", created.getUuid(), "Created project list item");
+            }
+            return ApiResponse.success("Project list item created successfully", created);
         } catch (Exception e) {
             return ApiResponse.error("Failed to create project list item: " + e.getMessage());
         }
@@ -59,7 +67,11 @@ public class ProjectListItemController {
     public ApiResponse<ProjectListItem> update(@PathVariable String uuid, @RequestBody ProjectListItem item) {
         try {
             item.setUuid(uuid);
-            return ApiResponse.success("Project list item updated successfully", service.update(item));
+            ProjectListItem updated = service.update(item);
+            if (auditTrailService != null) {
+                auditTrailService.record("project-list-items", "UPDATE", "project-list-items", uuid, "Updated project list item");
+            }
+            return ApiResponse.success("Project list item updated successfully", updated);
         } catch (Exception e) {
             return ApiResponse.error("Failed to update project list item: " + e.getMessage());
         }
@@ -69,7 +81,11 @@ public class ProjectListItemController {
     @PreAuthorize("hasAnyAuthority('project.list.audit', 'project.manage')")
     public ApiResponse<ProjectListItem> audit(@PathVariable String uuid) {
         try {
-            return ApiResponse.success("Project list item audited successfully", service.audit(uuid));
+            ProjectListItem audited = service.audit(uuid);
+            if (auditTrailService != null) {
+                auditTrailService.record("project-list-items", "AUDIT", "project-list-items", uuid, "Audited project list item");
+            }
+            return ApiResponse.success("Project list item audited successfully", audited);
         } catch (Exception e) {
             return ApiResponse.error("Failed to audit project list item: " + e.getMessage());
         }
@@ -80,6 +96,9 @@ public class ProjectListItemController {
     public ApiResponse<Void> delete(@PathVariable String uuid) {
         try {
             service.delete(uuid);
+            if (auditTrailService != null) {
+                auditTrailService.record("project-list-items", "DELETE", "project-list-items", uuid, "Deleted project list item");
+            }
             return ApiResponse.success("Project list item deleted successfully", null);
         } catch (Exception e) {
             return ApiResponse.error("Failed to delete project list item: " + e.getMessage());
@@ -95,9 +114,14 @@ public class ProjectListItemController {
             @RequestParam(defaultValue = "PARTIAL_SUCCESS") String importMode
     ) {
         try {
+            ExcelImportResult result = service.importFromExcel(projectListId, file, replaceExisting, importMode);
+            if (auditTrailService != null && result != null && result.getImportedRows() > 0) {
+                auditTrailService.record("project-list-items", "IMPORT", "project-lists", projectListId,
+                        "Imported " + result.getImportedRows() + " project list items");
+            }
             return ApiResponse.success(
                     "Project list items imported successfully",
-                    service.importFromExcel(projectListId, file, replaceExisting, importMode)
+                    result
             );
         } catch (IllegalArgumentException e) {
             return ApiResponse.badRequest(e.getMessage());

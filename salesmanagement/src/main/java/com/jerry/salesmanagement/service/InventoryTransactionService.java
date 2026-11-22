@@ -26,6 +26,8 @@ public interface InventoryTransactionService {
 
     InventoryTransaction create(InventoryTransaction inventoryTransaction);
 
+    InventoryTransaction createForWarehouseDocument(InventoryTransaction inventoryTransaction);
+
     InventoryTransaction update(InventoryTransaction inventoryTransaction);
 
     void delete(String uuid);

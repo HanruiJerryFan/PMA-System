@@ -84,13 +84,13 @@
     <select id="selectMaxAnnualSequence" parameterType="string" resultType="java.lang.Integer">
         SELECT MAX(CAST(RIGHT(doc_number, 3) AS UNSIGNED))
         FROM warehouse_doc
-        WHERE doc_number LIKE CONCAT(#{docNumberPrefix}, '%')
+        WHERE doc_number REGEXP CONCAT('^', #{docNumberPrefix}, '[0-9]{5}$')
     </select>
 
     <select id="selectMaxAnnualSequenceForUpdate" parameterType="string" resultType="java.lang.Integer" flushCache="true" useCache="false">
         SELECT CAST(RIGHT(doc_number, 3) AS DECIMAL(10,0))
         FROM warehouse_doc
-        WHERE doc_number LIKE CONCAT(#{docNumberPrefix}, '%')
+        WHERE doc_number REGEXP CONCAT('^', #{docNumberPrefix}, '[0-9]{5}$')
         ORDER BY CAST(RIGHT(doc_number, 3) AS DECIMAL(10,0)) DESC
         LIMIT 1 FOR UPDATE
     </select>

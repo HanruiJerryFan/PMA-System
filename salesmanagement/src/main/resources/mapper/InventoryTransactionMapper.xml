@@ -120,6 +120,19 @@
         WHERE uuid = #{uuid}
     </select>
 
+    <select id="selectWarehouseMaterialBalance" resultType="java.math.BigDecimal" flushCache="true" useCache="false">
+        SELECT COALESCE(SUM(
+            CASE
+                WHEN txn_type = 'IN' THEN quantity
+                WHEN txn_type = 'OUT' THEN -quantity
+                ELSE 0
+            END
+        ), 0)
+        FROM goods_transaction_dynamic_info
+        WHERE warehouse_id = #{warehouseId}
+          AND material_id = #{materialId}
+    </select>
+
     <select id="selectBySourceRef" resultType="com.jerry.salesmanagement.pojo.InventoryTransaction">
         SELECT
             id,
@@ -198,18 +211,18 @@
             <if test="materialId != null">material_id = #{materialId},</if>
             <if test="materialCode != null">material_code = #{materialCode},</if>
             <if test="materialName != null">material_name = #{materialName},</if>
-            <if test="model != null">model = #{model},</if>
-            <if test="brand != null">brand = #{brand},</if>
+            model = #{model},
+            brand = #{brand},
             <if test="category != null">category = #{category},</if>
-            <if test="projectId != null">project_id = #{projectId},</if>
+            project_id = #{projectId},
             <if test="warehouseId != null">warehouse_id = #{warehouseId},</if>
             <if test="txnType != null">txn_type = #{txnType},</if>
             <if test="txnTime != null">txn_time = #{txnTime},</if>
             <if test="quantity != null">quantity = #{quantity},</if>
-            <if test="unitPrice != null">unit_price = #{unitPrice},</if>
-            <if test="amount != null">amount = #{amount},</if>
-            <if test="sourceRefType != null">source_ref_type = #{sourceRefType},</if>
-            <if test="sourceRefId != null">source_ref_id = #{sourceRefId},</if>
+            unit_price = #{unitPrice},
+            amount = #{amount},
+            source_ref_type = #{sourceRefType},
+            source_ref_id = #{sourceRefId},
             update_time = NOW(),
             update_user = #{updatedBy}
         </set>

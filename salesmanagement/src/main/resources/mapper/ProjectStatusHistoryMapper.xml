@@ -82,7 +82,7 @@
             <if test="projectId != null">project_id = #{projectId},</if>
             <if test="stageId != null">stage_id = #{stageId},</if>
             <if test="createdAt != null">created_at = #{createdAt},</if>
-            <if test="createdBy != null">created_by = #{createdBy},</if>
+            created_by = #{createdBy}
         </set>
         WHERE uuid = #{uuid}
     </update>
@@ -90,5 +90,10 @@
     <delete id="deleteByUuid">
         DELETE FROM project_status_history
         WHERE uuid = #{uuid}
+    </delete>
+
+    <delete id="deleteByProjectId">
+        DELETE FROM project_status_history
+        WHERE project_id = #{projectId}
     </delete>
 </mapper>

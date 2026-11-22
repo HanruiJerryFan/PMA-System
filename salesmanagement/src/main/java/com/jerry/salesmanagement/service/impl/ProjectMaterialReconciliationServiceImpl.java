@@ -31,6 +31,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -293,6 +294,7 @@ public class ProjectMaterialReconciliationServiceImpl implements ProjectMaterial
         if (canViewInventory) {
             for (WarehouseDocument doc : docs) {
                 String docType = doc.getDocType();
+                String category = doc.getBusinessCategory();
                 for (WarehouseDocumentItem item : docItemsByDocNumber.getOrDefault(doc.getDocNumber(), List.of())) {
                     String key = buildMaterialKey(
                             item.getMaterialId(),
@@ -313,7 +315,7 @@ public class ProjectMaterialReconciliationServiceImpl implements ProjectMaterial
                     ));
                     BigDecimal qty = defaultZero(item.getQuantity());
                     BigDecimal amt = resolveAmount(item.getAmount(), item.getQuantity(), item.getUnitPrice());
-                    if ("INBOUND_NOTE".equals(docType)) {
+                    if ("INBOUND_NOTE".equals(docType) && !"CENTRALIZED_PURCHASE".equals(category)) {
                         line.setPurchasedQty(line.getPurchasedQty().add(qty));
                         line.setPurchasedAmount(line.getPurchasedAmount().add(amt));
                     } else if ("TRANSFER_JTX".equals(docType)) {
@@ -330,6 +332,17 @@ public class ProjectMaterialReconciliationServiceImpl implements ProjectMaterial
             }
 
             for (InventoryTransaction txn : standaloneTxns) {
+                String cat = txn.getCategory() == null ? "" : txn.getCategory().trim().toUpperCase(Locale.ROOT);
+                String txnType = txn.getTxnType() == null ? "" : txn.getTxnType().trim().toUpperCase(Locale.ROOT);
+                if ("CENTRALIZED_PURCHASE".equals(cat)) {
+                    continue;
+                }
+                if ("WAREHOUSE_TRANSFER_TO_PROJECT".equals(cat) && !"IN".equals(txnType)) {
+                    continue;
+                }
+                if ("PROJECT_TRANSFER_TO_WAREHOUSE".equals(cat) && !"OUT".equals(txnType)) {
+                    continue;
+                }
                 String key = buildMaterialKey(
                         txn.getMaterialId(),
                         txn.getMaterialCode(),
@@ -349,24 +362,34 @@ public class ProjectMaterialReconciliationServiceImpl implements ProjectMaterial
                 ));
                 BigDecimal qty = defaultZero(txn.getQuantity());
                 BigDecimal amt = resolveAmount(txn.getAmount(), txn.getQuantity(), txn.getUnitPrice());
-                String cat = txn.getCategory();
-                String txnType = txn.getTxnType();
-                if ("IN".equals(txnType)) {
-                    if ("WAREHOUSE_TRANSFER_TO_PROJECT".equals(cat)) {
-                        line.setTransferInQty(line.getTransferInQty().add(qty));
-                        line.setTransferInAmount(line.getTransferInAmount().add(amt));
-                    } else {
+                if ("WAREHOUSE_TRANSFER_TO_PROJECT".equals(cat)) {
+                    line.setTransferInQty(line.getTransferInQty().add(qty));
+                    line.setTransferInAmount(line.getTransferInAmount().add(amt));
+                } else if ("PROJECT_TRANSFER_TO_WAREHOUSE".equals(cat)) {
+                    line.setTransferOutQty(line.getTransferOutQty().add(qty));
+                    line.setTransferOutAmount(line.getTransferOutAmount().add(amt));
+                } else if ("PROJECT_PURCHASE".equals(cat)) {
+                    if ("IN".equals(txnType)) {
                         line.setPurchasedQty(line.getPurchasedQty().add(qty));
                         line.setPurchasedAmount(line.getPurchasedAmount().add(amt));
+                    } else if ("OUT".equals(txnType)) {
+                        line.setPurchasedQty(line.getPurchasedQty().subtract(qty));
+                        line.setPurchasedAmount(line.getPurchasedAmount().subtract(amt));
                     }
-                } else if ("OUT".equals(txnType)) {
-                    if ("PROJECT_TRANSFER_TO_WAREHOUSE".equals(cat)) {
-                        line.setTransferOutQty(line.getTransferOutQty().add(qty));
-                        line.setTransferOutAmount(line.getTransferOutAmount().add(amt));
-                    } else {
+                } else if ("PROJECT_SALES".equals(cat)) {
+                    if ("OUT".equals(txnType)) {
                         line.setShippedQty(line.getShippedQty().add(qty));
                         line.setShippedAmount(line.getShippedAmount().add(amt));
+                    } else if ("IN".equals(txnType)) {
+                        line.setShippedQty(line.getShippedQty().subtract(qty));
+                        line.setShippedAmount(line.getShippedAmount().subtract(amt));
                     }
+                } else if ("IN".equals(txnType)) {
+                    line.setPurchasedQty(line.getPurchasedQty().add(qty));
+                    line.setPurchasedAmount(line.getPurchasedAmount().add(amt));
+                } else if ("OUT".equals(txnType)) {
+                    line.setShippedQty(line.getShippedQty().add(qty));
+                    line.setShippedAmount(line.getShippedAmount().add(amt));
                 }
             }
         }
@@ -378,8 +401,8 @@ public class ProjectMaterialReconciliationServiceImpl implements ProjectMaterial
         int overProcuredCount = 0;
         int matchedCount = 0;
 
-        BigDecimal totalPlannedSalesQty = BigDecimal.ZERO;
-        BigDecimal totalShippedQty = BigDecimal.ZERO;
+        BigDecimal totalPositivePlannedSalesQty = BigDecimal.ZERO;
+        BigDecimal totalCappedFulfilledSalesQty = BigDecimal.ZERO;
         BigDecimal totalPlannedSalesAmount = BigDecimal.ZERO;
         BigDecimal totalPlannedProcurementAmount = BigDecimal.ZERO;
         BigDecimal totalActualSuppliedAmount = BigDecimal.ZERO;
@@ -392,13 +415,25 @@ public class ProjectMaterialReconciliationServiceImpl implements ProjectMaterial
             BigDecimal transferInQty = scale4(line.getTransferInQty());
             BigDecimal transferOutQty = scale4(line.getTransferOutQty());
             BigDecimal shippedQty = scale4(line.getShippedQty());
+            BigDecimal plannedSalesAmt = scale2(line.getPlannedSalesAmount());
+            BigDecimal plannedProcAmt = scale2(line.getPlannedProcurementAmount());
+            BigDecimal purchasedAmt = scale2(line.getPurchasedAmount());
+            BigDecimal transferInAmt = scale2(line.getTransferInAmount());
+            BigDecimal transferOutAmt = scale2(line.getTransferOutAmount());
+            BigDecimal shippedAmt = scale2(line.getShippedAmount());
 
             if (plannedSalesQty.compareTo(BigDecimal.ZERO) == 0
                     && plannedProcurementQty.compareTo(BigDecimal.ZERO) == 0
                     && purchasedQty.compareTo(BigDecimal.ZERO) == 0
                     && transferInQty.compareTo(BigDecimal.ZERO) == 0
                     && transferOutQty.compareTo(BigDecimal.ZERO) == 0
-                    && shippedQty.compareTo(BigDecimal.ZERO) == 0) {
+                    && shippedQty.compareTo(BigDecimal.ZERO) == 0
+                    && plannedSalesAmt.compareTo(BigDecimal.ZERO) == 0
+                    && plannedProcAmt.compareTo(BigDecimal.ZERO) == 0
+                    && purchasedAmt.compareTo(BigDecimal.ZERO) == 0
+                    && transferInAmt.compareTo(BigDecimal.ZERO) == 0
+                    && transferOutAmt.compareTo(BigDecimal.ZERO) == 0
+                    && shippedAmt.compareTo(BigDecimal.ZERO) == 0) {
                 continue;
             }
 
@@ -408,18 +443,18 @@ public class ProjectMaterialReconciliationServiceImpl implements ProjectMaterial
             BigDecimal unshippedOnHandQty = scale4(netSuppliedQty.subtract(shippedQty));
 
             line.setPlannedSalesQty(plannedSalesQty);
-            line.setPlannedSalesAmount(scale2(line.getPlannedSalesAmount()));
+            line.setPlannedSalesAmount(plannedSalesAmt);
             line.setPlannedProcurementQty(plannedProcurementQty);
-            line.setPlannedProcurementAmount(scale2(line.getPlannedProcurementAmount()));
+            line.setPlannedProcurementAmount(plannedProcAmt);
             line.setPurchasedQty(purchasedQty);
-            line.setPurchasedAmount(scale2(line.getPurchasedAmount()));
+            line.setPurchasedAmount(purchasedAmt);
             line.setTransferInQty(transferInQty);
-            line.setTransferInAmount(scale2(line.getTransferInAmount()));
+            line.setTransferInAmount(transferInAmt);
             line.setTransferOutQty(transferOutQty);
-            line.setTransferOutAmount(scale2(line.getTransferOutAmount()));
+            line.setTransferOutAmount(transferOutAmt);
             line.setNetSuppliedQty(netSuppliedQty);
             line.setShippedQty(shippedQty);
-            line.setShippedAmount(scale2(line.getShippedAmount()));
+            line.setShippedAmount(shippedAmt);
             line.setProcurementGapQty(procurementGapQty);
             line.setShipmentGapQty(shipmentGapQty);
             line.setUnshippedOnHandQty(unshippedOnHandQty);
@@ -431,7 +466,8 @@ public class ProjectMaterialReconciliationServiceImpl implements ProjectMaterial
                     netSuppliedQty,
                     shippedQty,
                     procurementGapQty,
-                    shipmentGapQty
+                    shipmentGapQty,
+                    unshippedOnHandQty
             );
             line.setStatus(status);
 
@@ -445,8 +481,11 @@ public class ProjectMaterialReconciliationServiceImpl implements ProjectMaterial
                 }
             }
 
-            totalPlannedSalesQty = totalPlannedSalesQty.add(plannedSalesQty);
-            totalShippedQty = totalShippedQty.add(shippedQty);
+            if (plannedSalesQty.compareTo(BigDecimal.ZERO) > 0) {
+                totalPositivePlannedSalesQty = totalPositivePlannedSalesQty.add(plannedSalesQty);
+                BigDecimal cappedShipped = shippedQty.max(BigDecimal.ZERO).min(plannedSalesQty);
+                totalCappedFulfilledSalesQty = totalCappedFulfilledSalesQty.add(cappedShipped);
+            }
             totalPlannedSalesAmount = totalPlannedSalesAmount.add(line.getPlannedSalesAmount());
             totalPlannedProcurementAmount = totalPlannedProcurementAmount.add(line.getPlannedProcurementAmount());
             BigDecimal suppliedAmt = line.getPurchasedAmount()
@@ -479,9 +518,9 @@ public class ProjectMaterialReconciliationServiceImpl implements ProjectMaterial
         dto.setPlannedProcurementAmount(scale2(totalPlannedProcurementAmount));
         dto.setActualSuppliedAmount(canViewInventory ? scale2(totalActualSuppliedAmount) : null);
         dto.setActualShippedAmount(canViewInventory ? scale2(totalActualShippedAmount) : null);
-        if (canViewInventory && totalPlannedSalesQty.compareTo(BigDecimal.ZERO) > 0) {
+        if (canViewInventory && totalPositivePlannedSalesQty.compareTo(BigDecimal.ZERO) > 0) {
             dto.setFulfillmentRate(
-                    totalShippedQty.multiply(HUNDRED).divide(totalPlannedSalesQty, 2, RoundingMode.HALF_UP)
+                    totalCappedFulfilledSalesQty.multiply(HUNDRED).divide(totalPositivePlannedSalesQty, 2, RoundingMode.HALF_UP)
             );
         }
         dto.setItems(finalizedLines);
@@ -495,20 +534,22 @@ public class ProjectMaterialReconciliationServiceImpl implements ProjectMaterial
             BigDecimal netSuppliedQty,
             BigDecimal shippedQty,
             BigDecimal procurementGapQty,
-            BigDecimal shipmentGapQty
+            BigDecimal shipmentGapQty,
+            BigDecimal unshippedOnHandQty
     ) {
         if (!canViewInventory) {
             return "NO_INVENTORY_PERMISSION";
         }
         if (plannedSalesQty.compareTo(BigDecimal.ZERO) == 0
                 && plannedProcurementQty.compareTo(BigDecimal.ZERO) == 0
-                && (netSuppliedQty.compareTo(BigDecimal.ZERO) > 0 || shippedQty.compareTo(BigDecimal.ZERO) > 0)) {
+                && (netSuppliedQty.compareTo(BigDecimal.ZERO) != 0 || shippedQty.compareTo(BigDecimal.ZERO) != 0)) {
             return "UNPLANNED";
         }
         if (shipmentGapQty.compareTo(BigDecimal.ZERO) < 0) {
             return "OVER_SHIPPED";
         }
-        if (procurementGapQty.compareTo(BigDecimal.ZERO) > 0) {
+        if (procurementGapQty.compareTo(BigDecimal.ZERO) > 0
+                || (shipmentGapQty.compareTo(BigDecimal.ZERO) > 0 && unshippedOnHandQty.compareTo(shipmentGapQty) < 0)) {
             return "PROCUREMENT_SHORTAGE";
         }
         if (shipmentGapQty.compareTo(BigDecimal.ZERO) > 0) {

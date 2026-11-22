@@ -151,17 +151,17 @@
         UPDATE project_list_item
         <set>
             <if test="projectListId != null">project_list_id = #{projectListId},</if>
-            <if test="materialId != null">material_id = #{materialId},</if>
-            <if test="materialCode != null">material_code = #{materialCode},</if>
+            material_id = #{materialId},
+            material_code = #{materialCode},
             <if test="itemName != null">item_name = #{itemName},</if>
-            <if test="model != null">model = #{model},</if>
-            <if test="brand != null">brand = #{brand},</if>
-            <if test="unit != null">unit = #{unit},</if>
+            model = #{model},
+            brand = #{brand},
+            unit = #{unit},
             <if test="quantity != null">quantity = #{quantity},</if>
-            <if test="unitPrice != null">unit_price = #{unitPrice},</if>
-            <if test="totalAmount != null">total_amount = #{totalAmount},</if>
-            <if test="sourceType != null">source_type = #{sourceType},</if>
-            <if test="remark != null">remark = #{remark},</if>
+            unit_price = #{unitPrice},
+            total_amount = #{totalAmount},
+            source_type = #{sourceType},
+            remark = #{remark},
             entry_user = #{entryUser},
             auditor_user = #{auditorUser},
             update_time = NOW(),

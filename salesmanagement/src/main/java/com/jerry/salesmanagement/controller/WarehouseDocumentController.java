@@ -14,6 +14,7 @@ import com.jerry.salesmanagement.pojo.ProductBrand;
 import com.jerry.salesmanagement.pojo.Project;
 import com.jerry.salesmanagement.pojo.WarehouseDocument;
 import com.jerry.salesmanagement.pojo.WarehouseDocumentCustomerOption;
+import com.jerry.salesmanagement.service.AuditTrailService;
 import com.jerry.salesmanagement.service.WarehouseDocumentPdfExportService;
 import com.jerry.salesmanagement.service.WarehouseDocumentService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,6 +47,9 @@ public class WarehouseDocumentController {
 
     @Autowired
     private WarehouseDocumentPdfExportService warehouseDocumentPdfExportService;
+
+    @Autowired(required = false)
+    private AuditTrailService auditTrailService;
 
     @Autowired
     private MaterialMasterMapper materialMasterMapper;
@@ -184,7 +188,12 @@ public class WarehouseDocumentController {
     @PreAuthorize("hasAnyAuthority('inventory.warehouse-doc.entry', 'inventory.manage')")
     public ApiResponse<WarehouseDocument> create(@RequestBody WarehouseDocument warehouseDocument) {
         try {
-            return ApiResponse.success(warehouseDocumentService.create(warehouseDocument));
+            warehouseDocument.setDocNumber(null);
+            WarehouseDocument created = warehouseDocumentService.create(warehouseDocument);
+            if (auditTrailService != null && created != null) {
+                auditTrailService.record("warehouse-documents", "CREATE", "warehouse-documents", created.getDocNumber(), "Created warehouse document");
+            }
+            return ApiResponse.success(created);
         } catch (Exception e) {
             return ApiResponse.error("Failed to create warehouse document: " + e.getMessage());
         }
@@ -198,7 +207,11 @@ public class WarehouseDocumentController {
     ) {
         try {
             warehouseDocument.setDocNumber(docNumber);
-            return ApiResponse.success(warehouseDocumentService.update(warehouseDocument));
+            WarehouseDocument updated = warehouseDocumentService.update(warehouseDocument);
+            if (auditTrailService != null) {
+                auditTrailService.record("warehouse-documents", "UPDATE", "warehouse-documents", docNumber, "Updated warehouse document");
+            }
+            return ApiResponse.success(updated);
         } catch (Exception e) {
             return ApiResponse.error("Failed to update warehouse document: " + e.getMessage());
         }
@@ -208,7 +221,11 @@ public class WarehouseDocumentController {
     @PreAuthorize("hasAnyAuthority('inventory.warehouse-doc.audit', 'inventory.manage')")
     public ApiResponse<WarehouseDocument> audit(@PathVariable String docNumber) {
         try {
-            return ApiResponse.success("Warehouse document audited", warehouseDocumentService.audit(docNumber));
+            WarehouseDocument audited = warehouseDocumentService.audit(docNumber);
+            if (auditTrailService != null) {
+                auditTrailService.record("warehouse-documents", "AUDIT", "warehouse-documents", docNumber, "Audited warehouse document");
+            }
+            return ApiResponse.success("Warehouse document audited", audited);
         } catch (Exception e) {
             return ApiResponse.error("Failed to audit warehouse document: " + e.getMessage());
         }
@@ -219,6 +236,9 @@ public class WarehouseDocumentController {
     public ApiResponse<Void> delete(@PathVariable String docNumber) {
         try {
             warehouseDocumentService.delete(docNumber);
+            if (auditTrailService != null) {
+                auditTrailService.record("warehouse-documents", "DELETE", "warehouse-documents", docNumber, "Deleted warehouse document");
+            }
             return ApiResponse.success(null);
         } catch (Exception e) {
             return ApiResponse.error("Failed to delete warehouse document: " + e.getMessage());

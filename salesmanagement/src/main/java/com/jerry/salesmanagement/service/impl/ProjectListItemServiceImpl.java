@@ -18,6 +18,7 @@ import com.jerry.salesmanagement.service.EntryAuditService;
 import com.jerry.salesmanagement.service.ProjectListItemService;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.FormulaEvaluator;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -31,11 +32,13 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -131,7 +134,7 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
     @Override
     @Transactional
     public ProjectListItem create(ProjectListItem item) {
-        ProjectList projectList = validateItem(item);
+        ProjectList projectList = validateItem(item, true);
         if (!StringUtils.hasText(item.getUuid())) {
             item.setUuid(UUID.randomUUID().toString());
         }
@@ -151,7 +154,14 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
         if (existing == null) {
             throw new IllegalArgumentException("Project list item does not exist");
         }
-        ProjectList projectList = validateItem(item);
+        if (StringUtils.hasText(item.getProjectListId())
+                && !Objects.equals(existing.getProjectListId(), item.getProjectListId())) {
+            throw new IllegalArgumentException("不允许将项目清单明细移动到其他清单");
+        }
+        if (!StringUtils.hasText(item.getProjectListId())) {
+            item.setProjectListId(existing.getProjectListId());
+        }
+        ProjectList projectList = validateItem(item, true);
         item.setTotalAmount(calculateTotalAmount(item));
         Long currentUserId = currentUserService.requireCurrentUserId();
         entryAuditService.applyUpdate(item, existing);
@@ -175,16 +185,31 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
     }
 
     @Override
+    @Transactional
     public void delete(String uuid) {
         ProjectListItem existing = mapper.selectByUuid(uuid);
-        if (existing != null && entryAuditService != null) {
+        if (existing == null) {
+            return;
+        }
+        ProjectList parentList = projectListMapper.selectByUuid(existing.getProjectListId());
+        assertParentListUnlockedForItemMutation(parentList);
+        if (entryAuditService != null) {
             entryAuditService.assertCanDelete(existing);
         }
         mapper.deleteByUuid(uuid);
     }
 
     @Override
+    @Transactional
     public void deleteByProjectListId(String projectListId) {
+        if (!StringUtils.hasText(projectListId)) {
+            return;
+        }
+        if (entryAuditService != null) {
+            for (ProjectListItem item : mapper.selectByProjectListId(projectListId)) {
+                entryAuditService.assertCanDelete(item);
+            }
+        }
         mapper.deleteByProjectListId(projectListId);
     }
 
@@ -194,9 +219,11 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
         if (!StringUtils.hasText(projectListId)) {
             throw new IllegalArgumentException("Project list is required");
         }
-        if (projectListMapper.selectByUuid(projectListId) == null) {
+        ProjectList projectList = projectListMapper.selectByUuid(projectListId);
+        if (projectList == null) {
             throw new IllegalArgumentException("Project list does not exist");
         }
+        assertParentListUnlockedForItemMutation(projectList);
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("Excel file is required");
         }
@@ -204,17 +231,18 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
         String normalizedImportMode = normalizeImportMode(importMode);
 
         try (InputStream inputStream = file.getInputStream(); Workbook workbook = WorkbookFactory.create(inputStream)) {
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
             Sheet sheet = workbook.getNumberOfSheets() > 0 ? workbook.getSheetAt(0) : null;
             if (sheet == null) {
                 throw new IllegalArgumentException("Excel sheet is empty");
             }
 
-            int headerRowIndex = findHeaderRowIndex(sheet);
+            int headerRowIndex = findHeaderRowIndex(sheet, evaluator);
             if (headerRowIndex < 0) {
                 throw new IllegalArgumentException("Header row was not found");
             }
 
-            Map<String, Integer> headerIndexMap = buildHeaderIndexMap(sheet.getRow(headerRowIndex));
+            Map<String, Integer> headerIndexMap = buildHeaderIndexMap(sheet.getRow(headerRowIndex), evaluator);
             if (!hasItemReferenceColumn(headerIndexMap) || !headerIndexMap.containsKey("quantity")) {
                 throw new IllegalArgumentException("Excel must contain Quantity and one of Material ID, Material Code, or Item Name columns");
             }
@@ -222,21 +250,21 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
             int totalRows = 0;
             int importedRows = 0;
             int skippedRows = 0;
-            List<ProjectListItem> validItems = new java.util.ArrayList<>();
-            List<ExcelImportError> errors = new java.util.ArrayList<>();
+            List<ProjectListItem> validItems = new ArrayList<>();
+            List<ExcelImportError> errors = new ArrayList<>();
 
             for (int rowIndex = headerRowIndex + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
                 Row row = sheet.getRow(rowIndex);
-                if (isEmptyDataRow(row, headerIndexMap)) {
+                if (isEmptyDataRow(row, headerIndexMap, evaluator)) {
                     skippedRows++;
                     continue;
                 }
 
                 totalRows++;
-                Map<String, String> rowData = extractRowData(row, headerIndexMap);
+                Map<String, String> rowData = extractRowData(row, headerIndexMap, evaluator);
                 try {
-                    ProjectListItem item = mapRowToItem(projectListId, row, headerIndexMap, rowIndex + 1);
-                    validateItem(item);
+                    ProjectListItem item = mapRowToItem(projectListId, row, headerIndexMap, rowIndex + 1, evaluator);
+                    validateItem(item, true);
                     validItems.add(item);
                 } catch (Exception e) {
                     errors.add(buildImportError(rowIndex + 1, e.getMessage(), rowData));
@@ -245,6 +273,10 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
 
             if (IMPORT_MODE_FAIL_FAST.equals(normalizedImportMode) && !errors.isEmpty()) {
                 return buildImportResult(projectListId, normalizedImportMode, replaceExisting, totalRows, 0, skippedRows, errors);
+            }
+
+            if (replaceExisting && !errors.isEmpty()) {
+                throw new IllegalArgumentException("覆盖导入不允许存在失败行，请先修正 Excel 中的 " + errors.size() + " 条错误行后重试（原清单明细未做任何删除）");
             }
 
             if (replaceExisting && !validItems.isEmpty()) {
@@ -264,13 +296,16 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
         }
     }
 
-    private ProjectList validateItem(ProjectListItem item) {
+    private ProjectList validateItem(ProjectListItem item, boolean checkParentAuditLock) {
         if (!StringUtils.hasText(item.getProjectListId())) {
             throw new IllegalArgumentException("Project list is required");
         }
         ProjectList projectList = projectListMapper.selectByUuid(item.getProjectListId());
         if (projectList == null) {
             throw new IllegalArgumentException("Project list does not exist");
+        }
+        if (checkParentAuditLock) {
+            assertParentListUnlockedForItemMutation(projectList);
         }
         hydrateMaterialFields(item);
         if (!StringUtils.hasText(item.getItemName())) {
@@ -290,17 +325,42 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
         if (item.getUnitPrice() != null && item.getUnitPrice().compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("Unit price cannot be negative");
         }
-        if (StringUtils.hasText(item.getMaterialCode()) && extractLeadingToken(item.getMaterialCode()).length() != 12) {
-            throw new IllegalArgumentException("Material code must be 12 characters");
+        if (StringUtils.hasText(item.getMaterialCode())) {
+            String code = extractLeadingToken(item.getMaterialCode());
+            if (code.length() < 10 || code.length() > 12) {
+                throw new IllegalArgumentException("Material code must be 10 to 12 characters");
+            }
         }
-        if (StringUtils.hasText(item.getSourceType()) && !SOURCE_TYPES.contains(item.getSourceType())) {
-            throw new IllegalArgumentException("Source type is invalid");
+        if (StringUtils.hasText(item.getSourceType())) {
+            item.setSourceType(item.getSourceType().trim().toUpperCase(Locale.ROOT));
+            if (!SOURCE_TYPES.contains(item.getSourceType())) {
+                throw new IllegalArgumentException("Source type is invalid");
+            }
+        } else {
+            item.setSourceType(null);
         }
         if (StringUtils.hasText(item.getMaterialId())
                 && materialMasterMapper.selectByUuid(item.getMaterialId()) == null) {
             throw new IllegalArgumentException("Material does not exist");
         }
+        item.setModel(trimToNull(item.getModel()));
+        item.setBrand(trimToNull(item.getBrand()));
+        item.setUnit(trimToNull(item.getUnit()));
+        item.setRemark(trimToNull(item.getRemark()));
         return projectList;
+    }
+
+    private void assertParentListUnlockedForItemMutation(ProjectList projectList) {
+        if (projectList != null && projectList.getAuditorUser() != null) {
+            boolean canOverride = entryAuditService != null && entryAuditService.canOverrideEntryAuditUsers();
+            if (!canOverride) {
+                throw new IllegalArgumentException("所属项目清单已审核，不能新增、修改、删除或覆盖导入明细，请联系管理员处理");
+            }
+        }
+    }
+
+    private String trimToNull(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
     }
 
     private String extractLeadingToken(String value) {
@@ -332,8 +392,8 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
         if (StringUtils.hasText(item.getMaterialCode())) {
             String normalizedMaterialCode = extractLeadingToken(item.getMaterialCode()).toUpperCase(Locale.ROOT);
             item.setMaterialCode(normalizedMaterialCode);
-            if (normalizedMaterialCode.length() != 12) {
-                throw new IllegalArgumentException("Material code must be 12 characters");
+            if (normalizedMaterialCode.length() < 10 || normalizedMaterialCode.length() > 12) {
+                throw new IllegalArgumentException("Material code must be 10 to 12 characters");
             }
             MaterialMaster material = materialMasterMapper.selectByMaterialCode(normalizedMaterialCode);
             if (material == null) {
@@ -381,13 +441,13 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
         return item.getQuantity().multiply(item.getUnitPrice()).setScale(2, RoundingMode.HALF_UP);
     }
 
-    private int findHeaderRowIndex(Sheet sheet) {
+    private int findHeaderRowIndex(Sheet sheet, FormulaEvaluator evaluator) {
         for (int rowIndex = sheet.getFirstRowNum(); rowIndex <= sheet.getLastRowNum(); rowIndex++) {
             Row row = sheet.getRow(rowIndex);
             if (row == null) {
                 continue;
             }
-            Map<String, Integer> headerIndexMap = buildHeaderIndexMap(row);
+            Map<String, Integer> headerIndexMap = buildHeaderIndexMap(row, evaluator);
             if (hasItemReferenceColumn(headerIndexMap) && headerIndexMap.containsKey("quantity")) {
                 return rowIndex;
             }
@@ -395,7 +455,7 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
         return -1;
     }
 
-    private Map<String, Integer> buildHeaderIndexMap(Row headerRow) {
+    private Map<String, Integer> buildHeaderIndexMap(Row headerRow, FormulaEvaluator evaluator) {
         Map<String, Integer> headerIndexMap = new HashMap<>();
         if (headerRow == null) {
             return headerIndexMap;
@@ -403,7 +463,7 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
 
         DataFormatter formatter = new DataFormatter();
         for (Cell cell : headerRow) {
-            String normalized = normalizeHeader(formatter.formatCellValue(cell));
+            String normalized = normalizeHeader(formatter.formatCellValue(cell, evaluator));
             if (!normalized.isEmpty()) {
                 headerIndexMap.putIfAbsent(normalized, cell.getColumnIndex());
             }
@@ -427,31 +487,29 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
         return ITEM_REFERENCE_HEADERS.stream().anyMatch(headerIndexMap::containsKey);
     }
 
-    private Map<String, String> extractRowData(Row row, Map<String, Integer> headerIndexMap) {
+    private Map<String, String> extractRowData(Row row, Map<String, Integer> headerIndexMap, FormulaEvaluator evaluator) {
         Map<String, String> rowData = new LinkedHashMap<>();
         DataFormatter formatter = new DataFormatter();
         headerIndexMap.forEach((key, columnIndex) -> {
             String value = row != null && row.getCell(columnIndex) != null
-                    ? formatter.formatCellValue(row.getCell(columnIndex)).trim()
+                    ? formatter.formatCellValue(row.getCell(columnIndex), evaluator).trim()
                     : "";
             rowData.put(key, value);
         });
         return rowData;
     }
 
-    private boolean isEmptyDataRow(Row row, Map<String, Integer> headerIndexMap) {
+    private boolean isEmptyDataRow(Row row, Map<String, Integer> headerIndexMap, FormulaEvaluator evaluator) {
         if (row == null) {
             return true;
         }
 
         DataFormatter formatter = new DataFormatter();
-        String[] keys = {"materialid", "materialcode", "itemname", "model", "brand", "unit", "quantity", "unitprice", "sourcetype", "remark"};
-        for (String key : keys) {
-            Integer columnIndex = headerIndexMap.get(key);
+        for (Integer columnIndex : headerIndexMap.values()) {
             if (columnIndex == null) {
                 continue;
             }
-            String value = formatter.formatCellValue(row.getCell(columnIndex)).trim();
+            String value = formatter.formatCellValue(row.getCell(columnIndex), evaluator).trim();
             if (!value.isEmpty()) {
                 return false;
             }
@@ -463,27 +521,28 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
             String projectListId,
             Row row,
             Map<String, Integer> headerIndexMap,
-            int excelRowNumber
+            int excelRowNumber,
+            FormulaEvaluator evaluator
     ) {
         DataFormatter formatter = new DataFormatter();
         ProjectListItem item = new ProjectListItem();
         item.setProjectListId(projectListId);
-        item.setMaterialId(getCellValue(row, headerIndexMap, "materialid", formatter));
-        item.setMaterialCode(getCellValue(row, headerIndexMap, "materialcode", formatter));
-        item.setItemName(getCellValue(row, headerIndexMap, "itemname", formatter));
-        item.setModel(getCellValue(row, headerIndexMap, "model", formatter));
-        item.setBrand(getCellValue(row, headerIndexMap, "brand", formatter));
-        item.setUnit(getCellValue(row, headerIndexMap, "unit", formatter));
-        item.setSourceType(getCellValue(row, headerIndexMap, "sourcetype", formatter));
-        item.setRemark(getCellValue(row, headerIndexMap, "remark", formatter));
+        item.setMaterialId(getCellValue(row, headerIndexMap, "materialid", formatter, evaluator));
+        item.setMaterialCode(getCellValue(row, headerIndexMap, "materialcode", formatter, evaluator));
+        item.setItemName(getCellValue(row, headerIndexMap, "itemname", formatter, evaluator));
+        item.setModel(getCellValue(row, headerIndexMap, "model", formatter, evaluator));
+        item.setBrand(getCellValue(row, headerIndexMap, "brand", formatter, evaluator));
+        item.setUnit(getCellValue(row, headerIndexMap, "unit", formatter, evaluator));
+        item.setSourceType(getCellValue(row, headerIndexMap, "sourcetype", formatter, evaluator));
+        item.setRemark(getCellValue(row, headerIndexMap, "remark", formatter, evaluator));
         item.setQuantity(parseDecimal(
-                getCellValue(row, headerIndexMap, "quantity", formatter),
+                getCellValue(row, headerIndexMap, "quantity", formatter, evaluator),
                 "Quantity",
                 excelRowNumber,
                 true
         ));
         item.setUnitPrice(parseDecimal(
-                getCellValue(row, headerIndexMap, "unitprice", formatter),
+                getCellValue(row, headerIndexMap, "unitprice", formatter, evaluator),
                 "Unit Price",
                 excelRowNumber,
                 false
@@ -491,7 +550,7 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
         return item;
     }
 
-    private String getCellValue(Row row, Map<String, Integer> headerIndexMap, String key, DataFormatter formatter) {
+    private String getCellValue(Row row, Map<String, Integer> headerIndexMap, String key, DataFormatter formatter, FormulaEvaluator evaluator) {
         Integer columnIndex = headerIndexMap.get(key);
         if (columnIndex == null) {
             return null;
@@ -500,7 +559,7 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
         if (cell == null) {
             return null;
         }
-        String value = formatter.formatCellValue(cell);
+        String value = formatter.formatCellValue(cell, evaluator);
         return StringUtils.hasText(value) ? value.trim() : null;
     }
 

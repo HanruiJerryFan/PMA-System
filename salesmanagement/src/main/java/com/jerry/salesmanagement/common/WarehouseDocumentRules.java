@@ -14,6 +14,9 @@ public final class WarehouseDocumentRules {
     }
 
     public static String numberPrefix(String type) {
+        if (type == null) {
+            throw new IllegalArgumentException("单据类型无效");
+        }
         return switch (type) {
             case "INBOUND_NOTE" -> "RKD";
             case "OUTBOUND_NOTE" -> "FHD";
@@ -24,6 +27,9 @@ public final class WarehouseDocumentRules {
     }
 
     public static List<String> categories(String type) {
+        if (type == null) {
+            return List.of();
+        }
         return switch (type) {
             case "INBOUND_NOTE" -> List.of("PROJECT_PURCHASE", "CENTRALIZED_PURCHASE");
             case "OUTBOUND_NOTE" -> List.of("PROJECT_SALES");
@@ -34,6 +40,9 @@ public final class WarehouseDocumentRules {
     }
 
     public static String sourceWarehouse(String category) {
+        if (category == null) {
+            return PROJECT_WAREHOUSE;
+        }
         return switch (category) {
             case "CENTRALIZED_PURCHASE", "WAREHOUSE_TRANSFER_TO_PROJECT" -> CENTRAL_WAREHOUSE;
             default -> PROJECT_WAREHOUSE;
@@ -45,6 +54,9 @@ public final class WarehouseDocumentRules {
     }
 
     public static String label(String type) {
+        if (type == null) {
+            return "入库单";
+        }
         return switch (type) {
             case "OUTBOUND_NOTE" -> "发货单";
             case "TRANSFER_JTX" -> "划拨单JTX";

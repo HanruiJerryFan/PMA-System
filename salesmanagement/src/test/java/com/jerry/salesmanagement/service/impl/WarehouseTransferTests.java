@@ -38,6 +38,7 @@ class WarehouseTransferTests {
     private WarehouseDocumentService service;
     private WarehouseMapper warehouses;
     private CurrentUserService currentUser;
+    private SystemConfigService systemConfigService;
     private Warehouse projectWarehouse;
     private Warehouse centralWarehouse;
 
@@ -124,6 +125,9 @@ class WarehouseTransferTests {
         when(customerTypes.selectById(3L)).thenReturn(supplierType);
         when(customerTypes.selectById(2L)).thenReturn(receiverType);
 
+        systemConfigService = mock(SystemConfigService.class);
+        when(systemConfigService.getString("inventory.allow_negative_stock", "false")).thenReturn("true");
+
         target = new WarehouseDocumentServiceImpl();
         ReflectionTestUtils.setField(target, "warehouseDocumentMapper", sql.getMapper(WarehouseDocumentMapper.class));
         ReflectionTestUtils.setField(target, "warehouseDocumentItemMapper", sql.getMapper(WarehouseDocumentItemMapper.class));
@@ -138,6 +142,8 @@ class WarehouseTransferTests {
         ReflectionTestUtils.setField(target, "currentUserService", currentUser);
         ReflectionTestUtils.setField(target, "entryAuditService", audits);
         ReflectionTestUtils.setField(target, "codeSequenceService", sequences);
+        ReflectionTestUtils.setField(target, "systemConfigService", systemConfigService);
+        ReflectionTestUtils.setField(inventory, "systemConfigService", systemConfigService);
         service = transactional(target, WarehouseDocumentService.class);
     }
 
@@ -303,6 +309,36 @@ class WarehouseTransferTests {
         assertEquals(0, new BigDecimal("2").compareTo(stock.getBalanceQuantity()));
         assertEquals(0, new BigDecimal("100").compareTo(stock.getPurchaseAveragePrice()));
         assertEquals(0, new BigDecimal("200").compareTo(stock.getInventoryAmount()));
+    }
+
+    @Test
+    void disallowsNegativeStockByDefaultAcrossOutboundTransferAndInboundReduction() {
+        when(systemConfigService.getString("inventory.allow_negative_stock", "false")).thenReturn("false");
+
+        WarehouseDocument outbound = document("OUTBOUND_NOTE", "PROJECT_SALES");
+        outbound.setCounterpartyCustomerId("receiver");
+        assertThrows(IllegalArgumentException.class, () -> service.create(outbound));
+        assertEquals(0, count("warehouse_doc"));
+        assertEquals(0, count("goods_transaction_dynamic_info"));
+
+        WarehouseDocument centralInbound = document("INBOUND_NOTE", "CENTRALIZED_PURCHASE");
+        centralInbound.setCounterpartyCustomerId("supplier");
+        centralInbound.getItems().get(0).setQuantity(new BigDecimal("3"));
+        WarehouseDocument savedInbound = service.create(centralInbound);
+        assertNull(savedInbound.getProjectId());
+
+        WarehouseDocument overTransfer = document("TRANSFER_JTX", "WAREHOUSE_TRANSFER_TO_PROJECT");
+        overTransfer.getItems().get(0).setQuantity(new BigDecimal("4"));
+        assertThrows(IllegalArgumentException.class, () -> service.create(overTransfer));
+
+        WarehouseDocument validTransfer = document("TRANSFER_JTX", "WAREHOUSE_TRANSFER_TO_PROJECT");
+        validTransfer.getItems().get(0).setQuantity(new BigDecimal("2"));
+        service.create(validTransfer);
+
+        // Reducing or deleting the consumed centralized inbound would make CK-JZCG balance negative
+        savedInbound.getItems().get(0).setQuantity(new BigDecimal("1"));
+        assertThrows(IllegalArgumentException.class, () -> service.update(savedInbound));
+        assertThrows(IllegalArgumentException.class, () -> service.delete(savedInbound.getDocNumber()));
     }
 
     private WarehouseDocument inbound(WarehouseDocument parent) {

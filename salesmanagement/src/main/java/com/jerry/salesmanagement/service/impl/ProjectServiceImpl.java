@@ -8,6 +8,8 @@ import com.jerry.salesmanagement.pojo.Project;
 import com.jerry.salesmanagement.pojo.ProjectType;
 import com.jerry.salesmanagement.pojo.dto.PageResult;
 import com.jerry.salesmanagement.pojo.dto.ProjectStageSortOrder;
+import com.jerry.salesmanagement.service.AttachmentService;
+import com.jerry.salesmanagement.service.CurrentUserService;
 import com.jerry.salesmanagement.service.CustomerService;
 import com.jerry.salesmanagement.service.ProjectService;
 import com.jerry.salesmanagement.service.SystemConfigService;
@@ -19,6 +21,7 @@ import org.springframework.util.StringUtils;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -46,6 +49,12 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Autowired(required = false)
     private ReferenceCheckMapper referenceCheckMapper;
+
+    @Autowired(required = false)
+    private CurrentUserService currentUserService;
+
+    @Autowired(required = false)
+    private AttachmentService attachmentService;
 
     @Override
     public Project getByUuid(String uuid) {
@@ -84,9 +93,12 @@ public class ProjectServiceImpl implements ProjectService {
     @Override
     @Transactional
     public Project create(Project project) {
-        validateProject(project);
+        validateProject(project, null);
         if (!StringUtils.hasText(project.getUuid())) {
             project.setUuid(UUID.randomUUID().toString());
+        }
+        if (currentUserService != null) {
+            project.setCreateUser(currentUserService.requireCurrentUserId());
         }
         projectMapper.insert(project);
         customerService.touchActivity(project.getCustomerId());
@@ -96,10 +108,17 @@ public class ProjectServiceImpl implements ProjectService {
     @Override
     @Transactional
     public Project update(Project project) {
-        validateProject(project);
+        Project existing = projectMapper.selectByUuid(project.getUuid());
+        if (existing == null) {
+            throw new IllegalArgumentException("Project does not exist");
+        }
+        validateProject(project, existing);
+        if (currentUserService != null) {
+            project.setUpdateUser(currentUserService.requireCurrentUserId());
+        }
         projectMapper.updateByUuid(project);
         customerService.touchActivity(project.getCustomerId());
-        return project;
+        return projectMapper.selectByUuid(project.getUuid());
     }
 
     @Override
@@ -123,13 +142,18 @@ public class ProjectServiceImpl implements ProjectService {
                     new ReferenceCheckMapper.ReferenceUsage("库存流水", referenceCheckMapper.countInventoryTransactionsByProjectUuid(uuid))
             );
         }
+        if (attachmentService != null) {
+            attachmentService.deleteByBusiness("projects", uuid);
+        }
+        projectStatusHistoryMapper.deleteByProjectId(uuid);
         projectMapper.deleteByUuid(uuid);
     }
 
-    private void validateProject(Project project) {
+    private void validateProject(Project project, Project existing) {
         if (!StringUtils.hasText(project.getProjectName())) {
             throw new IllegalArgumentException("Project name is required");
         }
+        project.setProjectName(project.getProjectName().trim());
         if (!StringUtils.hasText(project.getProjectNumber())) {
             throw new IllegalArgumentException("Project number is required");
         }
@@ -158,7 +182,8 @@ public class ProjectServiceImpl implements ProjectService {
         if (projectType == null) {
             throw new IllegalArgumentException("Project type does not exist");
         }
-        if (!Boolean.TRUE.equals(projectType.getIsActive())) {
+        boolean keptExistingType = existing != null && Objects.equals(existing.getProjectTypeId(), project.getProjectTypeId());
+        if (!keptExistingType && !Boolean.TRUE.equals(projectType.getIsActive())) {
             throw new IllegalArgumentException("Project type is disabled");
         }
     }

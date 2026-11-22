@@ -10,6 +10,7 @@ import com.jerry.salesmanagement.pojo.Customer;
 import com.jerry.salesmanagement.pojo.dto.ProjectListAggregateItem;
 import com.jerry.salesmanagement.pojo.dto.ProjectListAggregateSource;
 import com.jerry.salesmanagement.pojo.dto.ProjectListAggregateView;
+import com.jerry.salesmanagement.service.AttachmentService;
 import com.jerry.salesmanagement.service.CurrentUserService;
 import com.jerry.salesmanagement.service.CustomerService;
 import com.jerry.salesmanagement.service.EntryAuditService;
@@ -23,6 +24,8 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -57,6 +60,9 @@ public class ProjectListServiceImpl implements ProjectListService {
 
     @Autowired
     private EntryAuditService entryAuditService;
+
+    @Autowired(required = false)
+    private AttachmentService attachmentService;
 
     @Override
     public ProjectList getByUuid(String uuid) {
@@ -110,6 +116,7 @@ public class ProjectListServiceImpl implements ProjectListService {
         }
 
         Map<String, ProjectListAggregateItem> aggregateMap = new LinkedHashMap<>();
+        Map<String, Set<String>> distinctSourceListsByKey = new HashMap<>();
         List<String> sourceListIds = sourceLists.stream()
                 .map(ProjectList::getUuid)
                 .filter(StringUtils::hasText)
@@ -126,8 +133,13 @@ public class ProjectListServiceImpl implements ProjectListService {
                 String aggregateKey = buildAggregateKey(item);
                 ProjectListAggregateItem aggregateItem = aggregateMap.computeIfAbsent(aggregateKey, key -> createAggregateItem(item));
                 aggregateItem.setQuantity(defaultZero(aggregateItem.getQuantity()).add(defaultZero(item.getQuantity())));
-                aggregateItem.setTotalAmount(defaultZero(aggregateItem.getTotalAmount()).add(defaultZero(item.getTotalAmount())));
-                aggregateItem.setSourceListCount(aggregateItem.getSourceListCount() + 1);
+                BigDecimal lineAmount = item.getTotalAmount();
+                if (lineAmount == null && item.getQuantity() != null && item.getUnitPrice() != null) {
+                    lineAmount = item.getQuantity().multiply(item.getUnitPrice()).setScale(2, RoundingMode.HALF_UP);
+                }
+                aggregateItem.setTotalAmount(defaultZero(aggregateItem.getTotalAmount()).add(defaultZero(lineAmount)));
+                distinctSourceListsByKey.computeIfAbsent(aggregateKey, k -> new HashSet<>()).add(list.getUuid());
+                aggregateItem.setSourceListCount(distinctSourceListsByKey.get(aggregateKey).size());
             }
         }
 
@@ -185,6 +197,13 @@ public class ProjectListServiceImpl implements ProjectListService {
             throw new IllegalArgumentException("Project list does not exist");
         }
         Project project = validateProjectList(projectList);
+        if ("CHANGE".equals(existing.getListType()) && !"CHANGE".equals(projectList.getListType())) {
+            boolean hasNonPositiveItem = projectListItemService.getByProjectListId(existing.getUuid()).stream()
+                    .anyMatch(item -> item.getQuantity() == null || item.getQuantity().compareTo(BigDecimal.ZERO) <= 0);
+            if (hasNonPositiveItem) {
+                throw new IllegalArgumentException("当前清单包含数量小于或等于 0 的变更明细，不能切换为普通清单类型");
+            }
+        }
         entryAuditService.applyUpdate(projectList, existing);
         projectList.setUpdateUser(currentUserService.requireCurrentUserId());
         mapper.updateByUuid(projectList);
@@ -213,6 +232,9 @@ public class ProjectListServiceImpl implements ProjectListService {
             for (ProjectListItem item : projectListItemService.getByProjectListId(uuid)) {
                 entryAuditService.assertCanDelete(item);
             }
+        }
+        if (attachmentService != null) {
+            attachmentService.deleteByBusiness("project-lists", uuid);
         }
         projectListItemService.deleteByProjectListId(uuid);
         mapper.deleteByUuid(uuid);
@@ -266,16 +288,16 @@ public class ProjectListServiceImpl implements ProjectListService {
 
     private String buildAggregateKey(ProjectListItem item) {
         if (StringUtils.hasText(item.getMaterialId())) {
-            return "material:" + item.getMaterialId();
+            return "material:" + item.getMaterialId().trim();
         }
         if (StringUtils.hasText(item.getMaterialCode())) {
-            return "code:" + item.getMaterialCode();
+            return "code:" + item.getMaterialCode().trim().toUpperCase(Locale.ROOT);
         }
         return String.join("|",
-                item.getItemName() == null ? "" : item.getItemName(),
-                item.getModel() == null ? "" : item.getModel(),
-                item.getBrand() == null ? "" : item.getBrand(),
-                item.getUnit() == null ? "" : item.getUnit()
+                item.getItemName() == null ? "" : item.getItemName().trim().toUpperCase(Locale.ROOT),
+                item.getModel() == null ? "" : item.getModel().trim().toUpperCase(Locale.ROOT),
+                item.getBrand() == null ? "" : item.getBrand().trim().toUpperCase(Locale.ROOT),
+                item.getUnit() == null ? "" : item.getUnit().trim().toUpperCase(Locale.ROOT)
         );
     }
 

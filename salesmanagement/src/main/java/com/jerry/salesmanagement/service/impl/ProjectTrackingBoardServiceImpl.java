@@ -3,7 +3,9 @@ package com.jerry.salesmanagement.service.impl;
 import com.jerry.salesmanagement.common.FinanceVoucherMetrics;
 import com.jerry.salesmanagement.common.WarehouseDocumentRules;
 import com.jerry.salesmanagement.mapper.ContractBasicInfoMapper;
+import com.jerry.salesmanagement.mapper.ContractTypeMapper;
 import com.jerry.salesmanagement.mapper.CustomerMapper;
+import com.jerry.salesmanagement.mapper.FinanceSubjectMapper;
 import com.jerry.salesmanagement.mapper.FinanceVoucherMapper;
 import com.jerry.salesmanagement.mapper.ProjectListMapper;
 import com.jerry.salesmanagement.mapper.ProjectMapper;
@@ -14,7 +16,9 @@ import com.jerry.salesmanagement.mapper.StageMapper;
 import com.jerry.salesmanagement.mapper.SysUserMapper;
 import com.jerry.salesmanagement.mapper.WarehouseDocumentMapper;
 import com.jerry.salesmanagement.pojo.ContractBasicInfo;
+import com.jerry.salesmanagement.pojo.ContractType;
 import com.jerry.salesmanagement.pojo.Customer;
+import com.jerry.salesmanagement.pojo.FinanceSubject;
 import com.jerry.salesmanagement.pojo.FinanceVoucher;
 import com.jerry.salesmanagement.pojo.Project;
 import com.jerry.salesmanagement.pojo.ProjectList;
@@ -59,6 +63,8 @@ public class ProjectTrackingBoardServiceImpl implements ProjectTrackingBoardServ
     private static final long WARRANTY_EXPIRING_DAYS = 30L;
     private static final String DELETE_LOCK_STAGE_KEY = "project.delete.lock_stage_sort_order";
     private static final int DEFAULT_DELETE_LOCK_STAGE = 5;
+    private static final String LOW_COLLECTION_STAGE_KEY = "project.tracking.low_collection_stage_sort_order";
+    private static final int DEFAULT_LOW_COLLECTION_STAGE = 9;
     private static final BigDecimal HUNDRED = new BigDecimal("100");
     private static final BigDecimal LOW_COLLECTION_THRESHOLD = new BigDecimal("30");
 
@@ -89,8 +95,14 @@ public class ProjectTrackingBoardServiceImpl implements ProjectTrackingBoardServ
     @Autowired
     private ContractBasicInfoMapper contractBasicInfoMapper;
 
+    @Autowired(required = false)
+    private ContractTypeMapper contractTypeMapper;
+
     @Autowired
     private FinanceVoucherMapper financeVoucherMapper;
+
+    @Autowired(required = false)
+    private FinanceSubjectMapper financeSubjectMapper;
 
     @Autowired
     private WarehouseDocumentMapper warehouseDocumentMapper;
@@ -117,12 +129,16 @@ public class ProjectTrackingBoardServiceImpl implements ProjectTrackingBoardServ
         int deleteLockSortOrder = systemConfigService != null
                 ? systemConfigService.getInt(DELETE_LOCK_STAGE_KEY, DEFAULT_DELETE_LOCK_STAGE)
                 : DEFAULT_DELETE_LOCK_STAGE;
+        int lowCollectionStageSortOrder = systemConfigService != null
+                ? systemConfigService.getInt(LOW_COLLECTION_STAGE_KEY, DEFAULT_LOW_COLLECTION_STAGE)
+                : DEFAULT_LOW_COLLECTION_STAGE;
 
         List<Stage> activeStages = stageMapper.selectActive().stream()
                 .filter(Objects::nonNull)
                 .sorted(Comparator
                         .comparing((Stage s) -> s.getSortOrder() == null ? Integer.MAX_VALUE : s.getSortOrder())
-                        .thenComparing(s -> s.getStageCode() == null ? "" : s.getStageCode()))
+                        .thenComparing(s -> s.getStageCode() == null ? "" : s.getStageCode())
+                        .thenComparing(s -> s.getId() == null ? Long.MAX_VALUE : s.getId()))
                 .toList();
 
         Map<Long, Stage> stageById = new HashMap<>();
@@ -152,11 +168,13 @@ public class ProjectTrackingBoardServiceImpl implements ProjectTrackingBoardServ
         Map<String, List<ProjectList>> listsByProjectId = groupListsByProject(
                 projectListMapper.selectAll()
         );
+        Map<Long, ContractType> contractTypeById = indexContractTypes();
         Map<String, List<ContractBasicInfo>> contractsByProjectId = permissions.isCanViewContracts()
-                ? groupContractsByProject(contractBasicInfoMapper.selectAll())
+                ? groupContractsByProject(contractBasicInfoMapper.selectAll(), contractTypeById)
                 : Map.of();
+        Map<Long, String> level1SubjectCodeById = indexLevel1SubjectCodes();
         Map<String, List<FinanceVoucher>> vouchersByProjectId = permissions.isCanViewFinance()
-                ? groupVouchersByProject(financeVoucherMapper.selectAll())
+                ? groupVouchersByProject(financeVoucherMapper.selectAll(), level1SubjectCodeById)
                 : Map.of();
         Map<String, List<WarehouseDocument>> warehouseDocsByProjectId = permissions.isCanViewInventory()
                 ? groupWarehouseDocsByProject(warehouseDocumentMapper.selectAll())
@@ -184,6 +202,7 @@ public class ProjectTrackingBoardServiceImpl implements ProjectTrackingBoardServ
                     activeStageIndexById,
                     maxActiveStageSortOrder,
                     deleteLockSortOrder,
+                    lowCollectionStageSortOrder,
                     listsByProjectId.getOrDefault(project.getUuid(), List.of()),
                     contractsByProjectId.getOrDefault(project.getUuid(), List.of()),
                     vouchersByProjectId.getOrDefault(project.getUuid(), List.of()),
@@ -224,6 +243,7 @@ public class ProjectTrackingBoardServiceImpl implements ProjectTrackingBoardServ
             Map<Long, Integer> activeStageIndexById,
             int maxActiveStageSortOrder,
             int deleteLockSortOrder,
+            int lowCollectionStageSortOrder,
             List<ProjectList> projectLists,
             List<ContractBasicInfo> contracts,
             List<FinanceVoucher> vouchers,
@@ -275,6 +295,11 @@ public class ProjectTrackingBoardServiceImpl implements ProjectTrackingBoardServ
             if (enteredDate != null) {
                 card.setStageStayDays(Math.max(0L, ChronoUnit.DAYS.between(enteredDate, today)));
             }
+        } else if (project.getCreateTime() != null) {
+            LocalDate createdDate = toLocalDate(project.getCreateTime(), zoneId);
+            if (createdDate != null) {
+                card.setStageStayDays(Math.max(0L, ChronoUnit.DAYS.between(createdDate, today)));
+            }
         }
 
         Integer currentActiveIdx = currentStage != null ? activeStageIndexById.get(currentStage.getId()) : null;
@@ -297,6 +322,7 @@ public class ProjectTrackingBoardServiceImpl implements ProjectTrackingBoardServ
         }
 
         boolean completed = currentStage != null
+                && nextStage == null
                 && maxActiveStageSortOrder > 0
                 && currentStage.getSortOrder() != null
                 && currentStage.getSortOrder() >= maxActiveStageSortOrder;
@@ -429,7 +455,7 @@ public class ProjectTrackingBoardServiceImpl implements ProjectTrackingBoardServ
                 && permissions.isCanViewFinance()
                 && card.getCollectionRate() != null
                 && card.getCurrentStageSortOrder() != null
-                && card.getCurrentStageSortOrder() >= 9
+                && card.getCurrentStageSortOrder() >= lowCollectionStageSortOrder
                 && card.getCollectionRate().compareTo(LOW_COLLECTION_THRESHOLD) < 0) {
             riskTags.add("LOW_COLLECTION");
         }
@@ -616,26 +642,83 @@ public class ProjectTrackingBoardServiceImpl implements ProjectTrackingBoardServ
         return map;
     }
 
-    private Map<String, List<ContractBasicInfo>> groupContractsByProject(List<ContractBasicInfo> all) {
+    private Map<Long, ContractType> indexContractTypes() {
+        Map<Long, ContractType> map = new HashMap<>();
+        if (contractTypeMapper == null) {
+            return map;
+        }
+        for (ContractType type : contractTypeMapper.selectAll()) {
+            if (type != null && type.getId() != null) {
+                map.put(type.getId(), type);
+            }
+        }
+        return map;
+    }
+
+    private boolean isSalesContract(ContractBasicInfo contract, Map<Long, ContractType> contractTypeById) {
+        if (contractTypeById == null || contractTypeById.isEmpty() || contract.getContractTypeId() == null) {
+            return true;
+        }
+        ContractType type = contractTypeById.get(contract.getContractTypeId());
+        if (type == null) {
+            return true;
+        }
+        String code = type.getTypeCode() == null ? "" : type.getTypeCode().trim().toUpperCase(Locale.ROOT);
+        if ("XS".equals(code) || "XL".equals(code)) {
+            return true;
+        }
+        if ("C".equals(code) || "LW".equals(code) || "CL".equals(code)) {
+            return false;
+        }
+        String name = type.getTypeName() == null ? "" : type.getTypeName();
+        return name.contains("销售") && !name.contains("采购") && !name.contains("劳务");
+    }
+
+    private Map<Long, String> indexLevel1SubjectCodes() {
+        Map<Long, String> map = new HashMap<>();
+        if (financeSubjectMapper == null) {
+            return map;
+        }
+        for (FinanceSubject subject : financeSubjectMapper.selectAll()) {
+            if (subject != null && subject.getId() != null && Objects.equals(subject.getSubjectLevel(), 1)) {
+                map.put(subject.getId(), subject.getSubjectCode());
+            }
+        }
+        return map;
+    }
+
+    private Map<String, List<ContractBasicInfo>> groupContractsByProject(
+            List<ContractBasicInfo> all,
+            Map<Long, ContractType> contractTypeById
+    ) {
         Map<String, List<ContractBasicInfo>> map = new HashMap<>();
         if (all == null) {
             return map;
         }
         for (ContractBasicInfo contract : all) {
-            if (contract != null && StringUtils.hasText(contract.getProjectBasicInfoId())) {
+            if (contract != null
+                    && StringUtils.hasText(contract.getProjectBasicInfoId())
+                    && isSalesContract(contract, contractTypeById)) {
                 map.computeIfAbsent(contract.getProjectBasicInfoId(), key -> new ArrayList<>()).add(contract);
             }
         }
         return map;
     }
 
-    private Map<String, List<FinanceVoucher>> groupVouchersByProject(List<FinanceVoucher> all) {
+    private Map<String, List<FinanceVoucher>> groupVouchersByProject(
+            List<FinanceVoucher> all,
+            Map<Long, String> level1SubjectCodeById
+    ) {
         Map<String, List<FinanceVoucher>> map = new HashMap<>();
         if (all == null) {
             return map;
         }
         for (FinanceVoucher voucher : all) {
             if (voucher != null && StringUtils.hasText(voucher.getProjectId())) {
+                String level1Code = level1SubjectCodeById.get(voucher.getLevel1SubjectId());
+                if ("NON_PROJECT".equals(level1Code)) {
+                    continue;
+                }
                 map.computeIfAbsent(voucher.getProjectId(), key -> new ArrayList<>()).add(voucher);
             }
         }

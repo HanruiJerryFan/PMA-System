@@ -19,6 +19,7 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 class GoodsInventoryMapperTests {
@@ -34,7 +35,7 @@ class GoodsInventoryMapperTests {
                 CREATE TABLE goods_transaction_dynamic_info (
                   id BIGINT AUTO_INCREMENT PRIMARY KEY, material_id VARCHAR(36), material_code VARCHAR(12),
                   material_name VARCHAR(200), model VARCHAR(200), brand VARCHAR(128), category VARCHAR(64),
-                  txn_type VARCHAR(20), quantity DECIMAL(15,2), unit_price DECIMAL(15,4)
+                  txn_type VARCHAR(20), txn_time TIMESTAMP, quantity DECIMAL(18,4), unit_price DECIMAL(18,4)
                 )
                 """);
         Configuration configuration = new Configuration(new Environment("test", new JdbcTransactionFactory(), dataSource));
@@ -120,11 +121,32 @@ class GoodsInventoryMapperTests {
         }
     }
 
+    @Test
+    void unpricedPurchaseDoesNotDiluteAverageNullTxnTypeDoesNotSubtractBalanceAndSelectByUuidMatchesGroup() {
+        transaction("id-1", "M001", "PROJECT_PURCHASE", "IN", "10", "100");
+        transaction("id-2", "M001", "CENTRALIZED_PURCHASE", "IN", "30", null);
+        transaction("id-2", "M001", "PROJECT_PURCHASE", null, "5", "50");
+        try (SqlSession session = factory.openSession(true)) {
+            GoodsInventoryMapper mapper = session.getMapper(GoodsInventoryMapper.class);
+            GoodsInventory byId1 = mapper.selectByUuid("id-1");
+            GoodsInventory byId2 = mapper.selectByUuid("id-2");
+            GoodsInventory byCode = mapper.selectByUuid("M001");
+            assertNotNull(byId1);
+            assertNotNull(byId2);
+            assertNotNull(byCode);
+            assertNotNull(byId1.getLastTxnTime());
+            assertDecimal("40", byId1.getBalanceQuantity());
+            assertDecimal("100", byId1.getPurchaseAveragePrice());
+            assertDecimal("4000.00", byId1.getInventoryAmount());
+            assertEquals(byId1.getBalanceQuantity(), byId2.getBalanceQuantity());
+        }
+    }
+
     private void transaction(String materialId, String code, String category, String type, String quantity, String price) {
         jdbc.update("""
                 INSERT INTO goods_transaction_dynamic_info
-                  (material_id, material_code, material_name, category, txn_type, quantity, unit_price)
-                VALUES (?, ?, 'Test material', ?, ?, ?, ?)
+                  (material_id, material_code, material_name, category, txn_type, txn_time, quantity, unit_price)
+                VALUES (?, ?, 'Test material', ?, ?, CURRENT_TIMESTAMP, ?, ?)
                 """, materialId, code, category, type, new BigDecimal(quantity), price == null ? null : new BigDecimal(price));
     }
 

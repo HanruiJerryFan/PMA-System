@@ -178,15 +178,15 @@
             <if test="customerId != null">customer_id = #{customerId},</if>
             <if test="customerId != null">customer_uuid = #{customerId},</if>
             <if test="managerId != null">manager_id = #{managerId},</if>
-            <if test="participant1UserId != null">participant_1_user_id = #{participant1UserId},</if>
-            <if test="participant2UserId != null">participant_2_user_id = #{participant2UserId},</if>
-            <if test="participant3UserId != null">participant_3_user_id = #{participant3UserId},</if>
+            participant_1_user_id = #{participant1UserId},
+            participant_2_user_id = #{participant2UserId},
+            participant_3_user_id = #{participant3UserId},
             <if test="regionId != null">region_id = #{regionId},</if>
             <if test="projectTypeId != null">project_type_id = #{projectTypeId},</if>
-            <if test="warrantyUntil != null">warranty_until = #{warrantyUntil},</if>
-            <if test="planStartTime != null">plan_start_time = #{planStartTime},</if>
-            <if test="planEndTime != null">plan_end_time = #{planEndTime},</if>
-            <if test="salesContractAttachmentUuid != null">sales_contract_attachment_uuid = #{salesContractAttachmentUuid},</if>
+            warranty_until = #{warrantyUntil},
+            plan_start_time = #{planStartTime},
+            plan_end_time = #{planEndTime},
+            sales_contract_attachment_uuid = #{salesContractAttachmentUuid},
             update_time = NOW(),
             update_user = #{updateUser}
         </set>

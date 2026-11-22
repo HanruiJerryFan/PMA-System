@@ -4,6 +4,7 @@ import com.jerry.salesmanagement.pojo.InventoryTransaction;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Mapper
@@ -30,6 +31,7 @@ public interface InventoryTransactionMapper {
             @Param("sourceRefId") String sourceRefId
     );
     InventoryTransaction selectByUuid(String uuid);
+    BigDecimal selectWarehouseMaterialBalance(@Param("warehouseId") Long warehouseId, @Param("materialId") String materialId);
     List<InventoryTransaction> selectBySourceRef(@Param("sourceRefType") String sourceRefType, @Param("sourceRefId") String sourceRefId);
     int deleteBySourceRef(@Param("sourceRefType") String sourceRefType, @Param("sourceRefId") String sourceRefId);
     int insert(InventoryTransaction inventoryTransaction);

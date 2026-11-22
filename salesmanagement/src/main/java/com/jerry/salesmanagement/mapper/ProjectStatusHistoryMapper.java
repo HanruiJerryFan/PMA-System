@@ -24,4 +24,6 @@ public interface ProjectStatusHistoryMapper {
     int update(ProjectStatusHistory history);
 
     int deleteByUuid(@Param("uuid") String uuid);
+
+    int deleteByProjectId(@Param("projectId") String projectId);
 }

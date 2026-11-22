@@ -53,10 +53,10 @@
         <set>
             <if test="warehouseCode != null">warehouse_code = #{warehouseCode},</if>
             <if test="warehouseName != null">warehouse_name = #{warehouseName},</if>
-            <if test="warehouseAddress != null">warehouse_address = #{warehouseAddress},</if>
-            <if test="contactName != null">contact_name = #{contactName},</if>
-            <if test="contactPhone != null">contact_phone = #{contactPhone},</if>
-            <if test="remark != null">remark = #{remark},</if>
+            warehouse_address = #{warehouseAddress},
+            contact_name = #{contactName},
+            contact_phone = #{contactPhone},
+            remark = #{remark}
         </set>
         WHERE id = #{id}
     </update>

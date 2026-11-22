@@ -1,6 +1,7 @@
 package com.jerry.salesmanagement.controller;
 
 import com.jerry.salesmanagement.pojo.Warehouse;
+import com.jerry.salesmanagement.service.AuditTrailService;
 import com.jerry.salesmanagement.service.WarehouseService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -21,6 +22,9 @@ public class WarehouseController {
     @Autowired
     private WarehouseService warehouseService;
 
+    @Autowired(required = false)
+    private AuditTrailService auditTrailService;
+
     @GetMapping
     public List<Warehouse> getAll() {
         return warehouseService.getAll();
@@ -33,17 +37,28 @@ public class WarehouseController {
 
     @PostMapping
     public Warehouse create(@RequestBody Warehouse warehouse) {
-        return warehouseService.create(warehouse);
+        Warehouse created = warehouseService.create(warehouse);
+        if (auditTrailService != null && created != null) {
+            auditTrailService.record("warehouses", "CREATE", "warehouses", String.valueOf(created.getId()), "Created warehouse");
+        }
+        return created;
     }
 
     @PutMapping("/{id}")
     public Warehouse update(@PathVariable Long id, @RequestBody Warehouse warehouse) {
         warehouse.setId(id);
-        return warehouseService.update(warehouse);
+        Warehouse updated = warehouseService.update(warehouse);
+        if (auditTrailService != null) {
+            auditTrailService.record("warehouses", "UPDATE", "warehouses", String.valueOf(id), "Updated warehouse");
+        }
+        return updated;
     }
 
     @DeleteMapping("/{id}")
     public void delete(@PathVariable Long id) {
         warehouseService.delete(id);
+        if (auditTrailService != null) {
+            auditTrailService.record("warehouses", "DELETE", "warehouses", String.valueOf(id), "Deleted warehouse");
+        }
     }
 }

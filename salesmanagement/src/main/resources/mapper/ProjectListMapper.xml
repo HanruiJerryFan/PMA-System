@@ -118,7 +118,7 @@
             entry_date = #{entryDate},
             entry_user = #{entryUser},
             auditor_user = #{auditorUser},
-            <if test="pdfAttachmentId != null">pdf_attachment_id = #{pdfAttachmentId},</if>
+            pdf_attachment_id = #{pdfAttachmentId},
             update_time = NOW(),
             update_user = #{updateUser}
         </set>
