@@ -352,3 +352,52 @@
 - 后端离线单元测试（筛选 `service.impl.*`、`mapper.*`、`controller.*`、`config.*`，未包含依赖外部 MySQL 的 `SalesmanagementApplicationTests`）：**20 个测试类 / 89 项测试全部通过**（0 失败，0 错误，0 跳过）。
 - 前端 Jest 单元测试：**10 个测试套件 / 35 项测试全部通过**（0 失败）。
 - 前端生产构建：`npm run build` 编译成功，0 错误，0 ESLint 警告。
+
+---
+
+## V1.2.2 全模块深度缺陷排查与系统性治理（阶段 I）
+
+### 1. 数据库增量升级与基线同步
+- **新增增量升级脚本**：`database/12_defect_fixes_schema.sql`，并同步更新基线脚本 `database/00_current_schema.sql`、`database/01_current_seed_data.sql`、`database/02_current_views.sql` 与 `database/README.md`：
+  - 将 `product_basic_info` 插入/更新触发器校验放宽为 `CHAR_LENGTH(TRIM(material_code))` `10-12` 位，支持 2 位频段码（如 `GW`/`DM`）与 3 位流水号生成的 11 位物料编码；
+  - 将 `goods_transaction_dynamic_info` 的 `quantity`、`unit_price` 升级至 `DECIMAL(18,4)`，`amount` 升级至 `DECIMAL(18,2)`，消除高精度数量截断；
+  - 消除 `contract_type` 中 `CL` 与 `LW` 的重名（`CL` 调整为 `劳务分包`）；
+  - 为 `warehouse_info.warehouse_code` 补充条件唯一索引 `uk_warehouse_code`（无重复编码时自动添加）；
+  - 新增 `system_config` 默认配置项：`inventory.allow_negative_stock=false` 与 `project.tracking.low_collection_stage_sort_order=9`。
+
+### 2. 后端全模块缺陷治理
+- **库存与仓储（`WarehouseDocument*`、`WarehouseServiceImpl`、`InventoryTransaction*`、`GoodsInventoryMapper.xml`）**：
+  - 禁止通过 `/api/inventory-transactions` 直接新增、修改或删除 `sourceRefType=WAREHOUSE_DOC` 的单据流水；创建/更新/删除出入库单时统一执行非负库存约束（受 `inventory.allow_negative_stock` 控制），更新与删除均按历史与当前仓库集合校验；`集采入库（CENTRALIZED_PURCHASE）` 强制清空 `projectId`，其余必选项目类别强制校验项目存在性；
+  - 保护系统保留仓库 `CK-JZCG` 与 `CK-XMCG` 不被重命名、停用（变更编码/名称）或删除；
+  - 删除出入库单同步清理 `warehouse-documents` 业务附件，并修复 `CodeSequence` 序列回收及 `GoodsInventoryMapper` 聚合分组一致化。
+- **项目、清单、状态历史、对账与看板（`Project*`、`StageServiceImpl`、`ProjectMaterialReconciliationServiceImpl`、`ProjectTrackingBoardServiceImpl`）**：
+  - 修复 `ProjectListItemServiceImpl` 已审核父清单明细锁定漏洞：`create`/`update`/`delete`/`importFromExcel` 全链路在父清单已审核（`auditorUser != null`）且无覆写权限时拒绝变更；
+  - 加固 `ProjectStatusHistoryServiceImpl` 阶段前向推进（禁止停用阶段、重复或回退推进）以及非 `System` 操作员对达到锁定阈值历史的降级修改与删除拦截；
+  - 修复项目看板 `LOW_COLLECTION`、`stalled_days` 与对账中 `netSuppliedQty`/空清单边界计算问题。
+- **财务与税率（`FinanceVoucher*`、`TaxRateDictServiceImpl`、`FinanceAnalyticsServiceImpl`）**：
+  - 创建凭证忽略客户端传入 `voucherNo`，更新锁定 `voucherNo` 与 `occurredOn`、`yyyyMMdd` 前缀匹配、切换收付方向自动清空对向金额并允许保留既有历史停用税率；删除凭证时回收序列并联动清理 `finance-vouchers` 附件；
+  - 加固 `TaxRateDictServiceImpl`：被凭证引用的税率禁止删除或变更数值，允许仅更新显示标签与启停状态。
+- **客户、合同与活跃规则（`Customer*`、`Contract*`）**：
+  - `CustomerServiceImpl` 对空白税号执行 trim-to-null 避免唯一索引空串冲突，生成 `customerCode` 后锁定 `regionId` 与 `customerTypeId`，更新时允许保留既有的停用行业并补齐创建/更新人及 `customers` 附件级联清理；
+  - `CustomerIndustryDictServiceImpl`、`CustomerContactServiceImpl`、`ContractBasicInfoServiceImpl`、`ContractClauseServiceImpl`、`CustomerActivityRuleServiceImpl` 全面补齐引用完整性校验、活跃规则区间重叠校验与跨客户移动拦截。
+- **物料与字典（`MaterialMaster*`、`ProductCategory/Subcategory/Brand/Band`、`ProductHistoryPriceServiceImpl`）**：
+  - 物料创建校验启用的大写字母数字字典编码，支持 10–12 位编码（含 11 位 `GW`/`DM`）；更新锁定分类/品牌/频段；Excel 导入按行/全量事务模型与公式求值加固并修复停用/引用变更拦截；`ProductHistoryPrice` 由服务端统一写入并保留 `createUser`。
+- **附件、认证会话、日志与安全、AI 及 PDF 导出**：
+  - `AttachmentController` 统一跨平台文件名清洗、下载强制 `application/octet-stream` + `nosniff`、PDF `%PDF-` 魔数校验以及先库/先审再删文件（附告警日志）；
+  - `AuthController`、`LoginRecordServiceImpl`、`PasswordChangeRequiredFilter` 增加 `trust-forward-headers` 配置开关、`RELOGIN` 关闭旧会话、`changeSessionId()`、强制改密登出闭合与心跳/超时会话清理；`AuditTrailMapper.xml` 动作筛选大小写不敏感；并确认 20 个写操作控制器接入 `AuditTrailService`；
+  - `AiBusinessAnalysisServiceImpl` 优化 `NameMasker` 长度降序单遍脱敏与 `JsonNode` 安全 JSON 字符串脱敏，完善单项目简报作用域（待审列表与项目财务）及多域/财务意图精准识别；`TablePdfExportServiceImpl` 与 `PdfExportSupport` 补充行列/分段上限、列宽有限正数校验及字体缓存键加固。
+
+### 3. 前端全链路同步修复与单元测试增强
+- **基础链路与公共组件**：`api/index.js`、`api/modules.js`、`exporters.js`、`pagePermissions.js`、`CRUDTable.js`、`App.js` 修复错误对象透传、导出公式注入与 XML 控制字符清洗、`/inventory/warehouse` 与 `/project/list-dashboard` 权限精确匹配、模态框提交防连击与提交中禁止关闭、客户端筛选状态在列表刷新后的保持。
+- **各业务模块页面**：
+  - 库存（`WarehouseDocumentModal.js`、`WarehouseDoc.js`、`InventoryStock.js`、`InventoryTransactions.js`、`Warehouses.js`）、财务与 AI（`FinanceVouchers.js`、`TaxRateManagement.js`、`AiAnalytics.js`）修复表单联动回弹、税率浮点展示、未完成金额计入、`briefing` 竞态覆盖与异步异常提示；
+  - 项目模块（`ProjectListDashboard.js`、`ProjectDashboard.js`、`ProjectLists.js`、`ProjectTrackingBoard.js`、`ProjectMaterialReconciliation.js`）修复权限接口替换、`DatePicker` 精度保留、导入结果明细弹窗、未关联物料与无频段编辑、父清单已审锁定、看板过滤联动 KPI 与待审跳转权限控制、对账异常清旧态与库存无权限提示；
+  - 客户/合同/物料/附件/日志（`CustomerInfo.js`、`CustomerActivityRules.js`、`ContractInfo.js`、`ProductInfo.js`、`ProductPrices.js`、`AttachmentCenter.js`、`AuditTrails.js`、`LoginLogs.js`）补全可读详情展示、创建后分类/地区锁定、按客户过滤联系人、停用字典兼容、正整数 ID 搜索校验与 `RELOGIN` 状态展示。
+- **新增自动化回归测试**：
+  - 后端新增 `DefectRemediationTests.java`（7 项综合回归测试）；
+  - 前端新增 `exporters.test.js`、`rbacPermissions.test.js`，并扩展 `CRUDTable.serverPagination.test.js`。
+
+### 4. 阶段 I 最终验证结果
+- 后端离线单元测试（`service.impl.*`、`mapper.*`、`controller.*`、`config.*`，未包含依赖外部 MySQL 的 `SalesmanagementApplicationTests`）：**21 个测试类 / 100 项测试全部通过**（0 失败，0 错误，0 跳过）。
+- 前端 Jest 单元测试：**11 个测试套件 / 40 项测试全部通过**（0 失败）。
+- 前端生产构建：`npm run build` 编译成功，**0 错误，0 ESLint 警告**。
