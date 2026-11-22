@@ -40,12 +40,32 @@ public class SysRoleServiceImpl implements SysRoleService {
 
     @Override
     public SysRole update(SysRole role) {
+        if (role == null || role.getId() == null) {
+            throw new IllegalArgumentException("Role ID is required");
+        }
+        SysRole existing = roleMapper.selectById(role.getId());
+        if (isSystemRole(existing)) {
+            throw new IllegalArgumentException("内置 System 角色不可修改或删除");
+        }
         roleMapper.update(role);
         return role;
     }
 
     @Override
     public void delete(Long id) {
+        if (id == null) {
+            throw new IllegalArgumentException("Role ID is required");
+        }
+        SysRole existing = roleMapper.selectById(id);
+        if (isSystemRole(existing)) {
+            throw new IllegalArgumentException("内置 System 角色不可修改或删除");
+        }
         roleMapper.deleteById(id);
+    }
+
+    private boolean isSystemRole(SysRole role) {
+        return role != null
+                && role.getRoleName() != null
+                && "System".equalsIgnoreCase(role.getRoleName().trim());
     }
 }

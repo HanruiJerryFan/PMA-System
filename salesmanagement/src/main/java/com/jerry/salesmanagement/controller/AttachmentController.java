@@ -5,6 +5,7 @@ import com.jerry.salesmanagement.pojo.Attachment;
 import com.jerry.salesmanagement.pojo.SysUser;
 import com.jerry.salesmanagement.service.AttachmentService;
 import com.jerry.salesmanagement.service.AuditTrailService;
+import com.jerry.salesmanagement.service.CurrentUserService;
 import com.jerry.salesmanagement.service.SysUserService;
 import com.jerry.salesmanagement.service.SystemConfigService;
 import org.springframework.beans.BeanUtils;
@@ -13,8 +14,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.util.StringUtils;
@@ -29,6 +32,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @RestController
@@ -47,13 +51,19 @@ public class AttachmentController {
     @Autowired
     private SysUserService sysUserService;
 
+    @Autowired
+    private CurrentUserService currentUserService;
+
     @Value("${app.attachment.storage-root:uploads}")
     private String storageRoot;
 
     @GetMapping
     public ApiResponse<List<Attachment>> getAll() {
         try {
-            return ApiResponse.success(service.getAll().stream().map(this::sanitizeAttachment).toList());
+            return ApiResponse.success(service.getAll().stream()
+                    .filter(att -> att != null && canAccessBusinessType(att.getBusinessType()))
+                    .map(this::sanitizeAttachment)
+                    .toList());
         } catch (Exception e) {
             return ApiResponse.error("Failed to query attachments: " + e.getMessage());
         }
@@ -63,7 +73,13 @@ public class AttachmentController {
     public ApiResponse<Attachment> getByUuid(@PathVariable String uuid) {
         try {
             Attachment attachment = service.getByUuid(uuid);
-            return attachment != null ? ApiResponse.success(sanitizeAttachment(attachment)) : ApiResponse.notFound("Attachment not found");
+            if (attachment == null) {
+                return ApiResponse.notFound("Attachment not found");
+            }
+            requireBusinessTypeAccess(attachment.getBusinessType());
+            return ApiResponse.success(sanitizeAttachment(attachment));
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (Exception e) {
             return ApiResponse.error("Failed to query attachment: " + e.getMessage());
         }
@@ -74,6 +90,7 @@ public class AttachmentController {
             @RequestParam String businessType,
             @RequestParam(required = false) String businessUuid
     ) {
+        requireBusinessTypeAccess(businessType);
         try {
             return ApiResponse.success(service.getByBusiness(businessType, businessUuid).stream().map(this::sanitizeAttachment).toList());
         } catch (Exception e) {
@@ -92,6 +109,7 @@ public class AttachmentController {
             @RequestParam(required = false) String businessUuid,
             @RequestPart("file") MultipartFile file
     ) {
+        requireBusinessTypeAccess(businessType);
         Path copiedTarget = null;
         try {
             if (file == null || file.isEmpty()) {
@@ -146,6 +164,9 @@ public class AttachmentController {
             if (attachment == null) {
                 return ResponseEntity.notFound().build();
             }
+            if (!canAccessBusinessType(attachment.getBusinessType())) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
             return buildFileResponse(attachment, parseMediaType(attachment.getMimeType()), false);
         } catch (SecurityException e) {
             return ResponseEntity.notFound().build();
@@ -161,6 +182,9 @@ public class AttachmentController {
             if (attachment == null || !isPdf(attachment)) {
                 return ResponseEntity.notFound().build();
             }
+            if (!canAccessBusinessType(attachment.getBusinessType())) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
             return buildFileResponse(attachment, MediaType.APPLICATION_PDF, true);
         } catch (SecurityException e) {
             return ResponseEntity.notFound().build();
@@ -172,6 +196,14 @@ public class AttachmentController {
     @PutMapping("/{uuid}")
     public ApiResponse<Attachment> update(@PathVariable String uuid, @RequestBody Attachment attachment) {
         try {
+            Attachment existing = service.getByUuid(uuid);
+            if (existing == null) {
+                return ApiResponse.notFound("Attachment not found");
+            }
+            requireBusinessTypeAccess(existing.getBusinessType());
+            if (attachment != null && StringUtils.hasText(attachment.getBusinessType())) {
+                requireBusinessTypeAccess(attachment.getBusinessType());
+            }
             attachment.setUuid(uuid);
             attachment.setFileName(null);
             attachment.setFileExt(null);
@@ -182,6 +214,8 @@ public class AttachmentController {
             Attachment updated = service.update(attachment);
             auditTrailService.record("attachments", "UPDATE", "attachments", uuid, "Updated attachment metadata");
             return ApiResponse.success("Attachment updated", sanitizeAttachment(updated));
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (Exception e) {
             return ApiResponse.error("Failed to update attachment: " + e.getMessage());
         }
@@ -191,6 +225,9 @@ public class AttachmentController {
     public ApiResponse<Void> delete(@PathVariable String uuid) {
         try {
             Attachment attachment = service.getByUuid(uuid);
+            if (attachment != null) {
+                requireBusinessTypeAccess(attachment.getBusinessType());
+            }
             Path filePath = attachment != null ? resolveAttachmentPath(attachment) : null;
             service.delete(uuid);
             if (filePath != null) {
@@ -198,9 +235,41 @@ public class AttachmentController {
             }
             auditTrailService.record("attachments", "DELETE", "attachments", uuid, "Deleted attachment");
             return ApiResponse.success("Attachment deleted", null);
+        } catch (AccessDeniedException e) {
+            throw e;
         } catch (Exception e) {
             return ApiResponse.error("Failed to delete attachment: " + e.getMessage());
         }
+    }
+
+    private void requireBusinessTypeAccess(String businessType) {
+        if (!canAccessBusinessType(businessType)) {
+            throw new AccessDeniedException("没有访问该业务模块附件的权限");
+        }
+    }
+
+    private boolean canAccessBusinessType(String businessType) {
+        if (currentUserService == null) {
+            return false;
+        }
+        if (currentUserService.isSystemUser()) {
+            return true;
+        }
+        if (!StringUtils.hasText(businessType) || "other".equalsIgnoreCase(businessType.trim())) {
+            return true;
+        }
+        return switch (businessType.trim().toLowerCase(Locale.ROOT)) {
+            case "projects" -> currentUserService.hasAnyAuthority("project.access", "project.manage");
+            case "project-lists" -> currentUserService.hasAnyAuthority(
+                    "project.access", "project.manage", "project.list.entry", "project.list.audit");
+            case "contracts" -> currentUserService.hasAnyAuthority("contract.access", "contract.manage");
+            case "customers" -> currentUserService.hasAnyAuthority("customer.access", "customer.manage");
+            case "warehouse-documents" -> currentUserService.hasAnyAuthority(
+                    "inventory.access", "inventory.manage", "inventory.warehouse-doc.entry", "inventory.warehouse-doc.audit");
+            case "finance-vouchers" -> currentUserService.hasAnyAuthority(
+                    "finance.access", "finance.manage", "finance.voucher.entry", "finance.voucher.audit");
+            default -> currentUserService.hasAnyAuthority("attachment.manage");
+        };
     }
 
     private ResponseEntity<Resource> buildFileResponse(Attachment attachment, MediaType mediaType, boolean inline)

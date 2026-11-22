@@ -4,6 +4,7 @@ import com.jerry.salesmanagement.common.ApiResponse;
 import com.jerry.salesmanagement.pojo.Attachment;
 import com.jerry.salesmanagement.service.AttachmentService;
 import com.jerry.salesmanagement.service.AuditTrailService;
+import com.jerry.salesmanagement.service.CurrentUserService;
 import com.jerry.salesmanagement.service.SysUserService;
 import com.jerry.salesmanagement.service.SystemConfigService;
 import org.junit.jupiter.api.Test;
@@ -13,17 +14,20 @@ import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
@@ -223,7 +227,83 @@ class AttachmentControllerStorageTests {
         assertFalse(Files.exists(target));
     }
 
+    @Test
+    void enforcesBusinessTypeRbacAcrossEndpoints() throws Exception {
+        Path root = tempDir.resolve("uploads");
+        Files.createDirectories(root);
+        Path finFile = root.resolve("fin-secret.pdf");
+        Files.writeString(finFile, "finance-pdf");
+
+        Attachment projectAttachment = new Attachment();
+        projectAttachment.setUuid("proj-1");
+        projectAttachment.setBusinessType("projects");
+
+        Attachment otherAttachment = new Attachment();
+        otherAttachment.setUuid("other-1");
+        otherAttachment.setBusinessType("other");
+
+        Attachment nullTypeAttachment = new Attachment();
+        nullTypeAttachment.setUuid("null-1");
+        nullTypeAttachment.setBusinessType(null);
+
+        Attachment financeAttachment = new Attachment();
+        financeAttachment.setUuid("fin-1");
+        financeAttachment.setBusinessType("finance-vouchers");
+        financeAttachment.setFileExt("pdf");
+        financeAttachment.setMimeType("application/pdf");
+        financeAttachment.setStoragePath("fin-secret.pdf");
+
+        Attachment contractAttachment = new Attachment();
+        contractAttachment.setUuid("con-1");
+        contractAttachment.setBusinessType("contracts");
+
+        AttachmentService service = mock(AttachmentService.class);
+        when(service.getAll()).thenReturn(List.of(
+                projectAttachment, otherAttachment, nullTypeAttachment, financeAttachment, contractAttachment));
+        when(service.getByUuid("fin-1")).thenReturn(financeAttachment);
+        when(service.getByUuid("proj-1")).thenReturn(projectAttachment);
+
+        CurrentUserService projectOnlyUser = mock(CurrentUserService.class);
+        when(projectOnlyUser.isSystemUser()).thenReturn(false);
+        when(projectOnlyUser.hasAnyAuthority("project.access", "project.manage")).thenReturn(true);
+
+        AttachmentController controller = createController(root, service, projectOnlyUser);
+
+        ApiResponse<List<Attachment>> listResponse = controller.getAll();
+        assertEquals(200, listResponse.getCode());
+        assertEquals(List.of("proj-1", "other-1", "null-1"),
+                listResponse.getData().stream().map(Attachment::getUuid).toList());
+
+        assertEquals(200, controller.getByUuid("proj-1").getCode());
+        assertThrows(AccessDeniedException.class, () -> controller.getByUuid("fin-1"));
+        assertThrows(AccessDeniedException.class, () -> controller.getByBusiness("finance-vouchers", "fv-1"));
+
+        MockMultipartFile file = new MockMultipartFile("file", "contract.pdf", "application/pdf", "bytes".getBytes(StandardCharsets.UTF_8));
+        assertThrows(AccessDeniedException.class, () -> controller.upload("contracts", "c-1", file));
+        verify(service, never()).create(any(Attachment.class));
+
+        assertEquals(HttpStatus.FORBIDDEN, controller.download("fin-1").getStatusCode());
+        assertEquals(HttpStatus.FORBIDDEN, controller.previewPdf("fin-1").getStatusCode());
+
+        Attachment incomingUpdate = new Attachment();
+        incomingUpdate.setOriginalFileName("renamed.pdf");
+        assertThrows(AccessDeniedException.class, () -> controller.update("fin-1", incomingUpdate));
+        assertThrows(AccessDeniedException.class, () -> controller.delete("fin-1"));
+        verify(service, never()).delete("fin-1");
+        assertTrue(Files.exists(finFile));
+    }
+
     private AttachmentController createController(Path root, AttachmentService service) {
+        CurrentUserService systemUser = mock(CurrentUserService.class);
+        when(systemUser.isSystemUser()).thenReturn(true);
+        return createController(root, service, systemUser);
+    }
+
+    private AttachmentController createController(
+            Path root,
+            AttachmentService service,
+            CurrentUserService currentUserService
+    ) {
         SystemConfigService systemConfigService = mock(SystemConfigService.class);
         when(systemConfigService.getString("attachment.storage.root", root.toString())).thenReturn(root.toString());
 
@@ -232,6 +312,7 @@ class AttachmentControllerStorageTests {
         ReflectionTestUtils.setField(controller, "auditTrailService", mock(AuditTrailService.class));
         ReflectionTestUtils.setField(controller, "systemConfigService", systemConfigService);
         ReflectionTestUtils.setField(controller, "sysUserService", mock(SysUserService.class));
+        ReflectionTestUtils.setField(controller, "currentUserService", currentUserService);
         ReflectionTestUtils.setField(controller, "storageRoot", root.toString());
         return controller;
     }

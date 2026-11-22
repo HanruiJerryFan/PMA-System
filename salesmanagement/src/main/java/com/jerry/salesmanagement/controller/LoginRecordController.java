@@ -46,16 +46,4 @@ public class LoginRecordController {
     public List<LoginRecord> getByUserId(@PathVariable Long userId) {
         return loginRecordService.getByUserId(userId);
     }
-
-    @PostMapping
-    public LoginRecord create(@RequestBody LoginRecord record) {
-        // record 中至少包含 userId, loginStartTime
-        return loginRecordService.create(record);
-    }
-
-    @PutMapping("/{id}")
-    public LoginRecord update(@PathVariable Long id, @RequestBody LoginRecord record) {
-        record.setId(id);
-        return loginRecordService.update(record);
-    }
 }

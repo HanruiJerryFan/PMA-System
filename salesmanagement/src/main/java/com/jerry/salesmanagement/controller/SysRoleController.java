@@ -26,6 +26,12 @@ public class SysRoleController {
         return roleService.getAll();
     }
 
+    @GetMapping("/options")
+    @PreAuthorize("hasAnyAuthority('permission.roles.manage', 'permission.user-roles.manage', 'permission.role-permissions.manage')")
+    public List<SysRole> getOptions() {
+        return roleService.getAll();
+    }
+
     @GetMapping("/{id}")
     public SysRole getById(@PathVariable Long id) {
         return roleService.getById(id);

@@ -4,6 +4,7 @@ import com.jerry.salesmanagement.service.impl.CustomUserDetailsService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -11,6 +12,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
@@ -92,21 +94,28 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/pdf-exports/**")
                         .hasAnyAuthority(
                                 "customer.access",
                                 "customer.manage",
                                 "project.access",
                                 "project.manage",
+                                "project.list.entry",
+                                "project.list.audit",
                                 "contract.access",
                                 "contract.manage",
                                 "product.access",
                                 "product.manage",
                                 "inventory.access",
                                 "inventory.manage",
+                                "inventory.warehouse-doc.entry",
+                                "inventory.warehouse-doc.audit",
                                 "finance.access",
-                                "finance.manage"
+                                "finance.manage",
+                                "finance.voucher.entry",
+                                "finance.voucher.audit",
+                                "logs.view",
+                                "logs.manage"
                         )
 
                         .requestMatchers(HttpMethod.GET, "/api/system-configs/**").hasAuthority("permission.items.manage")
@@ -124,6 +133,7 @@ public class SecurityConfig {
                                 "project.list.audit",
                                 "contract.access",
                                 "contract.manage",
+                                "product.access",
                                 "product.manage",
                                 "inventory.access",
                                 "inventory.manage",
@@ -132,43 +142,61 @@ public class SecurityConfig {
                                 "finance.access",
                                 "finance.manage",
                                 "finance.voucher.entry",
-                                "finance.voucher.audit",
-                                "attachment.manage"
+                                "finance.voucher.audit"
                         )
                         .requestMatchers(HttpMethod.GET, "/api/customer-types/options")
-                        .hasAnyAuthority("customer.access", "product.manage", "attachment.manage")
+                        .hasAnyAuthority("customer.access", "customer.manage", "product.access", "product.manage")
                         .requestMatchers(HttpMethod.GET, "/api/customer-contacts/options")
-                        .hasAnyAuthority("customer.access", "contract.access", "attachment.manage")
+                        .hasAnyAuthority("customer.access", "customer.manage", "contract.access", "contract.manage")
                         .requestMatchers(HttpMethod.GET, "/api/projects/options")
-                        .hasAnyAuthority("project.access", "project.manage", "project.list.entry", "project.list.audit", "contract.access", "contract.manage", "finance.access", "finance.manage", "finance.voucher.entry", "finance.voucher.audit", "attachment.manage")
+                        .hasAnyAuthority(
+                                "project.access",
+                                "project.manage",
+                                "project.list.entry",
+                                "project.list.audit",
+                                "contract.access",
+                                "contract.manage",
+                                "inventory.access",
+                                "inventory.manage",
+                                "inventory.warehouse-doc.entry",
+                                "inventory.warehouse-doc.audit",
+                                "finance.access",
+                                "finance.manage",
+                                "finance.voucher.entry",
+                                "finance.voucher.audit"
+                        )
                         .requestMatchers(HttpMethod.GET, "/api/project-lists/options")
-                        .hasAnyAuthority("project.access", "project.manage", "project.list.entry", "project.list.audit", "attachment.manage")
+                        .hasAnyAuthority("project.access", "project.manage", "project.list.entry", "project.list.audit")
                         .requestMatchers(HttpMethod.GET, "/api/contracts/options")
-                        .hasAnyAuthority("contract.access", "attachment.manage")
+                        .hasAnyAuthority("contract.access", "contract.manage")
                         .requestMatchers(HttpMethod.GET, "/api/finance-vouchers/options")
-                        .hasAnyAuthority("finance.access", "finance.manage", "finance.voucher.entry", "finance.voucher.audit", "attachment.manage")
+                        .hasAnyAuthority("finance.access", "finance.manage", "finance.voucher.entry", "finance.voucher.audit")
                         .requestMatchers(HttpMethod.GET, "/api/warehouse-documents/options")
-                        .hasAnyAuthority("inventory.access", "inventory.manage", "inventory.warehouse-doc.entry", "inventory.warehouse-doc.audit", "attachment.manage")
+                        .hasAnyAuthority("inventory.access", "inventory.manage", "inventory.warehouse-doc.entry", "inventory.warehouse-doc.audit")
                         .requestMatchers(HttpMethod.GET, "/api/region/options")
-                        .hasAnyAuthority("customer.access", "project.access", "attachment.manage")
+                        .hasAnyAuthority("customer.access", "customer.manage", "project.access", "project.manage")
                         .requestMatchers(HttpMethod.GET, "/api/materials/options")
-                        .hasAnyAuthority("product.access", "project.access", "project.list.entry", "project.list.audit", "attachment.manage")
+                        .hasAnyAuthority("product.access", "product.manage", "project.access", "project.manage", "project.list.entry", "project.list.audit")
                         .requestMatchers(HttpMethod.GET, "/api/material-category-dicts/options")
-                        .hasAnyAuthority("product.access", "project.access", "project.list.entry", "project.list.audit", "attachment.manage")
+                        .hasAnyAuthority("product.access", "product.manage", "project.access", "project.manage", "project.list.entry", "project.list.audit")
                         .requestMatchers(HttpMethod.GET, "/api/material-subcategory-dicts/options")
-                        .hasAnyAuthority("product.access", "project.access", "project.list.entry", "project.list.audit", "attachment.manage")
+                        .hasAnyAuthority("product.access", "product.manage", "project.access", "project.manage", "project.list.entry", "project.list.audit")
                         .requestMatchers(HttpMethod.GET, "/api/material-brand-dicts/options")
-                        .hasAnyAuthority("product.access", "project.access", "project.list.entry", "project.list.audit", "attachment.manage")
+                        .hasAnyAuthority("product.access", "product.manage", "project.access", "project.manage", "project.list.entry", "project.list.audit")
                         .requestMatchers(HttpMethod.GET, "/api/users/**").hasAuthority("permission.users.manage")
                         .requestMatchers(HttpMethod.POST, "/api/users/**").hasAuthority("permission.users.manage")
                         .requestMatchers(HttpMethod.PUT, "/api/users/**").hasAuthority("permission.users.manage")
                         .requestMatchers(HttpMethod.DELETE, "/api/users/**").hasAuthority("permission.users.manage")
 
+                        .requestMatchers(HttpMethod.GET, "/api/roles/options")
+                        .hasAnyAuthority("permission.roles.manage", "permission.user-roles.manage", "permission.role-permissions.manage")
                         .requestMatchers(HttpMethod.GET, "/api/roles/**").hasAuthority("permission.roles.manage")
                         .requestMatchers(HttpMethod.POST, "/api/roles/**").hasAuthority("permission.roles.manage")
                         .requestMatchers(HttpMethod.PUT, "/api/roles/**").hasAuthority("permission.roles.manage")
                         .requestMatchers(HttpMethod.DELETE, "/api/roles/**").hasAuthority("permission.roles.manage")
 
+                        .requestMatchers(HttpMethod.GET, "/api/permissions/options")
+                        .hasAnyAuthority("permission.items.manage", "permission.role-permissions.manage")
                         .requestMatchers(HttpMethod.GET, "/api/permissions/**").hasAuthority("permission.items.manage")
                         .requestMatchers(HttpMethod.POST, "/api/permissions/**").hasAuthority("permission.items.manage")
                         .requestMatchers(HttpMethod.PUT, "/api/permissions/**").hasAuthority("permission.items.manage")
@@ -285,16 +313,16 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/login-logs/**", "/api/audit-trails/**")
                         .hasAnyAuthority("logs.view", "logs.manage")
                         .requestMatchers(HttpMethod.POST, "/api/login-logs/**", "/api/audit-trails/**")
-                        .hasAuthority("logs.manage")
+                        .denyAll()
                         .requestMatchers(HttpMethod.PUT, "/api/login-logs/**", "/api/audit-trails/**")
-                        .hasAuthority("logs.manage")
+                        .denyAll()
                         .requestMatchers(HttpMethod.DELETE, "/api/login-logs/**", "/api/audit-trails/**")
-                        .hasAuthority("logs.manage")
+                        .denyAll()
 
                         .anyRequest().authenticated()
                 )
                 .formLogin().disable()
-                .httpBasic();
+                .exceptionHandling(ex -> ex.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)));
 
         http.addFilterAfter(passwordChangeRequiredFilter, UsernamePasswordAuthenticationFilter.class);
 

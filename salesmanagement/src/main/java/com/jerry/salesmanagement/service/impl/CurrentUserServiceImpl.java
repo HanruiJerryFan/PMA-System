@@ -18,8 +18,7 @@ import java.util.stream.Collectors;
 public class CurrentUserServiceImpl implements CurrentUserService {
 
     private static final String SYSTEM_USERNAME = "System";
-    private static final String SYSTEM_ROLE = "ROLE_System";
-    private static final String ADMIN_ROLE = "ROLE_管理员";
+    private static final String ENTRY_AUDIT_MANAGE_AUTHORITY = "document.entry-audit.manage";
 
     @Autowired
     private SysUserService sysUserService;
@@ -71,9 +70,13 @@ public class CurrentUserServiceImpl implements CurrentUserService {
     }
 
     @Override
-    public boolean isSystemOrAdmin() {
+    public boolean isSystemUser() {
         SysUser currentUser = getCurrentUser();
-        return (currentUser != null && SYSTEM_USERNAME.equalsIgnoreCase(currentUser.getUsername()))
-                || hasAnyAuthority(SYSTEM_ROLE, ADMIN_ROLE, "document.entry-audit.manage");
+        return currentUser != null && SYSTEM_USERNAME.equalsIgnoreCase(currentUser.getUsername());
+    }
+
+    @Override
+    public boolean isSystemOrAdmin() {
+        return isSystemUser() || hasAnyAuthority(ENTRY_AUDIT_MANAGE_AUTHORITY);
     }
 }

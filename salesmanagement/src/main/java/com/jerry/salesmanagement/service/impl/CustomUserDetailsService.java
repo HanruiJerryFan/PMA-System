@@ -45,6 +45,15 @@ public class CustomUserDetailsService implements UserDetailsService {
             throw new DisabledException("User status is " + sysUser.getStatus());
         }
 
+        List<GrantedAuthority> authorities = loadAuthorities(sysUser);
+
+        return new User(sysUser.getUsername(), sysUser.getPassword(), authorities);
+    }
+
+    public List<GrantedAuthority> loadAuthorities(SysUser sysUser) {
+        if (sysUser == null || sysUser.getId() == null) {
+            return List.of();
+        }
         Set<String> roleSet = new LinkedHashSet<>();
         for (String roleName : sysRoleService.getRoleNamesByUserId(sysUser.getId())) {
             if (roleName != null && !roleName.isBlank()) {
@@ -66,7 +75,6 @@ public class CustomUserDetailsService implements UserDetailsService {
         for (String permission : permissionSet) {
             authorities.add(new SimpleGrantedAuthority(permission));
         }
-
-        return new User(sysUser.getUsername(), sysUser.getPassword(), authorities);
+        return authorities;
     }
 }

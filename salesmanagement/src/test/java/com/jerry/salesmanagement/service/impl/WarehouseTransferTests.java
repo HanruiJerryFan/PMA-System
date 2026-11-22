@@ -37,6 +37,7 @@ class WarehouseTransferTests {
     private WarehouseDocumentServiceImpl target;
     private WarehouseDocumentService service;
     private WarehouseMapper warehouses;
+    private CurrentUserService currentUser;
     private Warehouse projectWarehouse;
     private Warehouse centralWarehouse;
 
@@ -107,7 +108,7 @@ class WarehouseTransferTests {
         ReflectionTestUtils.setField(inventory, "warehouseMapper", warehouses);
         ReflectionTestUtils.setField(inventory, "projectMapper", projects);
         ReflectionTestUtils.setField(inventory, "materialMasterMapper", materials);
-        CurrentUserService currentUser = mock(CurrentUserService.class);
+        currentUser = mock(CurrentUserService.class);
         when(currentUser.requireCurrentUserId()).thenReturn(1L);
         EntryAuditServiceImpl audits = new EntryAuditServiceImpl();
         ReflectionTestUtils.setField(audits, "currentUserService", currentUser);
@@ -183,9 +184,10 @@ class WarehouseTransferTests {
         assertEquals(0, new BigDecimal("6").compareTo(inbound(updated).getItems().get(0).getQuantity()));
         assertEquals(2, count("warehouse_doc"));
         assertEquals(2, count("goods_transaction_dynamic_info"));
+        when(currentUser.requireCurrentUserId()).thenReturn(2L);
         service.audit(parent.getDocNumber());
-        assertEquals(1L, service.getByDocNumber(inboundNumber).getAuditorUser());
-        assertEquals(1L, service.getByDocNumber(parent.getDocNumber()).getAuditorUser());
+        assertEquals(2L, service.getByDocNumber(inboundNumber).getAuditorUser());
+        assertEquals(2L, service.getByDocNumber(parent.getDocNumber()).getAuditorUser());
     }
 
     @Test

@@ -172,8 +172,12 @@ public class WarehouseDocumentServiceImpl implements WarehouseDocumentService {
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public WarehouseDocument audit(String docNumber) {
         codeSequenceService.withLock(sequenceKey(docNumber), () -> {
-            WarehouseDocument existing = warehouseDocumentMapper.selectIdentityForUpdate(docNumber);
-            requireEditable(existing);
+            WarehouseDocument identity = warehouseDocumentMapper.selectIdentityForUpdate(docNumber);
+            requireEditable(identity);
+            WarehouseDocument existing = warehouseDocumentMapper.selectByDocNumber(docNumber);
+            if (existing == null) {
+                throw new IllegalArgumentException("Warehouse document does not exist");
+            }
             entryAuditService.applyAudit(existing);
             Long userId = currentUserService.requireCurrentUserId();
             warehouseDocumentMapper.updateAuditorByDocNumber(docNumber, existing.getAuditorUser(), userId);
@@ -190,6 +194,10 @@ public class WarehouseDocumentServiceImpl implements WarehouseDocumentService {
             WarehouseDocument existing = warehouseDocumentMapper.selectIdentityForUpdate(docNumber);
             if (existing == null) return;
             requireEditable(existing);
+            if (entryAuditService != null) {
+                WarehouseDocument fullDoc = warehouseDocumentMapper.selectByDocNumber(docNumber);
+                entryAuditService.assertCanDelete(fullDoc);
+            }
             WarehouseDocument inbound = linkedInbound(docNumber);
             if (inbound != null) deleteLinkedInbound(inbound);
             deleteRecords(docNumber);

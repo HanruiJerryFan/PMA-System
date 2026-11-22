@@ -26,6 +26,12 @@ public class SysPermissionController {
         return permissionService.getAll();
     }
 
+    @GetMapping("/options")
+    @PreAuthorize("hasAnyAuthority('permission.items.manage', 'permission.role-permissions.manage')")
+    public List<SysPermission> getOptions() {
+        return permissionService.getAll();
+    }
+
     @GetMapping("/{id}")
     public SysPermission getById(@PathVariable Long id) {
         return permissionService.getById(id);

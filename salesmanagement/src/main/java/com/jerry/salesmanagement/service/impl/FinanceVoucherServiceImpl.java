@@ -141,6 +141,9 @@ public class FinanceVoucherServiceImpl implements FinanceVoucherService {
         if (existing == null) {
             return;
         }
+        if (entryAuditService != null) {
+            entryAuditService.assertCanDelete(existing);
+        }
         String voucherNo = existing.getVoucherNo();
         if (!StringUtils.hasText(voucherNo) || !VOUCHER_NO_PATTERN.matcher(voucherNo).matches()) {
             mapper.deleteByUuid(uuid);

@@ -7,6 +7,8 @@ public interface EntryAuditService {
 
     void applyUpdate(EntryAuditable incoming, EntryAuditable existing);
 
+    void assertCanDelete(EntryAuditable existing);
+
     void applyAudit(EntryAuditable record);
 
     boolean canOverrideEntryAuditUsers();

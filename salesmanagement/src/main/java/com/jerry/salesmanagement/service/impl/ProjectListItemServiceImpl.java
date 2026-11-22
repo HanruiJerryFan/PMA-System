@@ -176,6 +176,10 @@ public class ProjectListItemServiceImpl implements ProjectListItemService {
 
     @Override
     public void delete(String uuid) {
+        ProjectListItem existing = mapper.selectByUuid(uuid);
+        if (existing != null && entryAuditService != null) {
+            entryAuditService.assertCanDelete(existing);
+        }
         mapper.deleteByUuid(uuid);
     }
 

@@ -24,13 +24,37 @@ public class EntryAuditServiceImpl implements EntryAuditService {
         if (canOverrideEntryAuditUsers()) {
             return;
         }
-        incoming.setEntryUser(existing.getEntryUser());
-        incoming.setAuditorUser(existing.getAuditorUser());
+        if (existing != null && existing.getAuditorUser() != null) {
+            throw new IllegalArgumentException("已审核单据不可修改，请联系具备录入审核维护权限的管理员");
+        }
+        if (existing != null) {
+            incoming.setEntryUser(existing.getEntryUser());
+            incoming.setAuditorUser(existing.getAuditorUser());
+        }
+    }
+
+    @Override
+    public void assertCanDelete(EntryAuditable existing) {
+        if (existing != null && existing.getAuditorUser() != null && !canOverrideEntryAuditUsers()) {
+            throw new IllegalArgumentException("已审核单据不可删除，请联系具备录入审核维护权限的管理员");
+        }
     }
 
     @Override
     public void applyAudit(EntryAuditable record) {
-        record.setAuditorUser(currentUserService.requireCurrentUserId());
+        if (record == null) {
+            throw new IllegalArgumentException("Record is required");
+        }
+        if (record.getAuditorUser() != null) {
+            throw new IllegalArgumentException("单据已审核，不可重复审核");
+        }
+        Long currentUserId = currentUserService.requireCurrentUserId();
+        if (record.getEntryUser() != null
+                && record.getEntryUser().equals(currentUserId)
+                && !canOverrideEntryAuditUsers()) {
+            throw new IllegalArgumentException("录入人与审核人不能为同一人");
+        }
+        record.setAuditorUser(currentUserId);
     }
 
     @Override

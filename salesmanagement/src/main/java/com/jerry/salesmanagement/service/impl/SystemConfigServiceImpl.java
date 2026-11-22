@@ -8,9 +8,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class SystemConfigServiceImpl implements SystemConfigService {
+
+    private static final Set<String> PATH_CONFIG_KEYS = Set.of("attachment.storage.root", "pdf.font.path");
 
     @Autowired
     private SystemConfigMapper systemConfigMapper;
@@ -70,6 +73,14 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         }
         if (!StringUtils.hasText(systemConfig.getConfigValue())) {
             throw new IllegalArgumentException("Config value is required");
+        }
+        String normalizedKey = systemConfig.getConfigKey().trim();
+        if (PATH_CONFIG_KEYS.contains(normalizedKey)) {
+            for (String segment : systemConfig.getConfigValue().replace('\\', '/').split("/")) {
+                if ("..".equals(segment.trim())) {
+                    throw new IllegalArgumentException("Path configuration cannot contain parent directory traversal");
+                }
+            }
         }
     }
 }

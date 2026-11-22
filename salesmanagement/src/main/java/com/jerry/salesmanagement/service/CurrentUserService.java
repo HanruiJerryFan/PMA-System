@@ -11,5 +11,9 @@ public interface CurrentUserService {
 
     boolean hasAnyAuthority(String... authorities);
 
+    default boolean isSystemUser() {
+        return false;
+    }
+
     boolean isSystemOrAdmin();
 }

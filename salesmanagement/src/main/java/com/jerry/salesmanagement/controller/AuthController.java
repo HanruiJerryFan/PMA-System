@@ -95,10 +95,20 @@ public class AuthController {
         }
 
         SecurityContext securityContext = (SecurityContext) session.getAttribute("SPRING_SECURITY_CONTEXT");
-        if (securityContext == null
-                || securityContext.getAuthentication() == null
-                || !securityContext.getAuthentication().isAuthenticated()) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equalsIgnoreCase(auth.getName())) {
+            auth = securityContext != null ? securityContext.getAuthentication() : null;
+        }
+        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equalsIgnoreCase(auth.getName())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("No Authentication");
+        }
+
+        SysUser currentUser = sysUserService.getByUsername(auth.getName());
+        if (currentUser == null || !"ACTIVE".equalsIgnoreCase(currentUser.getStatus())) {
+            recordLoginEnd(session, "FORCED");
+            session.invalidate();
+            SecurityContextHolder.clearContext();
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Account is inactive");
         }
 
         touchLoginRecord(session);
@@ -184,19 +194,30 @@ public class AuthController {
         }
 
         SecurityContext securityContext = (SecurityContext) session.getAttribute("SPRING_SECURITY_CONTEXT");
-        if (securityContext == null
-                || securityContext.getAuthentication() == null
-                || !securityContext.getAuthentication().isAuthenticated()) {
+        Authentication contextAuth = SecurityContextHolder.getContext().getAuthentication();
+        Authentication auth = (contextAuth != null
+                && contextAuth.isAuthenticated()
+                && !"anonymousUser".equalsIgnoreCase(contextAuth.getName()))
+                ? contextAuth
+                : (securityContext != null ? securityContext.getAuthentication() : null);
+        if (auth == null
+                || !auth.isAuthenticated()
+                || "anonymousUser".equalsIgnoreCase(auth.getName())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("No Authentication");
         }
 
-        Authentication auth = securityContext.getAuthentication();
         SysUser currentUser = sysUserService.getByUsername(auth.getName());
+        if (currentUser == null || !"ACTIVE".equalsIgnoreCase(currentUser.getStatus())) {
+            recordLoginEnd(session, "FORCED");
+            session.invalidate();
+            SecurityContextHolder.clearContext();
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Account is inactive");
+        }
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("id", currentUser != null ? currentUser.getId() : null);
+        payload.put("id", currentUser.getId());
         payload.put("username", auth.getName());
-        payload.put("realName", currentUser != null ? currentUser.getRealName() : null);
-        payload.put("forcePasswordChange", currentUser != null && Boolean.TRUE.equals(currentUser.getForcePasswordChange()));
+        payload.put("realName", currentUser.getRealName());
+        payload.put("forcePasswordChange", Boolean.TRUE.equals(currentUser.getForcePasswordChange()));
         payload.put(
                 "authorities",
                 auth.getAuthorities().stream().map(GrantedAuthority::getAuthority).collect(Collectors.toList())
