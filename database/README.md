@@ -55,6 +55,14 @@
   - 更新前后端后，HBJ（划拨单JTX）从集采仓库出库、项目仓库自动入库；HBX（划拨单XTJ）反向划拨。关联入库单由划拨单统一修改、审核和删除。
   - 采购均价只按采购入库金额 / 采购入库数量计算；划拨不重复计入采购成本或采购数量。
 
+- `12_defect_fixes_schema.sql`
+  - 全模块缺陷修复增量补丁（V1.2.2），可重复执行：
+  - 将 `product_basic_info` 编码校验触发器放宽为 10~12 位（兼容 `GW`/`DM` 两字符频段编码）；
+  - 将 `goods_transaction_dynamic_info.quantity`/`unit_price` 精度提升至 `DECIMAL(18,4)`（`amount` 为 `DECIMAL(18,2)`），消除 4 位小数被截断的问题；
+  - 将 `contract_type` 中 `CL` 的显示名称区分调整为 `'劳务分包'`；
+  - 为 `warehouse_info.warehouse_code` 添加唯一索引（在无重复数据时），并补充 `inventory.allow_negative_stock` 与 `project.tracking.low_collection_stage_sort_order` 默认配置；
+  - 执行完补丁后建议同步重跑 `02_current_views.sql` 以更新 `inventory_balance` 视图。
+
 ## 推荐使用顺序
 
 ### 初始化空库
@@ -77,6 +85,7 @@
 5. 执行 `09_finance_voucher_invoice_type.sql`
 6. 执行 `10_finance_subject.sql`
 7. 执行 `11_warehouse_transfers.sql`
+8. 执行 `12_defect_fixes_schema.sql` 并重跑 `02_current_views.sql`
 
 新版“财务管理 → 科目管理”使用 `finance.manage` 权限。财务凭证查询、筛选、导出，以及项目看板中的快速新增凭证，共用科目字典。科目改名后，历史凭证显示新名称；人员工资、差旅、项目调出的既有记账规则仍按原编码执行。
 

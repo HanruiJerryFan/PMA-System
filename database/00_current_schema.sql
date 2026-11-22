@@ -450,9 +450,9 @@ CREATE TABLE `goods_transaction_dynamic_info` (
   `warehouse_id` bigint(20) DEFAULT NULL,
   `txn_type` varchar(20) DEFAULT NULL,
   `txn_time` datetime DEFAULT NULL,
-  `quantity` decimal(15,2) NOT NULL DEFAULT '0.00' COMMENT '数量',
-  `unit_price` decimal(15,4) DEFAULT '0.0000',
-  `amount` decimal(15,2) DEFAULT NULL,
+  `quantity` decimal(18,4) NOT NULL DEFAULT '0.0000' COMMENT '数量',
+  `unit_price` decimal(18,4) DEFAULT '0.0000',
+  `amount` decimal(18,2) DEFAULT NULL,
   `source_ref_type` varchar(64) DEFAULT NULL,
   `source_ref_id` varchar(64) DEFAULT NULL,
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -555,8 +555,9 @@ BEFORE INSERT ON `product_basic_info`
 FOR EACH ROW
 BEGIN
     IF NEW.material_code IS NULL
-       OR CHAR_LENGTH(TRIM(NEW.material_code)) <> 12 THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'material_code must be 12 characters';
+       OR CHAR_LENGTH(TRIM(NEW.material_code)) < 10
+       OR CHAR_LENGTH(TRIM(NEW.material_code)) > 12 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'material_code must be 10 to 12 characters';
     END IF;
 END */;;
 DELIMITER ;
@@ -578,8 +579,9 @@ BEFORE UPDATE ON `product_basic_info`
 FOR EACH ROW
 BEGIN
     IF NEW.material_code IS NULL
-       OR CHAR_LENGTH(TRIM(NEW.material_code)) <> 12 THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'material_code must be 12 characters';
+       OR CHAR_LENGTH(TRIM(NEW.material_code)) < 10
+       OR CHAR_LENGTH(TRIM(NEW.material_code)) > 12 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'material_code must be 10 to 12 characters';
     END IF;
 END */;;
 DELIMITER ;
@@ -1116,7 +1118,8 @@ CREATE TABLE `warehouse_info` (
   `contact_name` varchar(100) DEFAULT NULL,
   `contact_phone` varchar(50) DEFAULT NULL,
   `remark` varchar(255) DEFAULT NULL,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_warehouse_code` (`warehouse_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
