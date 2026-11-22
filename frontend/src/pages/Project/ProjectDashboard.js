@@ -85,6 +85,14 @@ function formatAmount(value) {
   return Number(value).toFixed(2);
 }
 
+function formatTaxRateKey(rate) {
+  return Number(rate || 0).toFixed(2);
+}
+
+function formatTaxRatePercent(rate) {
+  return `${Number((Number(rate || 0) * 100).toFixed(2))}%`;
+}
+
 function VoucherDirectionSync({ form }) {
   const direction = Form.useWatch("transactionDirection", form);
 
@@ -345,14 +353,23 @@ export default function ProjectDashboard() {
 
   const project = useMemo(() => projects.find((item) => item.uuid === projectUuid) || null, [projects, projectUuid]);
   const canDeleteProject = canManageProject && project?.canDelete !== false;
-  const historyList = useMemo(() => [...statusHistory].filter((item) => item.projectId === projectUuid).sort((a, b) => dayjs(a.createdAt).valueOf() - dayjs(b.createdAt).valueOf()), [projectUuid, statusHistory]);
+  const historyList = useMemo(
+    () =>
+      [...statusHistory]
+        .filter((item) => item.projectId === projectUuid)
+        .sort((a, b) => {
+          const diff = dayjs(a.createdAt).valueOf() - dayjs(b.createdAt).valueOf();
+          return diff !== 0 ? diff : Number(a.id || 0) - Number(b.id || 0);
+        }),
+    [projectUuid, statusHistory]
+  );
   const currentStageId = useMemo(() => (historyList.length ? historyList[historyList.length - 1].stageId : null), [historyList]);
   const currentStageIndex = useMemo(() => stageList.findIndex((item) => item.id === currentStageId), [currentStageId, stageList]);
-  const nextStage = useMemo(() => (currentStageIndex < 0 ? stageList[0] || null : stageList[currentStageIndex + 1] || null), [currentStageIndex, stageList]);
   const availableAdvanceStages = useMemo(
-    () => stageList.filter((item, index) => index > currentStageIndex),
+    () => stageList.filter((item, index) => index > currentStageIndex && item.isActive !== false),
     [currentStageIndex, stageList]
   );
+  const nextStage = useMemo(() => availableAdvanceStages[0] || null, [availableAdvanceStages]);
   const milestoneItems = useMemo(
     () =>
       stageList.map((item, index) => ({
@@ -490,6 +507,8 @@ export default function ProjectDashboard() {
       setTaxRates(normalizeResponseData(taxRateResponse));
       setSubjects(normalizeResponseData(subjectResponse));
       setAttachments(normalizeResponseData(attachmentResponse));
+    } catch (error) {
+      message.error(error?.message || "加载项目总览失败");
     } finally {
       setLoading(false);
     }
@@ -534,25 +553,33 @@ export default function ProjectDashboard() {
     if (!project) {
       return;
     }
-    await projectAPI.deleteProject(project.uuid);
-    message.success("项目已删除");
-    navigate("/project/info");
+    try {
+      await projectAPI.deleteProject(project.uuid);
+      message.success("项目已删除");
+      navigate("/project/info");
+    } catch (error) {
+      message.error(error?.message || "删除项目失败");
+    }
   };
 
   const handleSaveProject = async () => {
-    const values = await editForm.validateFields();
-    setSubmitting(true);
     try {
+      const values = await editForm.validateFields();
+      setSubmitting(true);
       await projectAPI.updateProject(project.uuid, {
         ...values,
         regionId: Array.isArray(values.regionId) ? values.regionId[values.regionId.length - 1] || null : values.regionId,
-        planStartTime: values.planStartTime ? values.planStartTime.format("YYYY-MM-DD") : null,
-        planEndTime: values.planEndTime ? values.planEndTime.format("YYYY-MM-DD") : null,
+        planStartTime: values.planStartTime ? values.planStartTime.toISOString() : null,
+        planEndTime: values.planEndTime ? values.planEndTime.toISOString() : null,
         warrantyUntil: values.warrantyUntil ? values.warrantyUntil.format("YYYY-MM-DD") : null,
       });
       message.success("项目已更新");
       setEditVisible(false);
       await loadAll();
+    } catch (error) {
+      if (!error?.errorFields) {
+        message.error(error?.message || "更新项目失败");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -562,14 +589,14 @@ export default function ProjectDashboard() {
     if (!project) {
       return;
     }
-    const values = await advanceForm.validateFields();
-    const nextIndex = stageList.findIndex((item) => item.id === values.stageId);
-    if (nextIndex <= currentStageIndex) {
-      message.error("阶段不能回退或停留在当前阶段");
-      return;
-    }
-    setSubmitting(true);
     try {
+      const values = await advanceForm.validateFields();
+      const nextIndex = stageList.findIndex((item) => item.id === values.stageId);
+      if (nextIndex <= currentStageIndex) {
+        message.error("阶段不能回退或停留在当前阶段");
+        return;
+      }
+      setSubmitting(true);
       await projectAPI.createProjectStatusHistory({
         projectId: project.uuid,
         stageId: values.stageId,
@@ -579,15 +606,19 @@ export default function ProjectDashboard() {
       setAdvanceVisible(false);
       advanceForm.resetFields();
       await loadAll();
+    } catch (error) {
+      if (!error?.errorFields) {
+        message.error(error?.message || "推进项目阶段失败");
+      }
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleCreateList = async () => {
-    const values = await listForm.validateFields();
-    setSubmitting(true);
     try {
+      const values = await listForm.validateFields();
+      setSubmitting(true);
       const listPayload = {
         projectId: project.uuid,
         listName: values.listName,
@@ -595,14 +626,26 @@ export default function ProjectDashboard() {
         entryDate: values.entryDate ? values.entryDate.format("YYYY-MM-DD") : null,
       };
       const created = normalizeResponseData(await projectAPI.createProjectList(listPayload));
+      let attachmentFailed = false;
       if (pendingListAttachmentFiles.length) {
-        const uploadedAttachments = await uploadBusinessAttachments("project-lists", created.uuid, pendingListAttachmentFiles);
-        await projectAPI.updateProjectList(created.uuid, {
-          ...listPayload,
-          pdfAttachmentId: uploadedAttachments[0]?.uuid || null,
-        });
+        try {
+          const uploadedAttachments = await uploadBusinessAttachments("project-lists", created.uuid, pendingListAttachmentFiles);
+          await projectAPI.updateProjectList(created.uuid, {
+            ...listPayload,
+            pdfAttachmentId: uploadedAttachments[0]?.uuid || null,
+          });
+        } catch (attachError) {
+          attachmentFailed = true;
+          message.warning(
+            attachError?.message
+              ? `项目清单已创建，但附件上传失败：${attachError.message}`
+              : "项目清单已创建，但附件上传失败，请稍后在附件中心补传"
+          );
+        }
       }
-      message.success("项目清单已创建");
+      if (!attachmentFailed) {
+        message.success("项目清单已创建");
+      }
       setListVisible(false);
       listForm.resetFields();
       setPendingListAttachmentFiles([]);
@@ -610,15 +653,19 @@ export default function ProjectDashboard() {
         listAttachmentInputRef.current.value = "";
       }
       await loadAll();
+    } catch (error) {
+      if (!error?.errorFields) {
+        message.error(error?.message || "创建项目清单失败");
+      }
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleCreateContract = async () => {
-    const values = await contractForm.validateFields();
-    setSubmitting(true);
     try {
+      const values = await contractForm.validateFields();
+      setSubmitting(true);
       await contractAPI.createContract({
         projectBasicInfoId: project.uuid,
         clientId: project.customerId,
@@ -633,6 +680,10 @@ export default function ProjectDashboard() {
       setContractVisible(false);
       contractForm.resetFields();
       await loadAll();
+    } catch (error) {
+      if (!error?.errorFields) {
+        message.error(error?.message || "创建合同失败");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -651,7 +702,7 @@ export default function ProjectDashboard() {
         level2SubjectId: values.level2SubjectId,
         summary: values.summary,
         transactionDirection: values.transactionDirection,
-        taxRate: values.taxRate,
+        taxRate: values.taxRate == null ? null : Number(values.taxRate),
         counterpartyCustomerId: values.counterpartyCustomerId,
         invoiceStatus: values.invoiceStatus,
         invoiceType: values.invoiceStatus === "INVOICED" ? values.invoiceType : null,
@@ -1033,8 +1084,8 @@ export default function ProjectDashboard() {
           <Descriptions.Item label="地区">{regionMap[project.regionId] || "-"}</Descriptions.Item>
           <Descriptions.Item label="项目类型">{projectTypeMap[project.projectTypeId] || "-"}</Descriptions.Item>
           <Descriptions.Item label="质保截止">{formatDate(project.warrantyUntil)}</Descriptions.Item>
-          <Descriptions.Item label="计划开始">{formatDate(project.planStartTime)}</Descriptions.Item>
-          <Descriptions.Item label="计划结束">{formatDate(project.planEndTime)}</Descriptions.Item>
+          <Descriptions.Item label="计划开始">{formatDate(project.planStartTime, "YYYY-MM-DD HH:mm")}</Descriptions.Item>
+          <Descriptions.Item label="计划结束">{formatDate(project.planEndTime, "YYYY-MM-DD HH:mm")}</Descriptions.Item>
           <Descriptions.Item label="参与人" span={2}>
             {[project.participant1UserId, project.participant2UserId, project.participant3UserId].filter(Boolean).map((value) => userMap[value] || `用户${value}`).join(" / ") || "-"}
           </Descriptions.Item>
@@ -1242,12 +1293,12 @@ export default function ProjectDashboard() {
             </Col>
             <Col span={8}>
               <Form.Item name="planStartTime" label="计划开始">
-                <DatePicker style={{ width: "100%" }} />
+                <DatePicker showTime style={{ width: "100%" }} />
               </Form.Item>
             </Col>
             <Col span={8}>
               <Form.Item name="planEndTime" label="计划结束">
-                <DatePicker style={{ width: "100%" }} />
+                <DatePicker showTime style={{ width: "100%" }} />
               </Form.Item>
             </Col>
             <Col span={8}>
@@ -1337,7 +1388,7 @@ export default function ProjectDashboard() {
       </Modal>
 
       <Modal title="快速新增财务凭证" open={voucherVisible} onCancel={() => setVoucherVisible(false)} onOk={handleCreateVoucher} confirmLoading={submitting} destroyOnHidden>
-        <Form form={voucherForm} layout="vertical" initialValues={{ level1SubjectId: subjects.find((item) => item.subjectCode === "PROJECT" && item.subjectLevel === 1)?.id, transactionDirection: "PAY", taxRate: 0.13, invoiceStatus: "NOT_INVOICED" }}>
+        <Form form={voucherForm} layout="vertical" initialValues={{ level1SubjectId: subjects.find((item) => item.subjectCode === "PROJECT" && item.subjectLevel === 1)?.id, transactionDirection: "PAY", taxRate: "0.13", invoiceStatus: "NOT_INVOICED" }}>
           <VoucherDirectionSync form={voucherForm} />
           <Form.Item name="occurredOn" label="发生日期" rules={[{ required: true, message: "请选择发生日期" }]}>
             <DatePicker style={{ width: "100%" }} />
@@ -1374,9 +1425,9 @@ export default function ProjectDashboard() {
           </Form.Item>
           <Form.Item name="taxRate" label="税率" rules={[{ required: true, message: "请选择税率" }]}>
             <Select>
-              {sortSelectItems(taxRates, ["sortOrder","rate"]).map((item) => (
-                <Option key={item.id} value={item.rate}>
-                  {item.label || `${Number(item.rate || 0) * 100}%`}
+              {sortSelectItems(taxRates.filter((item) => item.isActive !== false), ["sortOrder", "rate"]).map((item) => (
+                <Option key={item.id} value={formatTaxRateKey(item.rate)}>
+                  {item.label || formatTaxRatePercent(item.rate)}
                 </Option>
               ))}
             </Select>

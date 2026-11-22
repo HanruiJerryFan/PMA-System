@@ -32,19 +32,21 @@ const api = axios.create({
 });
 
 function buildApiError(error) {
+  let wrapped = error;
   if (error.response?.data && typeof error.response.data === "object" && "message" in error.response.data) {
-    return new Error(error.response.data.message || "Request failed");
+    wrapped = new Error(error.response.data.message || "Request failed");
+  } else if (error.response?.status === 403) {
+    wrapped = new Error("Permission denied");
+  } else if (error.response?.status === 401) {
+    wrapped = new Error("Authentication required");
+  } else if (error.message === "Network Error") {
+    wrapped = new Error("Network error or backend unavailable");
   }
-  if (error.response?.status === 403) {
-    return new Error("Permission denied");
+  if (wrapped !== error && error?.response) {
+    wrapped.response = error.response;
+    wrapped.status = error.response.status;
   }
-  if (error.response?.status === 401) {
-    return new Error("Authentication required");
-  }
-  if (error.message === "Network Error") {
-    return new Error("Network error or backend unavailable");
-  }
-  return error;
+  return wrapped;
 }
 
 api.interceptors.request.use(
@@ -81,12 +83,13 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
-    if (error.response?.status === 401) {
+    const pathname = window.location?.pathname || "";
+    if (error.response?.status === 401 && pathname !== "/login" && pathname !== "/register") {
       window.location.href = "/login";
     }
     if (error.response?.status === 403 && error.response?.data === "Password change required") {
       redirectToChangePassword();
-    } else if (error.response?.status === 403) {
+    } else if (error.response?.status === 403 && !error.config?.skipForbiddenRedirect) {
       redirectToPermissionDenied("You do not have permission to perform this action.");
     }
     return Promise.reject(buildApiError(error));

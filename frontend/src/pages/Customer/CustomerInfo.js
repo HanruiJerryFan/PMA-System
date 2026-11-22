@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Cascader, Input, Select, Tag } from "antd";
+import { Button, Cascader, Input, Select, Tag, message } from "antd";
 import { DownloadOutlined } from "@ant-design/icons";
 import CRUDTable from "../../components/Common/CRUDTable";
 import { customerAPI, regionAPI } from "../../api/modules";
@@ -89,6 +89,8 @@ export default function CustomerInfo() {
       }
       setCustomers(nextRecords);
       setTotal(nextTotal);
+    } catch (error) {
+      message.error(error?.message || "加载客户列表失败");
     } finally {
       setLoading(false);
     }
@@ -100,14 +102,18 @@ export default function CustomerInfo() {
 
   useEffect(() => {
     async function fetchDictionaries() {
-      const [typeResponse, industryResponse, regionResponse] = await Promise.all([
-        customerAPI.getCustomerTypes(),
-        customerAPI.getCustomerIndustryDicts(),
-        regionAPI.getRegions(),
-      ]);
-      setCustomerTypes(typeResponse.data || []);
-      setCustomerIndustries(industryResponse.data || []);
-      setRegions(regionResponse.data || []);
+      try {
+        const [typeResponse, industryResponse, regionResponse] = await Promise.all([
+          customerAPI.getCustomerTypes(),
+          customerAPI.getCustomerIndustryDicts(),
+          regionAPI.getRegions(),
+        ]);
+        setCustomerTypes(typeResponse.data || []);
+        setCustomerIndustries(industryResponse.data || []);
+        setRegions(regionResponse.data || []);
+      } catch (error) {
+        message.error(error?.message || "加载客户字典失败");
+      }
     }
 
     fetchDictionaries();
@@ -192,6 +198,8 @@ export default function CustomerInfo() {
           item.updateTime ? new Date(item.updateTime).toLocaleString() : "",
         ])
       );
+    } catch (error) {
+      message.error(error?.message || "导出客户数据失败");
     } finally {
       setExporting(false);
     }
@@ -264,6 +272,21 @@ export default function CustomerInfo() {
         },
         onReset: () => setQuery((prev) => ({ ...prev, page: 1, filters: {} })),
       }}
+      detailFields={[
+        { key: "customerCode", label: "客户编码" },
+        { key: "customerName", label: "客户名称" },
+        { key: "customerTypeLabel", label: "客户类型" },
+        { key: "regionLabel", label: "地区" },
+        { key: "industry", label: "行业" },
+        { key: "activityStatusLabel", label: "活跃状态" },
+        { key: "lastActiveAt", label: "最后活跃时间" },
+        { key: "registerAddress", label: "注册地址" },
+        { key: "officeAddress", label: "办公地址" },
+        { key: "taxIdentificationNumber", label: "税号" },
+        { key: "bankName", label: "开户行" },
+        { key: "bankAccount", label: "银行账号" },
+        { key: "remark", label: "备注" },
+      ]}
       formFields={[
         {
           name: "customerCode",
@@ -280,8 +303,8 @@ export default function CustomerInfo() {
           name: "customerTypeId",
           label: "客户类型",
           rules: [{ required: true, message: "请选择客户类型" }],
-          component: (
-            <Select placeholder="请选择客户类型">
+          component: ({ editingRecord }) => (
+            <Select placeholder="请选择客户类型" disabled={Boolean(editingRecord?.customerCode)}>
               {sortSelectItems(customerTypes, ["typeCode"]).map((item) => (
                 <Option key={item.id} value={item.id}>
                   {item.typeCode} - {item.typeName}
@@ -294,22 +317,38 @@ export default function CustomerInfo() {
           name: "regionId",
           label: "地区",
           rules: [{ required: true, message: "请选择地区" }],
-          component: (
-            <Cascader options={regionOptions} placeholder="请选择省 / 市 / 区" changeOnSelect />
+          component: ({ editingRecord }) => (
+            <Cascader
+              options={regionOptions}
+              placeholder="请选择省 / 市 / 区"
+              changeOnSelect
+              disabled={Boolean(editingRecord?.customerCode)}
+            />
           ),
         },
         {
           name: "industry",
           label: "行业",
-          component: (
-            <Select placeholder="请选择行业" allowClear>
-              {activeCustomerIndustries.map((item) => (
-                <Option key={item.id} value={item.industryName}>
-                  {item.industryName}
-                </Option>
-              ))}
-            </Select>
-          ),
+          component: ({ editingRecord }) => {
+            const existingIndustry = editingRecord?.industry;
+            const hasDisabledExisting =
+              existingIndustry &&
+              !activeCustomerIndustries.some((item) => item.industryName === existingIndustry);
+            return (
+              <Select placeholder="请选择行业" allowClear>
+                {hasDisabledExisting ? (
+                  <Option key={`disabled-${existingIndustry}`} value={existingIndustry}>
+                    {existingIndustry}（已停用）
+                  </Option>
+                ) : null}
+                {activeCustomerIndustries.map((item) => (
+                  <Option key={item.id} value={item.industryName}>
+                    {item.industryName}
+                  </Option>
+                ))}
+              </Select>
+            );
+          },
         },
         {
           name: "registerAddress",

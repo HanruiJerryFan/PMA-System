@@ -1,26 +1,53 @@
-function escapeCsvValue(value) {
+function neutralizeSpreadsheetFormula(value) {
+  if (value == null) {
+    return "";
+  }
+  const str = String(value);
+  if (/^[=+\-@\t\r]/.test(str) && !/^[-+]?\d+(\.\d+)?$/.test(str)) {
+    return `'${str}`;
+  }
+  return str;
+}
+
+export function escapeCsvValue(value) {
   if (value == null) {
     return "";
   }
 
-  const stringValue = String(value).replace(/\r?\n|\r/g, " ");
+  const stringValue = neutralizeSpreadsheetFormula(String(value).replace(/\r?\n|\r/g, " "));
   if (/[",]/.test(stringValue)) {
     return `"${stringValue.replace(/"/g, '""')}"`;
   }
   return stringValue;
 }
 
-function escapeXml(value) {
+export function escapeXml(value) {
   if (value == null) {
     return "";
   }
 
   return String(value)
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
+}
+
+export function escapeHtmlCell(value) {
+  if (value == null) {
+    return "";
+  }
+  return neutralizeSpreadsheetFormula(String(value))
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function sanitizeWorksheetName(name) {

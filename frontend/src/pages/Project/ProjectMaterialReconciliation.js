@@ -27,7 +27,9 @@ import {
   SearchOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 import { projectAPI } from "../../api/modules";
+import { hasAnyAuthority } from "../../utils/authorities";
 import { downloadExcel } from "../../utils/exporters";
 
 const { Text, Title } = Typography;
@@ -63,6 +65,7 @@ function formatMoney(value) {
 export default function ProjectMaterialReconciliation() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { currentUser } = useAuth();
   const selectedProjectUuid = searchParams.get("projectUuid") || "";
 
   const [loading, setLoading] = useState(false);
@@ -70,6 +73,12 @@ export default function ProjectMaterialReconciliation() {
   const [detail, setDetail] = useState(null);
   const [keyword, setKeyword] = useState("");
   const [statusFilter, setStatusFilter] = useState(undefined);
+  const canViewOverviewInventory = useMemo(
+    () =>
+      hasAnyAuthority(currentUser, ["inventory.access", "inventory.manage"]) &&
+      !overview.some((row) => row.canViewInventory === false),
+    [currentUser, overview]
+  );
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -89,6 +98,7 @@ export default function ProjectMaterialReconciliation() {
         setDetail(null);
       }
     } catch (error) {
+      setDetail(null);
       message.error(error?.message || "加载采发对账数据失败");
     } finally {
       setLoading(false);
@@ -501,6 +511,14 @@ export default function ProjectMaterialReconciliation() {
         </>
       ) : (
         <>
+          {!canViewOverviewInventory ? (
+            <Alert
+              type="warning"
+              showIcon
+              message="当前账号缺少库存查看权限（inventory.access）"
+              description="当前仅展示项目清单计划数据；联系管理员分配库存查看权限后可对比实际采购入库、划拨与发货流水。"
+            />
+          ) : null}
           <Row gutter={[16, 16]}>
             <Col xs={12} sm={6}>
               <Card size="small">

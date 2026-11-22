@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Input } from "antd";
+import { Input, message } from "antd";
 import CRUDTable from "../../components/Common/CRUDTable";
 import { inventoryAPI } from "../../api/modules";
 
@@ -12,6 +12,8 @@ export default function Warehouses() {
     try {
       const response = await inventoryAPI.getWarehouses();
       setWarehouses(response.data || response || []);
+    } catch (error) {
+      message.error(error?.message || "加载仓库列表失败");
     } finally {
       setLoading(false);
     }

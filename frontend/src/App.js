@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
-import { heartbeat, sendLogoutBeacon } from "./api/auth";
+import { heartbeat } from "./api/auth";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import MainLayout from "./components/Layout/MainLayout";
 import PrivateRoute from "./components/PrivateRoute";
@@ -70,17 +70,8 @@ function AppContent() {
         });
     }, 2 * 60 * 1000);
 
-    const handlePageHide = () => {
-      sendLogoutBeacon();
-    };
-
-    window.addEventListener("pagehide", handlePageHide);
-    window.addEventListener("beforeunload", handlePageHide);
-
     return () => {
       window.clearInterval(heartbeatInterval);
-      window.removeEventListener("pagehide", handlePageHide);
-      window.removeEventListener("beforeunload", handlePageHide);
     };
   }, [clearAuth, loggedIn]);
 
@@ -149,7 +140,7 @@ function AppContent() {
               <Route path="/customer/industries" element={<PrivateRoute requiredAuthorities={["customer.manage"]}><CustomerIndustries /></PrivateRoute>} />
               <Route path="/customer/activity-rules" element={<PrivateRoute requiredAuthorities={["customer.manage"]}><CustomerActivityRules /></PrivateRoute>} />
               <Route path="/project/dashboard" element={<PrivateRoute requiredAuthorities={["project.access", "project.manage"]}><ProjectDashboard /></PrivateRoute>} />
-              <Route path="/project/list-dashboard" element={<PrivateRoute requiredAuthorities={["project.access", "project.manage"]}><ProjectListDashboard /></PrivateRoute>} />
+              <Route path="/project/list-dashboard" element={<PrivateRoute requiredAuthorities={["project.access", "project.manage", "project.list.entry", "project.list.audit"]}><ProjectListDashboard /></PrivateRoute>} />
               <Route path="/project/info" element={<PrivateRoute requiredAuthorities={["project.access", "project.manage"]}><ProjectInfo /></PrivateRoute>} />
               <Route path="/project/types" element={<PrivateRoute requiredAuthorities={["project.manage"]}><ProjectTypes /></PrivateRoute>} />
               <Route path="/project/stages" element={<PrivateRoute requiredAuthorities={["project.manage"]}><StageManagement /></PrivateRoute>} />

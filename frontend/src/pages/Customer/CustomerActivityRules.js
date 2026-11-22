@@ -1,19 +1,27 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Button, Input, InputNumber, Popconfirm, Switch, Tag, message } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import CRUDTable from "../../components/Common/CRUDTable";
+import { useAuth } from "../../context/AuthContext";
 import { customerAPI } from "../../api/modules";
+import { hasAnyAuthority } from "../../utils/authorities";
+import { resolvePagePermissions } from "../../utils/pagePermissions";
 
 export default function CustomerActivityRules() {
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const { currentUser } = useAuth();
+  const pagePermissions = useMemo(() => resolvePagePermissions("/customer/activity-rules"), []);
+  const canManage = hasAnyAuthority(currentUser, pagePermissions.manageAuthorities);
 
   const fetchRules = async () => {
     setLoading(true);
     try {
       const response = await customerAPI.getCustomerActivityRules();
       setRules(response.data || []);
+    } catch (error) {
+      message.error(error?.message || "加载活跃规则失败");
     } finally {
       setLoading(false);
     }
@@ -39,11 +47,17 @@ export default function CustomerActivityRules() {
   };
 
   const handleRefreshStatuses = async () => {
+    if (!canManage) {
+      message.error("无权限操作");
+      return;
+    }
     setRefreshing(true);
     try {
       const response = await customerAPI.refreshCustomerActivityStatuses();
       message.success(`已刷新 ${response.data ?? 0} 个客户状态`);
       await fetchRules();
+    } catch (error) {
+      message.error(error?.message || "刷新客户活跃状态失败");
     } finally {
       setRefreshing(false);
     }
@@ -80,11 +94,13 @@ export default function CustomerActivityRules() {
       rowKey="id"
       searchFields={[{ name: "statusCode", label: "状态" }]}
       extraActions={
-        <Popconfirm title="确认立即刷新全部客户活跃状态吗？" onConfirm={handleRefreshStatuses} okText="确定" cancelText="取消">
-          <Button icon={<ReloadOutlined />} loading={refreshing}>
-            刷新状态
-          </Button>
-        </Popconfirm>
+        canManage ? (
+          <Popconfirm title="确认立即刷新全部客户活跃状态吗？" onConfirm={handleRefreshStatuses} okText="确定" cancelText="取消">
+            <Button icon={<ReloadOutlined />} loading={refreshing}>
+              刷新状态
+            </Button>
+          </Popconfirm>
+        ) : null
       }
       formFields={[
         {
@@ -114,6 +130,7 @@ export default function CustomerActivityRules() {
           name: "isActive",
           label: "启用",
           valuePropName: "checked",
+          getDefaultValue: () => true,
           rules: [{ required: true, message: "请选择启用状态" }],
           component: <Switch checkedChildren="启用" unCheckedChildren="停用" />,
         },

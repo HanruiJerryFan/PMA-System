@@ -12,6 +12,17 @@ function normalizeTextFilter(value) {
   return typeof value === "string" ? value.trim() || undefined : undefined;
 }
 
+function buildEditableDictList(items = [], currentValue, keyField = "id") {
+  return sortSelectItems(
+    items.filter(
+      (item) =>
+        item.isActive ||
+        (currentValue != null && String(item[keyField]) === String(currentValue))
+    ),
+    ["sortOrder", "code"]
+  );
+}
+
 export default function ProductInfo() {
   const [products, setProducts] = useState([]);
   const [total, setTotal] = useState(0);
@@ -54,7 +65,7 @@ export default function ProductInfo() {
         categoryLabel: categoryMap[item.categoryId] || item.categoryCode || "-",
         subcategoryLabel: subcategoryMap[item.subcategoryId] || item.subcategoryCode || "-",
         brandLabel: brandMap[item.brandId] || item.brandCode || "-",
-        bandLabel: bandMap[item.bandCode] || item.bandCode || "-",
+        bandLabel: bandMap[item.bandCode || item.frequency] || item.bandCode || item.frequency || "-",
       })),
     [bandMap, brandMap, categoryMap, subcategoryMap]
   );
@@ -75,6 +86,8 @@ export default function ProductInfo() {
       }
       setProducts(nextRecords);
       setTotal(nextTotal);
+    } catch (error) {
+      message.error(error?.message || "加载物料列表失败");
     } finally {
       setLoading(false);
     }
@@ -86,16 +99,20 @@ export default function ProductInfo() {
 
   useEffect(() => {
     async function fetchOptions() {
-      const [categoryResponse, subcategoryResponse, brandResponse, bandResponse] = await Promise.all([
-        productAPI.getProductCategories(),
-        productAPI.getProductSubcategories(),
-        productAPI.getProductBrands(),
-        productAPI.getProductBands(),
-      ]);
-      setCategories(categoryResponse.data || []);
-      setSubcategories(subcategoryResponse.data || []);
-      setBrands(brandResponse.data || []);
-      setBands(bandResponse.data || []);
+      try {
+        const [categoryResponse, subcategoryResponse, brandResponse, bandResponse] = await Promise.all([
+          productAPI.getProductCategories(),
+          productAPI.getProductSubcategories(),
+          productAPI.getProductBrands(),
+          productAPI.getProductBands(),
+        ]);
+        setCategories(categoryResponse.data || []);
+        setSubcategories(subcategoryResponse.data || []);
+        setBrands(brandResponse.data || []);
+        setBands(bandResponse.data || []);
+      } catch (error) {
+        message.error(error?.message || "加载物料字典失败");
+      }
     }
 
     fetchOptions();
@@ -161,6 +178,8 @@ export default function ProductInfo() {
           item.isActive ? "启用" : "停用",
         ])
       );
+    } catch (error) {
+      message.error(error?.message || "导出物料数据失败");
     } finally {
       setExporting(false);
     }
@@ -211,7 +230,13 @@ export default function ProductInfo() {
       reloadCurrentPage();
       setImportResult(response.data || null);
       setImportResultVisible(true);
-      message.success(`导入成功 ${response.data?.importedRows ?? 0} 行，失败 ${response.data?.failedRows ?? 0} 行`);
+      const imported = response.data?.importedRows ?? 0;
+      const failed = response.data?.failedRows ?? 0;
+      if (failed > 0) {
+        message.warning(`导入成功 ${imported} 行，失败 ${failed} 行`);
+      } else {
+        message.success(`导入成功 ${imported} 行，失败 0 行`);
+      }
       resetImportState();
     } catch (error) {
       message.error(error?.message || "导入失败");
@@ -333,9 +358,13 @@ export default function ProductInfo() {
             name: "categoryId",
             label: "大类",
             rules: [{ required: true, message: "请选择大类" }],
-            component: (
-              <Select placeholder="请选择大类">
-                {sortSelectItems(categories.filter((item) => item.isActive), ["sortOrder","code"]).map((item) => <Option key={item.id} value={item.id}>{item.code || "--"} {item.name}</Option>)}
+            component: ({ editingRecord }) => (
+              <Select placeholder="请选择大类" disabled={Boolean(editingRecord)}>
+                {buildEditableDictList(categories, editingRecord?.categoryId).map((item) => (
+                  <Option key={item.id} value={item.id}>
+                    {item.code || "--"} {item.name}{item.isActive === false ? "（已停用）" : ""}
+                  </Option>
+                ))}
               </Select>
             ),
           },
@@ -343,9 +372,13 @@ export default function ProductInfo() {
             name: "subcategoryId",
             label: "分项",
             rules: [{ required: true, message: "请选择分项" }],
-            component: (
-              <Select placeholder="请选择分项">
-                {sortSelectItems(subcategories.filter((item) => item.isActive), ["sortOrder","code"]).map((item) => <Option key={item.id} value={item.id}>{item.code || "--"} {item.name}</Option>)}
+            component: ({ editingRecord }) => (
+              <Select placeholder="请选择分项" disabled={Boolean(editingRecord)}>
+                {buildEditableDictList(subcategories, editingRecord?.subcategoryId).map((item) => (
+                  <Option key={item.id} value={item.id}>
+                    {item.code || "--"} {item.name}{item.isActive === false ? "（已停用）" : ""}
+                  </Option>
+                ))}
               </Select>
             ),
           },
@@ -353,9 +386,13 @@ export default function ProductInfo() {
             name: "brandId",
             label: "品牌",
             rules: [{ required: true, message: "请选择品牌" }],
-            component: (
-              <Select placeholder="请选择品牌">
-                {sortSelectItems(brands.filter((item) => item.isActive), ["sortOrder","code"]).map((item) => <Option key={item.id} value={item.id}>{item.code || "--"} {item.name}</Option>)}
+            component: ({ editingRecord }) => (
+              <Select placeholder="请选择品牌" disabled={Boolean(editingRecord)}>
+                {buildEditableDictList(brands, editingRecord?.brandId).map((item) => (
+                  <Option key={item.id} value={item.id}>
+                    {item.code || "--"} {item.name}{item.isActive === false ? "（已停用）" : ""}
+                  </Option>
+                ))}
               </Select>
             ),
           },
@@ -363,9 +400,17 @@ export default function ProductInfo() {
             name: "frequency",
             label: "频段",
             rules: [{ required: true, message: "请选择频段" }],
-            component: (
-              <Select placeholder="请选择频段">
-                {sortSelectItems(bands.filter((item) => item.isActive), ["sortOrder","code"]).map((item) => <Option key={item.id} value={item.code}>{item.code || "---"} {item.description}</Option>)}
+            component: ({ editingRecord }) => (
+              <Select placeholder="请选择频段" disabled={Boolean(editingRecord)}>
+                {buildEditableDictList(
+                  bands,
+                  editingRecord ? editingRecord.bandCode || editingRecord.frequency : null,
+                  "code"
+                ).map((item) => (
+                  <Option key={item.id} value={item.code}>
+                    {item.code || "---"} {item.description}{item.isActive === false ? "（已停用）" : ""}
+                  </Option>
+                ))}
               </Select>
             ),
           },
@@ -373,9 +418,13 @@ export default function ProductInfo() {
           { name: "unit", label: "单位", rules: [{ required: true, message: "请输入单位" }], component: <Input placeholder="请输入单位" /> },
           { name: "specification", label: "规格参数", component: <Input.TextArea rows={3} placeholder="请输入规格参数" /> },
           { name: "otherNote", label: "其他说明", component: <Input.TextArea rows={3} placeholder="请输入其他说明" /> },
-          { name: "isActive", label: "启用状态", valuePropName: "checked", component: <Switch checkedChildren="启用" unCheckedChildren="停用" /> },
+          { name: "isActive", label: "启用状态", valuePropName: "checked", getDefaultValue: () => true, component: <Switch checkedChildren="启用" unCheckedChildren="停用" /> },
         ]}
-        mapRecordToFormValues={(record) => ({ ...record, isActive: Boolean(record.isActive) })}
+        mapRecordToFormValues={(record) => ({
+          ...record,
+          frequency: record.bandCode || record.frequency || undefined,
+          isActive: Boolean(record.isActive),
+        })}
         transformValues={(values) => ({ ...values, isActive: Boolean(values.isActive) })}
       />
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import dayjs from "dayjs";
-import { Button, Card, Space, Statistic } from "antd";
+import { Button, Card, Space, Statistic, message } from "antd";
 import { DownloadOutlined } from "@ant-design/icons";
 import CRUDTable from "../../components/Common/CRUDTable";
 import { inventoryAPI } from "../../api/modules";
@@ -12,6 +12,7 @@ const sumInventoryAmount = (rows) =>
 
 export default function InventoryStock() {
   const [inventories, setInventories] = useState([]);
+  const [filteredInventories, setFilteredInventories] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const fetchInventory = async () => {
@@ -19,6 +20,8 @@ export default function InventoryStock() {
     try {
       const response = await inventoryAPI.getInventory();
       setInventories(response.data || []);
+    } catch (error) {
+      message.error(error?.message || "加载库存汇总失败");
     } finally {
       setLoading(false);
     }
@@ -53,7 +56,7 @@ export default function InventoryStock() {
   return (
     <Space direction="vertical" size="middle" style={{ width: "100%" }}>
       <Card>
-        <Statistic title="设备材料库存总额" value={sumInventoryAmount(inventories)} precision={2} suffix="元" loading={loading} />
+        <Statistic title="设备材料库存总额" value={sumInventoryAmount(filteredInventories)} precision={2} suffix="元" loading={loading} />
       </Card>
       <CRUDTable
         title="库存汇总"
@@ -70,6 +73,7 @@ export default function InventoryStock() {
         ]}
         dataSource={inventories}
         loading={loading}
+        onFilteredDataChange={setFilteredInventories}
         rowKey={(item) => item.materialCode?.trim() || item.uuid}
         extraActions={({ filteredData, canExport }) => (
           <Button

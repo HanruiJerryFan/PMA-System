@@ -58,6 +58,8 @@ const IMPORT_MODE_OPTIONS = [
   { value: "FAIL_FAST", label: "遇错即停" },
 ];
 
+const EMPTY_MODEL_SENTINEL = "__EMPTY_MODEL__";
+
 function normalizeResponseData(response) {
   return response?.data ?? response ?? [];
 }
@@ -118,6 +120,9 @@ export default function ProjectLists() {
   const [replaceExistingOnImport, setReplaceExistingOnImport] = useState(false);
   const [importMode, setImportMode] = useState("PARTIAL_SUCCESS");
   const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+  const [importResultVisible, setImportResultVisible] = useState(false);
+  const [submittingList, setSubmittingList] = useState(false);
   const [listForm] = Form.useForm();
   const [itemForm] = Form.useForm();
   const importInputRef = useRef(null);
@@ -152,24 +157,51 @@ export default function ProjectLists() {
       )),
     [users]
   );
-  const activeCategories = useMemo(() => categories.filter((item) => item.isActive !== false), [categories]);
-  const activeSubcategories = useMemo(() => subcategories.filter((item) => item.isActive !== false), [subcategories]);
+  const editingMaterial = useMemo(
+    () => (editingItem?.materialId ? productMap[editingItem.materialId] || null : null),
+    [editingItem, productMap]
+  );
+  const activeCategories = useMemo(
+    () =>
+      categories.filter(
+        (item) =>
+          item.isActive !== false ||
+          (editingMaterial && Number(item.id) === Number(editingMaterial.categoryId))
+      ),
+    [categories, editingMaterial]
+  );
+  const activeSubcategories = useMemo(
+    () =>
+      subcategories.filter(
+        (item) =>
+          item.isActive !== false ||
+          (editingMaterial && Number(item.id) === Number(editingMaterial.subcategoryId))
+      ),
+    [editingMaterial, subcategories]
+  );
   const currentProject = useMemo(() => (projectUuidFilter ? projectMap[projectUuidFilter] || null : null), [projectMap, projectUuidFilter]);
 
   const filteredSubcategories = useMemo(() => activeSubcategories, [activeSubcategories]);
 
   const filteredProducts = useMemo(
-    () => products.filter((item) => item.isActive !== false && (selectedCategoryId == null || Number(item.categoryId) === Number(selectedCategoryId)) && (selectedSubcategoryId == null || Number(item.subcategoryId) === Number(selectedSubcategoryId))),
-    [products, selectedCategoryId, selectedSubcategoryId]
+    () =>
+      products.filter(
+        (item) =>
+          (item.isActive !== false || (editingMaterial && item.uuid === editingMaterial.uuid)) &&
+          (selectedCategoryId == null || Number(item.categoryId) === Number(selectedCategoryId)) &&
+          (selectedSubcategoryId == null || Number(item.subcategoryId) === Number(selectedSubcategoryId))
+      ),
+    [editingMaterial, products, selectedCategoryId, selectedSubcategoryId]
   );
 
   const productNameOptions = useMemo(() => [...new Set(filteredProducts.map((item) => item.productName).filter(Boolean))], [filteredProducts]);
   const filteredByName = useMemo(() => filteredProducts.filter((item) => !selectedProductName || item.productName === selectedProductName), [filteredProducts, selectedProductName]);
-  const productModelOptions = useMemo(() => [...new Set(filteredByName.map((item) => item.productModel || ""))], [filteredByName]);
-  const filteredByModel = useMemo(() => filteredByName.filter((item) => !selectedProductModel || (item.productModel || "") === selectedProductModel), [filteredByName, selectedProductModel]);
+  const productModelOptions = useMemo(() => [...new Set(filteredByName.map((item) => item.productModel || EMPTY_MODEL_SENTINEL))], [filteredByName]);
+  const filteredByModel = useMemo(() => filteredByName.filter((item) => !selectedProductModel || (item.productModel || EMPTY_MODEL_SENTINEL) === selectedProductModel), [filteredByName, selectedProductModel]);
   const bandOptions = useMemo(() => [...new Set(filteredByModel.map((item) => item.bandCode || item.frequency || "").filter(Boolean))], [filteredByModel]);
   const materialOptions = useMemo(() => filteredByModel.filter((item) => !selectedBandCode || (item.bandCode || item.frequency || "") === selectedBandCode), [filteredByModel, selectedBandCode]);
   const selectedMaterial = useMemo(() => selectedMaterialId ? productMap[selectedMaterialId] || null : null, [productMap, selectedMaterialId]);
+  const requireCatalogSelection = !editingItem || Boolean(editingItem.materialId) || selectedCategoryId != null || Boolean(selectedMaterialId);
 
   const decoratedLists = useMemo(() => projectLists.map((item) => ({
     ...item,
@@ -180,6 +212,7 @@ export default function ProjectLists() {
   })), [projectLists, projectMap, userMap]);
 
   const selectedList = useMemo(() => decoratedLists.find((item) => item.uuid === selectedListUuid) || null, [decoratedLists, selectedListUuid]);
+  const isSelectedListAuditLocked = Boolean(selectedList?.auditorUser) && !canMaintainEntryAudit;
   const selectedUnitPriceLabel = useMemo(() => getUnitPriceLabel(selectedList?.listType), [selectedList?.listType]);
   const decoratedListItems = useMemo(() => listItems.map((item) => ({
     ...item,
@@ -210,26 +243,32 @@ export default function ProjectLists() {
       const data = normalizeResponseData(response);
       setProjectLists(data);
       setSelectedListUuid((current) => (current && data.some((item) => item.uuid === current) ? current : data[0]?.uuid || null));
+    } catch (error) {
+      message.error(error?.message || "加载项目清单失败");
     } finally {
       setLoading(false);
     }
   }, [projectUuidFilter]);
 
   const fetchOptions = useCallback(async () => {
-    const [projectResponse, productResponse, categoryResponse, subcategoryResponse, brandResponse, userResponse] = await Promise.all([
-      projectAPI.getProjectOptions(),
-      productAPI.getProductOptions(),
-      productAPI.getProductCategoryOptions(),
-      productAPI.getProductSubcategoryOptions(),
-      productAPI.getProductBrandOptions(),
-      permissionAPI.getUserOptions().catch(() => []),
-    ]);
-    setProjects(normalizeResponseData(projectResponse));
-    setProducts(normalizeResponseData(productResponse));
-    setCategories(normalizeResponseData(categoryResponse));
-    setSubcategories(normalizeResponseData(subcategoryResponse));
-    setBrands(normalizeResponseData(brandResponse));
-    setUsers(Array.isArray(userResponse) ? userResponse : normalizeResponseData(userResponse));
+    try {
+      const [projectResponse, productResponse, categoryResponse, subcategoryResponse, brandResponse, userResponse] = await Promise.all([
+        projectAPI.getProjectOptions(),
+        productAPI.getProductOptions(),
+        productAPI.getProductCategoryOptions(),
+        productAPI.getProductSubcategoryOptions(),
+        productAPI.getProductBrandOptions(),
+        permissionAPI.getUserOptions().catch(() => []),
+      ]);
+      setProjects(normalizeResponseData(projectResponse));
+      setProducts(normalizeResponseData(productResponse));
+      setCategories(normalizeResponseData(categoryResponse));
+      setSubcategories(normalizeResponseData(subcategoryResponse));
+      setBrands(normalizeResponseData(brandResponse));
+      setUsers(Array.isArray(userResponse) ? userResponse : normalizeResponseData(userResponse));
+    } catch (error) {
+      message.error(error?.message || "加载物料与项目选项失败");
+    }
   }, []);
 
   const fetchItems = useCallback(async (projectListId) => {
@@ -241,6 +280,8 @@ export default function ProjectLists() {
     try {
       const response = await projectAPI.getProjectListItems(projectListId);
       setListItems(normalizeResponseData(response));
+    } catch (error) {
+      message.error(error?.message || "加载清单明细失败");
     } finally {
       setItemsLoading(false);
     }
@@ -290,8 +331,10 @@ export default function ProjectLists() {
   };
 
   const submitList = async () => {
+    if (submittingList) return;
     try {
       const values = await listForm.validateFields();
+      setSubmittingList(true);
       const payload = {
         projectId: values.projectId || projectUuidFilter || null,
         listName: values.listName,
@@ -313,19 +356,33 @@ export default function ProjectLists() {
         message.success(pendingListAttachmentFiles.length ? "项目清单及附件已更新" : "项目清单已更新");
       } else {
         const created = normalizeResponseData(await projectAPI.createProjectList(payload));
+        let attachmentFailed = false;
         if (pendingListAttachmentFiles.length) {
-          const uploadedAttachments = await uploadProjectListAttachments(created.uuid);
-          await projectAPI.updateProjectList(created.uuid, {
-            ...payload,
-            pdfAttachmentId: uploadedAttachments[0]?.uuid || null,
-          });
+          try {
+            const uploadedAttachments = await uploadProjectListAttachments(created.uuid);
+            await projectAPI.updateProjectList(created.uuid, {
+              ...payload,
+              pdfAttachmentId: uploadedAttachments[0]?.uuid || null,
+            });
+          } catch (attachError) {
+            attachmentFailed = true;
+            message.warning(
+              attachError?.message
+                ? `项目清单已新增，但附件上传失败：${attachError.message}`
+                : "项目清单已新增，但附件上传失败，请稍后重新上传"
+            );
+          }
         }
-        message.success(pendingListAttachmentFiles.length ? "项目清单及附件已新增" : "项目清单已新增");
+        if (!attachmentFailed) {
+          message.success(pendingListAttachmentFiles.length ? "项目清单及附件已新增" : "项目清单已新增");
+        }
       }
       closeListModal();
       await fetchProjectLists();
     } catch (error) {
       if (!error?.errorFields) message.error(error?.message || "保存项目清单失败");
+    } finally {
+      setSubmittingList(false);
     }
   };
 
@@ -334,16 +391,24 @@ export default function ProjectLists() {
       message.error("没有审核项目清单的权限");
       return;
     }
-    await projectAPI.auditProjectList(uuid);
-    message.success("项目清单已审核");
-    await fetchProjectLists();
+    try {
+      await projectAPI.auditProjectList(uuid);
+      message.success("项目清单已审核");
+      await fetchProjectLists();
+    } catch (error) {
+      message.error(error?.message || "审核项目清单失败");
+    }
   };
 
   const deleteList = async (uuid) => {
     if (!canManage) return message.error("没有维护项目清单的权限");
-    await projectAPI.deleteProjectList(uuid);
-    message.success("删除成功");
-    await fetchProjectLists();
+    try {
+      await projectAPI.deleteProjectList(uuid);
+      message.success("删除成功");
+      await fetchProjectLists();
+    } catch (error) {
+      message.error(error?.message || "删除项目清单失败");
+    }
   };
 
   const openProjectDashboard = () => {
@@ -373,6 +438,7 @@ export default function ProjectLists() {
 
   const openItemModal = (record = null) => {
     if (!canManage) return message.error("没有维护项目清单明细的权限");
+    if (isSelectedListAuditLocked) return message.error("所属项目清单已审核，不可维护明细");
     if (record?.auditorUser && !canMaintainEntryAudit) return message.error("已审核明细不可修改");
     if (!selectedListUuid) return message.warning("请先选择一个项目清单");
     setEditingItem(record);
@@ -384,8 +450,10 @@ export default function ProjectLists() {
         categoryId: material?.categoryId ?? null,
         subcategoryId: material?.subcategoryId ?? null,
         selectedProductName: material?.productName ?? record.itemName ?? null,
-        selectedProductModel: material?.productModel ?? record.model ?? null,
-        selectedBandCode: material?.bandCode ?? material?.frequency ?? null,
+        selectedProductModel: material
+          ? (material.productModel || EMPTY_MODEL_SENTINEL)
+          : (record.model ? record.model : undefined),
+        selectedBandCode: material?.bandCode ?? material?.frequency ?? undefined,
         materialId: material?.uuid ?? record.materialId ?? null,
       });
     }
@@ -417,7 +485,12 @@ export default function ProjectLists() {
       const values = await itemForm.validateFields();
       const payload = {
         projectListId: selectedListUuid,
-        materialId: values.materialId,
+        materialId: values.materialId || null,
+        materialCode: values.materialId ? (values.materialCode || null) : (editingItem?.materialCode || null),
+        itemName: values.materialId ? (values.itemName || null) : (editingItem?.itemName || null),
+        model: values.materialId ? (values.model || null) : (editingItem?.model || null),
+        brand: values.materialId ? (values.brand || null) : (editingItem?.brand || null),
+        unit: values.materialId ? (values.unit || null) : (editingItem?.unit || null),
         quantity: Number(values.quantity),
         unitPrice: values.unitPrice == null ? null : Number(values.unitPrice),
         remark: values.remark || null,
@@ -445,16 +518,24 @@ export default function ProjectLists() {
       message.error("没有审核项目清单明细的权限");
       return;
     }
-    await projectAPI.auditProjectListItem(uuid);
-    message.success("项目清单明细已审核");
-    await fetchItems(selectedListUuid);
+    try {
+      await projectAPI.auditProjectListItem(uuid);
+      message.success("项目清单明细已审核");
+      await fetchItems(selectedListUuid);
+    } catch (error) {
+      message.error(error?.message || "审核清单明细失败");
+    }
   };
 
   const deleteItem = async (uuid) => {
     if (!canManage) return message.error("没有维护项目清单明细的权限");
-    await projectAPI.deleteProjectListItem(uuid);
-    await fetchItems(selectedListUuid);
-    message.success("删除成功");
+    try {
+      await projectAPI.deleteProjectListItem(uuid);
+      await fetchItems(selectedListUuid);
+      message.success("删除成功");
+    } catch (error) {
+      message.error(error?.message || "删除清单明细失败");
+    }
   };
 
   const downloadTemplate = async () => {
@@ -475,8 +556,22 @@ export default function ProjectLists() {
     formData.append("file", pendingImportFile);
     setImporting(true);
     try {
-      await projectAPI.importProjectListItems(selectedListUuid, formData, replaceExistingOnImport, importMode);
-      message.success("导入完成");
+      const response = await projectAPI.importProjectListItems(selectedListUuid, formData, replaceExistingOnImport, importMode);
+      const result = normalizeResponseData(response);
+      if (result && (result.totalRows != null || result.importedRows != null)) {
+        const imported = result.importedRows ?? 0;
+        const skipped = result.skippedRows ?? 0;
+        const failed = result.failedRows ?? 0;
+        if (failed > 0 || imported === 0) {
+          message.warning(`导入完成：成功 ${imported} 行，跳过 ${skipped} 行，失败 ${failed} 行`);
+        } else {
+          message.success(`导入成功 ${imported} 行${skipped > 0 ? `，跳过 ${skipped} 行` : ""}`);
+        }
+        setImportResult(result);
+        setImportResultVisible(true);
+      } else {
+        message.success("导入完成");
+      }
       setImportModalVisible(false);
       setPendingImportFile(null);
       if (importInputRef.current) importInputRef.current.value = "";
@@ -654,7 +749,7 @@ export default function ProjectLists() {
           <Button
             type="link"
             icon={<EditOutlined />}
-            disabled={!canManage || (Boolean(record.auditorUser) && !canMaintainEntryAudit)}
+            disabled={!canManage || isSelectedListAuditLocked || (Boolean(record.auditorUser) && !canMaintainEntryAudit)}
             onClick={() => openItemModal(record)}
           >
             编辑
@@ -673,7 +768,7 @@ export default function ProjectLists() {
           </Button>
           <Popconfirm
             title="确定删除这条清单明细吗？"
-            disabled={!canManage || (Boolean(record.auditorUser) && !canMaintainEntryAudit)}
+            disabled={!canManage || isSelectedListAuditLocked || (Boolean(record.auditorUser) && !canMaintainEntryAudit)}
             onConfirm={() => deleteItem(record.uuid)}
             okText="确定"
             cancelText="取消"
@@ -681,7 +776,7 @@ export default function ProjectLists() {
             <Button
               type="link"
               danger
-              disabled={!canManage || (Boolean(record.auditorUser) && !canMaintainEntryAudit)}
+              disabled={!canManage || isSelectedListAuditLocked || (Boolean(record.auditorUser) && !canMaintainEntryAudit)}
               icon={<DeleteOutlined />}
             >
               删除
@@ -785,7 +880,7 @@ export default function ProjectLists() {
               </Button>
               <Statistic title="总数量" value={itemSummary.quantity} precision={4} />
               <Statistic title="总金额" value={itemSummary.amount} precision={2} />
-              <Button type="primary" icon={<PlusOutlined />} disabled={!selectedListUuid || !canManage} onClick={() => openItemModal()}>
+              <Button type="primary" icon={<PlusOutlined />} disabled={!selectedListUuid || !canManage || isSelectedListAuditLocked} onClick={() => openItemModal()}>
                 新增明细
               </Button>
             </Space>
@@ -812,7 +907,7 @@ export default function ProjectLists() {
           )}
         </Card>
 
-        <Modal title={editingList ? "编辑项目清单" : "新增项目清单"} open={listModalVisible} onOk={submitList} onCancel={closeListModal} okText="保存" cancelText="取消" destroyOnHidden>
+        <Modal title={editingList ? "编辑项目清单" : "新增项目清单"} open={listModalVisible} onOk={submitList} onCancel={() => { if (!submittingList) closeListModal(); }} confirmLoading={submittingList} cancelButtonProps={{ disabled: submittingList }} okText="保存" cancelText="取消" destroyOnHidden>
           <Form form={listForm} layout="vertical">
             <Form.Item name="projectId" label="项目" rules={projectUuidFilter ? [] : [{ required: true, message: "请选择项目" }]}>
               <Select placeholder="请选择项目" showSearch optionFilterProp="children" disabled={Boolean(projectUuidFilter)}>{sortSelectItems(projects, ["projectNumber"]).map((item) => <Option key={item.uuid} value={item.uuid}>{formatProjectOptionLabel(item)}</Option>)}</Select>
@@ -860,14 +955,14 @@ export default function ProjectLists() {
         <Modal title={editingItem ? "编辑清单明细" : "新增清单明细"} open={itemModalVisible} onOk={submitItem} onCancel={() => { setItemModalVisible(false); setEditingItem(null); itemForm.resetFields(); }} okText="保存" cancelText="取消" width={860} destroyOnHidden>
           <Form form={itemForm} layout="vertical" preserve={false}>
             <Row gutter={16}>
-              <Col span={8}><Form.Item name="categoryId" label="大类" rules={[{ required: true, message: "请选择大类" }]}><Select showSearch optionFilterProp="children" onChange={() => clearItemSelection(["subcategoryId", "selectedProductName", "selectedProductModel", "selectedBandCode", "materialId", "materialCode", "itemName", "model", "brand", "unit"])}>{sortSelectItems(activeCategories, ["sortOrder","code"]).map((item) => <Option key={item.id} value={item.id}>{item.name}</Option>)}</Select></Form.Item></Col>
-              <Col span={8}><Form.Item name="subcategoryId" label="分项" rules={[{ required: true, message: "请选择分项" }]}><Select showSearch optionFilterProp="children" onChange={() => clearItemSelection(["selectedProductName", "selectedProductModel", "selectedBandCode", "materialId", "materialCode", "itemName", "model", "brand", "unit"])}>{sortSelectItems(filteredSubcategories, ["sortOrder","code"]).map((item) => <Option key={item.id} value={item.id}>{item.name}</Option>)}</Select></Form.Item></Col>
-              <Col span={8}><Form.Item name="selectedProductName" label="名称" rules={[{ required: true, message: "请选择名称" }]}><Select showSearch optionFilterProp="children" onChange={() => clearItemSelection(["selectedProductModel", "selectedBandCode", "materialId", "materialCode", "itemName", "model", "brand", "unit"])}>{productNameOptions.map((name) => <Option key={name} value={name}>{name}</Option>)}</Select></Form.Item></Col>
+              <Col span={8}><Form.Item name="categoryId" label="大类" rules={requireCatalogSelection ? [{ required: true, message: "请选择大类" }] : []}><Select allowClear showSearch optionFilterProp="children" onChange={() => clearItemSelection(["subcategoryId", "selectedProductName", "selectedProductModel", "selectedBandCode", "materialId", "materialCode", "itemName", "model", "brand", "unit"])}>{sortSelectItems(activeCategories, ["sortOrder","code"]).map((item) => <Option key={item.id} value={item.id}>{item.name}{item.isActive === false ? "（已停用）" : ""}</Option>)}</Select></Form.Item></Col>
+              <Col span={8}><Form.Item name="subcategoryId" label="分项" rules={requireCatalogSelection ? [{ required: true, message: "请选择分项" }] : []}><Select allowClear showSearch optionFilterProp="children" onChange={() => clearItemSelection(["selectedProductName", "selectedProductModel", "selectedBandCode", "materialId", "materialCode", "itemName", "model", "brand", "unit"])}>{sortSelectItems(filteredSubcategories, ["sortOrder","code"]).map((item) => <Option key={item.id} value={item.id}>{item.name}{item.isActive === false ? "（已停用）" : ""}</Option>)}</Select></Form.Item></Col>
+              <Col span={8}><Form.Item name="selectedProductName" label="名称" rules={requireCatalogSelection ? [{ required: true, message: "请选择名称" }] : []}><Select allowClear showSearch optionFilterProp="children" onChange={() => clearItemSelection(["selectedProductModel", "selectedBandCode", "materialId", "materialCode", "itemName", "model", "brand", "unit"])}>{productNameOptions.map((name) => <Option key={name} value={name}>{name}</Option>)}</Select></Form.Item></Col>
             </Row>
             <Row gutter={16}>
-              <Col span={8}><Form.Item name="selectedProductModel" label="型号" rules={[{ required: true, message: "请选择型号" }]}><Select showSearch optionFilterProp="children" onChange={() => clearItemSelection(["selectedBandCode", "materialId", "materialCode", "itemName", "model", "brand", "unit"])}>{sortSelectItems(productModelOptions).map((model) => <Option key={model || "_empty"} value={model}>{model || "未填写型号"}</Option>)}</Select></Form.Item></Col>
-              <Col span={8}><Form.Item name="selectedBandCode" label="频段" rules={[{ required: true, message: "请选择频段" }]}><Select showSearch optionFilterProp="children" onChange={() => clearItemSelection(["materialId", "materialCode", "itemName", "model", "brand", "unit"])}>{sortSelectItems(bandOptions).map((band) => <Option key={band} value={band}>{band}</Option>)}</Select></Form.Item></Col>
-              <Col span={8}><Form.Item name="materialId" label="物料" rules={[{ required: true, message: "请选择物料" }]}><Select showSearch optionFilterProp="children" onChange={handleMaterialChange}>{sortSelectItems(materialOptions, ["materialCode"]).map((item) => <Option key={item.uuid} value={item.uuid}>{item.materialCode} / {item.productModel || "未填写型号"}</Option>)}</Select></Form.Item></Col>
+              <Col span={8}><Form.Item name="selectedProductModel" label="型号" rules={requireCatalogSelection ? [{ required: true, message: "请选择型号" }] : []}><Select allowClear showSearch optionFilterProp="children" onChange={() => clearItemSelection(["selectedBandCode", "materialId", "materialCode", "itemName", "model", "brand", "unit"])}>{sortSelectItems(productModelOptions).map((model) => <Option key={model} value={model}>{model === EMPTY_MODEL_SENTINEL ? "未填写型号" : model}</Option>)}</Select></Form.Item></Col>
+              <Col span={8}><Form.Item name="selectedBandCode" label="频段"><Select allowClear showSearch optionFilterProp="children" onChange={() => clearItemSelection(["materialId", "materialCode", "itemName", "model", "brand", "unit"])}>{sortSelectItems(bandOptions).map((band) => <Option key={band} value={band}>{band}</Option>)}</Select></Form.Item></Col>
+              <Col span={8}><Form.Item name="materialId" label="物料" rules={requireCatalogSelection ? [{ required: true, message: "请选择物料" }] : []}><Select allowClear showSearch optionFilterProp="children" onChange={handleMaterialChange}>{sortSelectItems(materialOptions, ["materialCode"]).map((item) => <Option key={item.uuid} value={item.uuid}>{item.materialCode} / {item.productModel || "未填写型号"}{item.isActive === false ? "（已停用）" : ""}</Option>)}</Select></Form.Item></Col>
             </Row>
             <Descriptions bordered size="small" column={2} style={{ marginBottom: 16 }}>
               <Descriptions.Item label="物料编码">{selectedMaterial?.materialCode || "-"}</Descriptions.Item>
@@ -913,6 +1008,42 @@ export default function ProjectLists() {
             <Space><span>导入前覆盖现有明细</span><Switch checked={replaceExistingOnImport} onChange={setReplaceExistingOnImport} /></Space>
             <div><div style={{ marginBottom: 8 }}>导入模式</div><Select value={importMode} onChange={setImportMode} style={{ width: "100%" }}>{IMPORT_MODE_OPTIONS.map((item) => <Option key={item.value} value={item.value}>{item.label}</Option>)}</Select></div>
           </Space>
+        </Modal>
+
+        <Modal title="导入结果" open={importResultVisible} onCancel={() => setImportResultVisible(false)} footer={null} width={900}>
+          {importResult ? (
+            <Space direction="vertical" size={16} style={{ width: "100%" }}>
+              <Descriptions bordered size="small" column={2}>
+                <Descriptions.Item label="导入模式">{importResult.importMode}</Descriptions.Item>
+                <Descriptions.Item label="总行数">{importResult.totalRows}</Descriptions.Item>
+                <Descriptions.Item label="成功行数">{importResult.importedRows}</Descriptions.Item>
+                <Descriptions.Item label="跳过行数">{importResult.skippedRows}</Descriptions.Item>
+                <Descriptions.Item label="失败行数">{importResult.failedRows}</Descriptions.Item>
+                <Descriptions.Item label="资源类型">{importResult.resourceType}</Descriptions.Item>
+              </Descriptions>
+              <Table
+                rowKey={(record, index) => `${record.rowNumber ?? index}-${record.message}`}
+                dataSource={importResult.errors || []}
+                pagination={{ pageSize: 5 }}
+                columns={[
+                  { title: "行号", dataIndex: "rowNumber", key: "rowNumber", width: 80 },
+                  { title: "错误信息", dataIndex: "message", key: "message", width: 260 },
+                  {
+                    title: "失败行数据",
+                    dataIndex: "rowData",
+                    key: "rowData",
+                    render: (value) =>
+                      value
+                        ? Object.entries(value)
+                            .filter(([, item]) => item)
+                            .map(([key, item]) => `${key}: ${item}`)
+                            .join(" | ")
+                        : "-",
+                  },
+                ]}
+              />
+            </Space>
+          ) : null}
         </Modal>
       </Space>
     </Card>

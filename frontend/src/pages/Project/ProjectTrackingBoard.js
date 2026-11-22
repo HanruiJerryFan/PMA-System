@@ -96,7 +96,9 @@ export default function ProjectTrackingBoard() {
   }, [loadBoard]);
 
   const permissions = board.permissions || {};
-  const summary = board.summary || {};
+  const hasApprovalAccess = Boolean(
+    permissions.canAuditProjectLists || permissions.canAuditWarehouseDocs || permissions.canAuditFinanceVouchers
+  );
 
   const managerOptions = useMemo(() => {
     const map = new Map();
@@ -121,6 +123,25 @@ export default function ProjectTrackingBoard() {
   const filteredItems = useMemo(
     () => filterTrackingCards(board.items || [], filters),
     [board.items, filters]
+  );
+
+  const displaySummary = useMemo(
+    () => ({
+      totalProjects: filteredItems.length,
+      activeProjects: filteredItems.filter((item) => !item.completed).length,
+      overdueCount: filteredItems.filter(
+        (item) => item.overdue || (item.riskTags || []).includes("OVERDUE")
+      ).length,
+      stalledCount: filteredItems.filter((item) => (item.riskTags || []).includes("STALLED")).length,
+      warrantyExpiringCount: filteredItems.filter(
+        (item) => item.warrantyStatus === "EXPIRING_SOON" || (item.riskTags || []).includes("WARRANTY_EXPIRING")
+      ).length,
+      pendingAuditProjectCount: filteredItems.filter(
+        (item) => Number(item.totalPendingAuditCount || 0) > 0 || (item.riskTags || []).includes("PENDING_AUDIT")
+      ).length,
+      totalReceivableAmount: filteredItems.reduce((sum, item) => sum + Number(item.receivableAmount || 0), 0),
+    }),
+    [filteredItems]
   );
 
   const swimlanes = useMemo(
@@ -323,9 +344,15 @@ export default function ProjectTrackingBoard() {
         align: "center",
         render: (count) =>
           count > 0 ? (
-            <Tag color="processing" style={{ cursor: "pointer" }} onClick={() => navigate("/approvals/pending")}>
-              {count} 项待审
-            </Tag>
+            hasApprovalAccess ? (
+              <Tooltip title="点击前往待审核工作台">
+                <Tag color="processing" style={{ cursor: "pointer" }} onClick={() => navigate("/approvals/pending")}>
+                  {count} 项待审
+                </Tag>
+              </Tooltip>
+            ) : (
+              <Tag color="processing">{count} 项待审</Tag>
+            )
           ) : (
             <Tag>0</Tag>
           ),
@@ -390,7 +417,15 @@ export default function ProjectTrackingBoard() {
     );
 
     return cols;
-  }, [advancingUuid, handleQuickAdvance, navigate, permissions.canManageProject, permissions.canViewContracts, permissions.canViewFinance]);
+  }, [
+    advancingUuid,
+    handleQuickAdvance,
+    hasApprovalAccess,
+    navigate,
+    permissions.canManageProject,
+    permissions.canViewContracts,
+    permissions.canViewFinance,
+  ]);
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
@@ -434,15 +469,15 @@ export default function ProjectTrackingBoard() {
       <Row gutter={[12, 12]}>
         <Col xs={12} sm={8} lg={4}>
           <Card size="small" hoverable onClick={() => setFilters((prev) => ({ ...prev, riskTag: undefined }))}>
-            <Statistic title="项目总数" value={summary.totalProjects || 0} suffix={`进行中 ${summary.activeProjects || 0}`} />
+            <Statistic title="项目总数" value={displaySummary.totalProjects || 0} suffix={`进行中 ${displaySummary.activeProjects || 0}`} />
           </Card>
         </Col>
         <Col xs={12} sm={8} lg={4}>
           <Card size="small" hoverable onClick={() => toggleRiskFilter("OVERDUE")}>
             <Statistic
               title="计划超期"
-              value={summary.overdueCount || 0}
-              valueStyle={{ color: (summary.overdueCount || 0) > 0 ? "#cf1322" : undefined }}
+              value={displaySummary.overdueCount || 0}
+              valueStyle={{ color: (displaySummary.overdueCount || 0) > 0 ? "#cf1322" : undefined }}
               prefix={<WarningOutlined />}
             />
           </Card>
@@ -451,8 +486,8 @@ export default function ProjectTrackingBoard() {
           <Card size="small" hoverable onClick={() => toggleRiskFilter("STALLED")}>
             <Statistic
               title="阶段滞留"
-              value={summary.stalledCount || 0}
-              valueStyle={{ color: (summary.stalledCount || 0) > 0 ? "#d46b08" : undefined }}
+              value={displaySummary.stalledCount || 0}
+              valueStyle={{ color: (displaySummary.stalledCount || 0) > 0 ? "#d46b08" : undefined }}
               prefix={<ClockCircleOutlined />}
             />
           </Card>
@@ -461,8 +496,8 @@ export default function ProjectTrackingBoard() {
           <Card size="small" hoverable onClick={() => toggleRiskFilter("WARRANTY_EXPIRING")}>
             <Statistic
               title="质保临期"
-              value={summary.warrantyExpiringCount || 0}
-              valueStyle={{ color: (summary.warrantyExpiringCount || 0) > 0 ? "#d48806" : undefined }}
+              value={displaySummary.warrantyExpiringCount || 0}
+              valueStyle={{ color: (displaySummary.warrantyExpiringCount || 0) > 0 ? "#d48806" : undefined }}
             />
           </Card>
         </Col>
@@ -470,8 +505,8 @@ export default function ProjectTrackingBoard() {
           <Card size="small" hoverable onClick={() => toggleRiskFilter("PENDING_AUDIT")}>
             <Statistic
               title="有待审单据项目"
-              value={summary.pendingAuditProjectCount || 0}
-              valueStyle={{ color: (summary.pendingAuditProjectCount || 0) > 0 ? "#1677ff" : undefined }}
+              value={displaySummary.pendingAuditProjectCount || 0}
+              valueStyle={{ color: (displaySummary.pendingAuditProjectCount || 0) > 0 ? "#1677ff" : undefined }}
             />
           </Card>
         </Col>
@@ -480,9 +515,9 @@ export default function ProjectTrackingBoard() {
             <Card size="small">
               <Statistic
                 title="项目应收合计"
-                value={Number(summary.totalReceivableAmount || 0)}
+                value={Number(displaySummary.totalReceivableAmount || 0)}
                 precision={2}
-                valueStyle={{ color: Number(summary.totalReceivableAmount || 0) > 0 ? "#cf1322" : "#3f8600" }}
+                valueStyle={{ color: Number(displaySummary.totalReceivableAmount || 0) > 0 ? "#cf1322" : "#3f8600" }}
               />
             </Card>
           </Col>
@@ -662,15 +697,21 @@ export default function ProjectTrackingBoard() {
                               {card.projectNumber} · {card.projectName}
                             </Button>
                             {card.totalPendingAuditCount > 0 ? (
-                              <Tooltip title="点击前往待审核工作台">
-                                <Tag
-                                  color="processing"
-                                  style={{ cursor: "pointer", marginRight: 0, flexShrink: 0 }}
-                                  onClick={() => navigate("/approvals/pending")}
-                                >
+                              hasApprovalAccess ? (
+                                <Tooltip title="点击前往待审核工作台">
+                                  <Tag
+                                    color="processing"
+                                    style={{ cursor: "pointer", marginRight: 0, flexShrink: 0 }}
+                                    onClick={() => navigate("/approvals/pending")}
+                                  >
+                                    审 {card.totalPendingAuditCount}
+                                  </Tag>
+                                </Tooltip>
+                              ) : (
+                                <Tag color="processing" style={{ marginRight: 0, flexShrink: 0 }}>
                                   审 {card.totalPendingAuditCount}
                                 </Tag>
-                              </Tooltip>
+                              )
                             ) : null}
                           </div>
 

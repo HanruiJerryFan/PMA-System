@@ -15,6 +15,7 @@ import {
   Select,
   Statistic,
   Typography,
+  message,
 } from "antd";
 import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import {
@@ -43,32 +44,7 @@ function ItemEditor({ field, form, materialOptions, materialMap, onRemove }) {
   const amount =
     rowValue.unitPrice == null || rowValue.unitPrice === ""
       ? null
-      : Number(rowValue.quantity || 0) * Number(rowValue.unitPrice || 0);
-
-  useEffect(() => {
-    if (!rowValue.materialId || !material) {
-      return;
-    }
-    if (!rowValue.displayName) {
-      form.setFieldValue(
-        ["items", field.name, "displayName"],
-        material.productName || "",
-      );
-    }
-    if (!rowValue.displayModel) {
-      form.setFieldValue(
-        ["items", field.name, "displayModel"],
-        material.productModel || material.specification || "",
-      );
-    }
-  }, [
-    field.name,
-    form,
-    material,
-    rowValue.displayModel,
-    rowValue.displayName,
-    rowValue.materialId,
-  ]);
+      : Math.round((Number(rowValue.quantity || 0) * Number(rowValue.unitPrice || 0) + Number.EPSILON) * 100) / 100;
 
   return (
     <Card
@@ -243,10 +219,19 @@ export default function WarehouseDocumentModal({
           .toLowerCase(),
       }));
   }, [allowedCustomerTypeCodes, customerOptions]);
+  const historicalMaterialIds = useMemo(
+    () =>
+      new Set(
+        (initialDocument?.items || [])
+          .map((item) => item?.materialId)
+          .filter(Boolean),
+      ),
+    [initialDocument],
+  );
   const materialOptions = useMemo(
     () =>
       sortSelectItems(materials, ["materialCode"])
-        .filter((item) => item.isActive !== false)
+        .filter((item) => item.isActive !== false || historicalMaterialIds.has(item.uuid))
         .map((item) => ({
           value: item.uuid,
           label: [
@@ -254,6 +239,7 @@ export default function WarehouseDocumentModal({
             item.productName,
             item.productModel,
             item.bandCode || item.frequency,
+            item.isActive === false ? "（已停用）" : null,
           ]
             .filter(Boolean)
             .join(" / "),
@@ -270,7 +256,7 @@ export default function WarehouseDocumentModal({
             .join(" ")
             .toLowerCase(),
         })),
-    [materials],
+    [historicalMaterialIds, materials],
   );
   const userOptions = useMemo(
     () =>
@@ -285,9 +271,12 @@ export default function WarehouseDocumentModal({
     () =>
       (watchedItems ?? []).reduce(
         (acc, item) => {
-          acc.quantity += Number(item?.quantity || 0);
+          const qty = Number(item?.quantity || 0);
+          acc.quantity += qty;
           if (item?.unitPrice != null && item?.unitPrice !== "") {
-            acc.amount += Number(item.quantity || 0) * Number(item.unitPrice || 0);
+            const lineAmount =
+              Math.round((qty * Number(item.unitPrice || 0) + Number.EPSILON) * 100) / 100;
+            acc.amount = Math.round((acc.amount + lineAmount + Number.EPSILON) * 100) / 100;
           }
           return acc;
         },
@@ -312,6 +301,12 @@ export default function WarehouseDocumentModal({
   }, [categoryOptions, form, open, selectedWarehouse?.id, watchedDocType]);
 
   useEffect(() => {
+    if (open && currentCategory === "CENTRALIZED_PURCHASE" && form.getFieldValue("projectId")) {
+      form.setFieldValue("projectId", undefined);
+    }
+  }, [currentCategory, form, open]);
+
+  useEffect(() => {
     // Wait for the form to load its document type before validating the saved counterparty.
     if (!open || !watchedDocType || isTransfer) {
       return;
@@ -331,17 +326,25 @@ export default function WarehouseDocumentModal({
 
   const handleSubmit = async () => {
     const values = await form.validateFields();
+    if (!selectedWarehouse?.id) {
+      message.error(`未找到对应仓库 ${warehouseCode}，请先在仓库管理中核对配置`);
+      return;
+    }
+    if (isTransfer && !destinationWarehouse?.id) {
+      message.error(`未找到对应调入仓库 ${transferDestinationCode(currentDocType)}，请先在仓库管理中核对配置`);
+      return;
+    }
     const payload = {
       docNumber: values.docNumber,
       docType: values.docType,
       businessCategory: values.businessCategory,
-      projectId: values.projectId || null,
+      projectId: values.businessCategory === "CENTRALIZED_PURCHASE" ? null : (values.projectId || null),
       warehouseId: values.warehouseId || null,
       counterpartyCustomerId: isTransfer ? null : values.counterpartyCustomerId,
       counterpartyAddress: values.counterpartyAddress || null,
       counterpartyContact: values.counterpartyContact || null,
       contractNumber: values.contractNumber || null,
-      docDate: values.docDate ? values.docDate.toISOString() : null,
+      docDate: values.docDate ? `${values.docDate.format("YYYY-MM-DD")}T12:00:00Z` : null,
       remark: values.remark || null,
       items: (values.items || [])
         .filter((item) => item?.materialId && item?.quantity)
@@ -430,12 +433,21 @@ export default function WarehouseDocumentModal({
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item name="projectId" label="项目">
+            <Form.Item
+              name="projectId"
+              label="项目"
+              rules={
+                currentCategory !== "CENTRALIZED_PURCHASE" && !legacyCategory
+                  ? [{ required: true, message: "请选择项目" }]
+                  : []
+              }
+            >
               <Select
-                allowClear
+                allowClear={currentCategory === "CENTRALIZED_PURCHASE"}
+                disabled={currentCategory === "CENTRALIZED_PURCHASE"}
                 showSearch
                 optionFilterProp="label"
-                placeholder="请选择项目"
+                placeholder={currentCategory === "CENTRALIZED_PURCHASE" ? "集中采购入库不绑定具体项目" : "请选择项目"}
                 filterOption={(input, option) =>
                   option?.searchText?.includes(input.trim().toLowerCase())
                 }
@@ -451,13 +463,25 @@ export default function WarehouseDocumentModal({
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item label={isTransfer ? "调出仓库" : "仓库"}>
+            <Form.Item
+              label={isTransfer ? "调出仓库" : "仓库"}
+              validateStatus={!selectedWarehouse ? "error" : undefined}
+              help={!selectedWarehouse ? `请核对已有仓库 ${warehouseCode}` : undefined}
+            >
               <Input aria-label={isTransfer ? "调出仓库" : "仓库"} value={selectedWarehouse ? `${selectedWarehouse.warehouseCode} - ${selectedWarehouse.warehouseName}` : `请核对已有仓库 ${warehouseCode}`} disabled />
             </Form.Item>
             <Form.Item name="warehouseId" hidden rules={[{ required: true, message: `请核对已有仓库 ${warehouseCode}` }]}><Input /></Form.Item>
           </Col>
           {isTransfer ? <>
-            <Col xs={24} md={12}><Form.Item label="调入仓库"><Input aria-label="调入仓库" disabled value={destinationWarehouse ? `${destinationWarehouse.warehouseCode} - ${destinationWarehouse.warehouseName}` : `请核对已有仓库 ${transferDestinationCode(currentDocType)}`} /></Form.Item></Col>
+            <Col xs={24} md={12}>
+              <Form.Item
+                label="调入仓库"
+                validateStatus={!destinationWarehouse ? "error" : undefined}
+                help={!destinationWarehouse ? `请核对已有仓库 ${transferDestinationCode(currentDocType)}` : undefined}
+              >
+                <Input aria-label="调入仓库" disabled value={destinationWarehouse ? `${destinationWarehouse.warehouseCode} - ${destinationWarehouse.warehouseName}` : `请核对已有仓库 ${transferDestinationCode(currentDocType)}`} />
+              </Form.Item>
+            </Col>
             <Col span={24}><Alert type="info" showIcon message="保存划拨单会自动生成调入仓库的入库单；修改、审核和删除由划拨单统一联动。" /></Col>
           </> : <>
           <Col xs={24} md={8}>
@@ -550,8 +574,19 @@ export default function WarehouseDocumentModal({
             </Card>
           </Col>
         </Row>
-        <Form.List name="items">
-          {(fields, { add, remove }) => (
+        <Form.List
+          name="items"
+          rules={[
+            {
+              validator: async (_, items) => {
+                if (!items || items.length < 1) {
+                  return Promise.reject(new Error("请至少添加一条物料明细"));
+                }
+              },
+            },
+          ]}
+        >
+          {(fields, { add, remove }, { errors }) => (
             <>
               <div
                 style={{
@@ -577,6 +612,7 @@ export default function WarehouseDocumentModal({
                 />
               ))}
               {!fields.length ? <Empty description="请至少添加一条物料明细" /> : null}
+              <Form.ErrorList errors={errors} />
             </>
           )}
         </Form.List>

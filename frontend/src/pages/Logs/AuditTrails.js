@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Card, Form, Input, Space, Table, Tag } from "antd";
+import { Button, Card, Form, Input, Space, Table, Tag, message } from "antd";
 import { DownloadOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { useAuth } from "../../context/AuthContext";
 import { logAPI } from "../../api/modules";
@@ -38,6 +38,8 @@ export default function AuditTrails() {
       }
       setRecords(nextRecords);
       setTotal(nextTotal);
+    } catch (error) {
+      message.error(error?.message || "加载审计日志失败");
     } finally {
       setLoading(false);
     }
@@ -63,8 +65,13 @@ export default function AuditTrails() {
   );
 
   const handleSearch = (values) => {
+    const trimmedUserId = values.userId == null ? "" : String(values.userId).trim();
+    if (trimmedUserId && (!/^\d+$/.test(trimmedUserId) || Number(trimmedUserId) <= 0)) {
+      message.warning("用户 ID 必须为正整数");
+      return;
+    }
     const nextFilters = {
-      userId: values.userId ? Number(values.userId) : undefined,
+      userId: trimmedUserId ? Number(trimmedUserId) : undefined,
       module: values.module?.trim() || undefined,
       action: values.action?.trim() || undefined,
     };
@@ -101,6 +108,8 @@ export default function AuditTrails() {
           item.occurredAt ? new Date(item.occurredAt).toLocaleString() : "",
         ])
       );
+    } catch (error) {
+      message.error(error?.message || "导出审计日志失败");
     } finally {
       setExporting(false);
     }

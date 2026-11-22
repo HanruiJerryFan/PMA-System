@@ -335,7 +335,7 @@ export default function ProjectListDashboard() {
             : projectAPI.getProjectListAggregate(projectUuid, aggregateType)
           : Promise.resolve(null);
         const [projectResponse, listResponse, aggregateResponse, itemResponse, attachmentResponse] = await Promise.all([
-          projectAPI.getProjects(),
+          projectAPI.getProjectOptions(),
           projectAPI.getProjectListsByProject(projectUuid),
           aggregateRequest,
           listUuid ? projectAPI.getProjectListItems(listUuid) : Promise.resolve([]),
@@ -359,6 +359,8 @@ export default function ProjectListDashboard() {
         setAggregateView(aggregateType ? aggregateData : null);
         setListItems(aggregateType ? aggregateData?.items || [] : normalizeResponseData(itemResponse));
         setAttachments(normalizeResponseData(attachmentResponse));
+      } catch (error) {
+        message.error(error?.message || "加载清单详情失败");
       } finally {
         setLoading(false);
       }

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Button,
@@ -65,6 +65,7 @@ export default function AiAnalytics() {
     enabled: false,
     configured: false,
     localEndpoint: false,
+    maskSensitiveNames: false,
     model: null,
     mode: "RULE_BASED",
     authorizedScopes: [],
@@ -74,6 +75,7 @@ export default function AiAnalytics() {
   const [briefing, setBriefing] = useState(null);
   const [question, setQuestion] = useState("");
   const [qaHistory, setQaHistory] = useState([]);
+  const briefingReqIdRef = useRef(0);
 
   const canViewProjects = useMemo(
     () => hasAnyAuthority(currentUser, ["project.access", "project.manage"]),
@@ -81,14 +83,21 @@ export default function AiAnalytics() {
   );
 
   const loadBriefing = useCallback(async (projectUuid) => {
+    const reqId = ++briefingReqIdRef.current;
     setBriefingLoading(true);
     try {
       const response = await aiAPI.generateBriefing(projectUuid || null);
-      setBriefing(response?.data ?? response ?? null);
+      if (reqId === briefingReqIdRef.current) {
+        setBriefing(response?.data ?? response ?? null);
+      }
     } catch (error) {
-      message.error(error?.message || "生成经营简报失败");
+      if (reqId === briefingReqIdRef.current) {
+        message.error(error?.message || "生成经营简报失败");
+      }
     } finally {
-      setBriefingLoading(false);
+      if (reqId === briefingReqIdRef.current) {
+        setBriefingLoading(false);
+      }
     }
   }, []);
 
@@ -104,6 +113,7 @@ export default function AiAnalytics() {
         enabled: Boolean(statusPayload.enabled),
         configured: Boolean(statusPayload.configured),
         localEndpoint: Boolean(statusPayload.localEndpoint),
+        maskSensitiveNames: Boolean(statusPayload.maskSensitiveNames),
         model: statusPayload.model || null,
         mode: statusPayload.mode || "RULE_BASED",
         authorizedScopes: Array.isArray(statusPayload.authorizedScopes) ? statusPayload.authorizedScopes : [],
@@ -183,7 +193,7 @@ export default function AiAnalytics() {
                     ? `AI 大模型模式${status.model ? ` (${status.model})` : ""}`
                     : "规则分析模式（无需外部 Key）"}
                 </Tag>
-                {status.configured && !status.localEndpoint ? (
+                {status.configured && !status.localEndpoint && status.maskSensitiveNames ? (
                   <Tag color="cyan">客户名称已自动脱敏</Tag>
                 ) : null}
               </Space>

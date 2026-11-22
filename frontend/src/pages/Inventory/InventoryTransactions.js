@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
-import { Alert, Button, Select, Tag } from "antd";
+import { Alert, Button, Select, Tag, message } from "antd";
 import { DownloadOutlined } from "@ant-design/icons";
 import CRUDTable from "../../components/Common/CRUDTable";
 import { inventoryAPI } from "../../api/modules";
@@ -89,6 +89,8 @@ export default function InventoryTransactions() {
       }
       setTransactions(nextRecords);
       setTotal(nextTotal);
+    } catch (error) {
+      message.error(error?.message || "加载库存流水失败");
     } finally {
       setLoading(false);
     }
@@ -100,12 +102,16 @@ export default function InventoryTransactions() {
 
   useEffect(() => {
     async function fetchOptions() {
-      const [projectResponse, warehouseResponse] = await Promise.all([
-        inventoryAPI.getWarehouseDocProjectOptions(),
-        inventoryAPI.getWarehouses(),
-      ]);
-      setProjects(normalizeResponseData(projectResponse));
-      setWarehouses(normalizeResponseData(warehouseResponse));
+      try {
+        const [projectResponse, warehouseResponse] = await Promise.all([
+          inventoryAPI.getWarehouseDocProjectOptions(),
+          inventoryAPI.getWarehouses(),
+        ]);
+        setProjects(normalizeResponseData(projectResponse));
+        setWarehouses(normalizeResponseData(warehouseResponse));
+      } catch (error) {
+        message.error(error?.message || "加载筛选项失败");
+      }
     }
 
     fetchOptions();
@@ -139,7 +145,12 @@ export default function InventoryTransactions() {
       const response = await inventoryAPI.getTransactions();
       const allRows = decorateRows(normalizeResponseData(response));
       const outboundRows = allRows.filter(
-        (item) => item.txnType === "OUT" && item.projectId && matchesActiveFilters(item, query.filters || {})
+        (item) =>
+          item.txnType === "OUT" &&
+          item.projectId &&
+          item.category !== "WAREHOUSE_TRANSFER_TO_PROJECT" &&
+          item.category !== "PROJECT_TRANSFER_TO_WAREHOUSE" &&
+          matchesActiveFilters(item, query.filters || {})
       );
       downloadExcel(
         `project-material-outbound-summary-${dayjs().format("YYYY-MM-DD")}.xls`,
@@ -161,6 +172,8 @@ export default function InventoryTransactions() {
           item.sourceRefId || "",
         ])
       );
+    } catch (error) {
+      message.error(error?.message || "导出项目物料出库汇总失败");
     } finally {
       setExporting(false);
     }

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import dayjs from "dayjs";
-import { Button, DatePicker, Input, InputNumber, Select, message } from "antd";
+import { Button, DatePicker, Form, Input, InputNumber, Select, message } from "antd";
 import { DownloadOutlined, FilePdfOutlined, LinkOutlined } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
@@ -16,7 +16,45 @@ import { formatProjectOptionLabel } from "../../utils/projectLabels";
 const { Option } = Select;
 
 function getContractTypeName(item) {
-  return item?.typeName || item?.name || item?.code || String(item?.id ?? "");
+  return item?.typeName || item?.name || item?.code || item?.typeCode || String(item?.id ?? "");
+}
+
+function ContractContactField({ form, contacts }) {
+  const selectedClientId = Form.useWatch("clientId", form);
+  const selectedContactId = Form.useWatch("contactId", form);
+
+  const filteredContacts = useMemo(
+    () => (selectedClientId ? contacts.filter((item) => item.clientId === selectedClientId) : []),
+    [contacts, selectedClientId]
+  );
+
+  useEffect(() => {
+    if (
+      selectedContactId &&
+      (!selectedClientId ||
+        (contacts.length > 0 && !filteredContacts.some((item) => item.uuid === selectedContactId)))
+    ) {
+      form.setFieldValue("contactId", undefined);
+    }
+  }, [contacts.length, filteredContacts, form, selectedClientId, selectedContactId]);
+
+  return (
+    <Form.Item name="contactId" label="客户联系人">
+      <Select
+        placeholder={selectedClientId ? "请选择联系人" : "请先选择客户"}
+        disabled={!selectedClientId}
+        allowClear
+        showSearch
+        optionFilterProp="children"
+      >
+        {filteredContacts.map((item) => (
+          <Option key={item.uuid} value={item.uuid}>
+            {item.contactName}
+          </Option>
+        ))}
+      </Select>
+    </Form.Item>
+  );
 }
 
 function normalizeApiData(response) {
@@ -85,22 +123,28 @@ export default function ContractInfo() {
     try {
       const response = await contractAPI.getContracts();
       setContracts(normalizeApiData(response));
+    } catch (error) {
+      message.error(error?.message || "加载合同列表失败");
     } finally {
       setLoading(false);
     }
   };
 
   const fetchOptions = async () => {
-    const [customerResponse, projectResponse, contactResponse, contractTypeResponse] = await Promise.all([
-      customerAPI.getCustomerOptions(),
-      projectAPI.getProjectOptions(),
-      customerAPI.getCustomerContactOptions(),
-      contractAPI.getContractTypes(),
-    ]);
-    setCustomers(normalizeApiData(customerResponse));
-    setProjects(normalizeApiData(projectResponse));
-    setContacts(normalizeApiData(contactResponse));
-    setContractTypes(normalizeApiData(contractTypeResponse));
+    try {
+      const [customerResponse, projectResponse, contactResponse, contractTypeResponse] = await Promise.all([
+        customerAPI.getCustomerOptions(),
+        projectAPI.getProjectOptions(),
+        customerAPI.getCustomerContactOptions(),
+        contractAPI.getContractTypes(),
+      ]);
+      setCustomers(normalizeApiData(customerResponse));
+      setProjects(normalizeApiData(projectResponse));
+      setContacts(normalizeApiData(contactResponse));
+      setContractTypes(normalizeApiData(contractTypeResponse));
+    } catch (error) {
+      message.error(error?.message || "加载合同关联选项失败");
+    }
   };
 
   useEffect(() => {
@@ -119,7 +163,15 @@ export default function ContractInfo() {
     const createdResponse = await contractAPI.createContract(values);
     const createdContract = normalizeApiEntity(createdResponse);
     if (pendingContractAttachmentFiles.length && createdContract?.uuid) {
-      await uploadBusinessAttachments("contracts", createdContract.uuid, pendingContractAttachmentFiles);
+      try {
+        await uploadBusinessAttachments("contracts", createdContract.uuid, pendingContractAttachmentFiles);
+      } catch (attachError) {
+        message.warning(
+          attachError?.message
+            ? `合同已创建，但附件上传失败：${attachError.message}`
+            : "合同已创建，但附件上传失败，请稍后在附件中心补传"
+        );
+      }
     }
     await fetchContracts();
     return createdContract;
@@ -128,7 +180,15 @@ export default function ContractInfo() {
   const handleUpdate = async (uuid, values) => {
     const updatedResponse = await contractAPI.updateContract(uuid, values);
     if (pendingContractAttachmentFiles.length) {
-      await uploadBusinessAttachments("contracts", uuid, pendingContractAttachmentFiles);
+      try {
+        await uploadBusinessAttachments("contracts", uuid, pendingContractAttachmentFiles);
+      } catch (attachError) {
+        message.warning(
+          attachError?.message
+            ? `合同已更新，但附件上传失败：${attachError.message}`
+            : "合同已更新，但附件上传失败，请稍后在附件中心补传"
+        );
+      }
     }
     await fetchContracts();
     return normalizeApiEntity(updatedResponse);
@@ -362,23 +422,18 @@ export default function ContractInfo() {
           ),
         },
         {
-          name: "contactId",
-          label: "客户联系人",
-          component: (
-            <Select placeholder="请选择联系人" allowClear showSearch optionFilterProp="children">
-              {contacts.map((item) => (
-                <Option key={item.uuid} value={item.uuid}>
-                  {item.contactName}
-                </Option>
-              ))}
-            </Select>
-          ),
+          key: "contactId",
+          renderOnly: true,
+          render: ({ form }) => <ContractContactField form={form} contacts={contacts} />,
         },
         {
           name: "subItemNo",
           label: "分项编号",
-          rules: [{ required: true, message: "请输入分项编号" }],
-          component: <Input placeholder="例如 01" />,
+          rules: [
+            { required: true, message: "请输入分项编号" },
+            { max: 2, message: "分项编号最多 2 位" },
+          ],
+          component: <Input placeholder="例如 01" maxLength={2} />,
         },
         { name: "subItemContent", label: "分项内容", component: <Input.TextArea rows={3} placeholder="请输入分项内容" /> },
         { name: "signDate", label: "签约日期", component: <DatePicker style={{ width: "100%" }} /> },

@@ -230,6 +230,8 @@ export default function AttachmentCenter() {
         ? await attachmentAPI.getAttachmentsByBusiness(businessTypeFilter, businessUuidFilter || undefined)
         : await attachmentAPI.getAttachments();
       setAttachments(response.data || []);
+    } catch (error) {
+      message.error(error?.message || "加载附件列表失败");
     } finally {
       setLoading(false);
     }
@@ -455,7 +457,7 @@ export default function AttachmentCenter() {
 
   const handleUpload = async () => {
     if (!canManage) {
-      message.error("Permission denied");
+      message.error("无权限操作");
       return;
     }
     try {
@@ -481,6 +483,10 @@ export default function AttachmentCenter() {
         }
       }
 
+      if (failedFiles.length === selectedFiles.length) {
+        message.error(`上传失败：${failedFiles.join("、")}`);
+        return;
+      }
       if (failedFiles.length) {
         message.warning(`已上传 ${selectedFiles.length - failedFiles.length} 个文件，失败 ${failedFiles.length} 个：${failedFiles.join("、")}`);
       } else {
@@ -637,7 +643,7 @@ export default function AttachmentCenter() {
                     uploadForm.setFieldValue("businessUuid", value || undefined);
                   }}
                   options={businessOptions.map((item) => ({
-                    value: item.uuid || item.docNumber || item.id,
+                    value: getBusinessOptionKey(selectedUploadBusinessType, item),
                     label: buildBusinessOptionLabel(selectedUploadBusinessType, item),
                   }))}
                 />

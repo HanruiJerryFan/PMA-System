@@ -239,6 +239,7 @@ export const attachmentAPI = {
   downloadAttachment: (uuid) =>
     api.get(`/attachments/download/${uuid}`, {
       responseType: "blob",
+      timeout: 120000,
     }),
   previewAttachmentPdf: (uuid) =>
     api.get(`/attachments/preview/${uuid}`, {
@@ -274,6 +275,7 @@ export const exportAPI = {
   downloadTablePdf: (data) =>
     api.post("/pdf-exports/table", data, {
       responseType: "blob",
+      timeout: 120000,
     }),
 };
 
@@ -284,6 +286,6 @@ export const approvalAPI = {
 export const aiAPI = {
   getStatus: () => api.get("/ai/status"),
   generateBriefing: (projectUuid) =>
-    api.post("/ai/briefing", projectUuid ? { projectUuid } : {}),
-  ask: (data) => api.post("/ai/ask", data),
+    api.post("/ai/briefing", projectUuid ? { projectUuid } : {}, { timeout: 60000 }),
+  ask: (data) => api.post("/ai/ask", data, { timeout: 60000 }),
 };

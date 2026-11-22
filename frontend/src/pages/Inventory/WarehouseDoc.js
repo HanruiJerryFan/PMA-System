@@ -21,7 +21,7 @@ import {
 import { CheckCircleOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, FilePdfOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
 import { useAuth } from "../../context/AuthContext";
 import { inventoryAPI, permissionAPI } from "../../api/modules";
-import { downloadApiFile, downloadExcel, downloadHtmlExcel, resolveBlobErrorMessage } from "../../utils/exporters";
+import { downloadApiFile, downloadExcel, downloadHtmlExcel, escapeHtmlCell, resolveBlobErrorMessage } from "../../utils/exporters";
 import { formatProjectOptionLabel } from "../../utils/projectLabels";
 import { sortSelectItems } from "../../utils/selectSorting";
 import { queryWarehouseDocuments } from "./warehouseDocumentQuery";
@@ -107,13 +107,17 @@ export default function WarehouseDoc() {
   }, [filteredDocs]);
 
   const applyQuery = (values) => {
-    setQueryFilters(values);
+    setQueryFilters((prev) => ({
+      ...(prev?.docType ? { docType: prev.docType } : {}),
+      ...values,
+    }));
     setDocumentPage(1);
   };
 
   const resetQuery = () => {
     queryForm.resetFields();
-    applyQuery({});
+    setQueryFilters({});
+    setDocumentPage(1);
   };
 
   const exportQueryStatistics = () => {
@@ -149,6 +153,8 @@ export default function WarehouseDoc() {
           ? current
           : docData[0]?.docNumber || null,
       );
+    } catch (error) {
+      message.error(error?.message || "加载出入库单数据失败");
     } finally {
       setLoading(false);
     }
@@ -202,9 +208,13 @@ export default function WarehouseDoc() {
       message.error("没有维护出入库单的权限");
       return;
     }
-    await inventoryAPI.deleteWarehouseDoc(docNumber);
-    message.success("删除成功");
-    await fetchData();
+    try {
+      await inventoryAPI.deleteWarehouseDoc(docNumber);
+      message.success("删除成功");
+      await fetchData();
+    } catch (error) {
+      message.error(error?.message || "删除出入库单失败");
+    }
   };
 
   const auditDocument = async (docNumber) => {
@@ -212,9 +222,13 @@ export default function WarehouseDoc() {
       message.error("没有审核出入库单的权限");
       return;
     }
-    await inventoryAPI.auditWarehouseDoc(docNumber);
-    message.success("出入库单已审核");
-    await fetchData();
+    try {
+      await inventoryAPI.auditWarehouseDoc(docNumber);
+      message.success("出入库单已审核");
+      await fetchData();
+    } catch (error) {
+      message.error(error?.message || "审核出入库单失败");
+    }
   };
 
   const printDocument = (doc = selectedDoc) => {
@@ -249,7 +263,10 @@ export default function WarehouseDoc() {
     if (!doc) {
       return;
     }
-    downloadHtmlExcel(`${doc.docNumber || docMeta(doc.docType).label}.xls`, buildWarehouseDocumentHtml(doc));
+    downloadHtmlExcel(
+      `${doc.docNumber || docMeta(doc.docType).label}.xls`,
+      buildWarehouseDocumentHtml(doc, { sanitizeForExcel: true }),
+    );
   };
 
   const columns = [
@@ -600,10 +617,11 @@ const documentColumnGroupHtml = `<colgroup>${documentColumnWidths
   .map((width) => `<col style="width:${width}" />`)
   .join("")}</colgroup>`;
 
-function buildWarehouseDocumentHtml(doc, { autoPrint = false } = {}) {
+function buildWarehouseDocumentHtml(doc, { autoPrint = false, sanitizeForExcel = false } = {}) {
+  const esc = sanitizeForExcel ? escapeHtmlCell : escapeHtml;
   const previewMeta = docMeta(doc.docType, doc.sourceRefType);
   const rows = buildWarehouseDocumentRows(doc);
-  return `<!DOCTYPE html><html><head><meta charset="utf-8" /><title>${escapeHtml(previewMeta.label)}</title><style>
+  return `<!DOCTYPE html><html><head><meta charset="utf-8" /><title>${esc(previewMeta.label)}</title><style>
     @page{margin:6mm}
     body{font-family:"SimSun","Microsoft YaHei",serif;margin:0;padding:12px;color:#111}
     .doc-sheet{width:100%;box-sizing:border-box}
@@ -628,37 +646,37 @@ function buildWarehouseDocumentHtml(doc, { autoPrint = false } = {}) {
       .model-cell{font-size:11px}
       .strong{font-size:15px}
     }
-  </style></head><body><div class="doc-sheet"><div class="doc-title">${escapeHtml(previewMeta.label)}</div><table class="meta-table">
+  </style></head><body><div class="doc-sheet"><div class="doc-title">${esc(previewMeta.label)}</div><table class="meta-table">
     ${documentMetaColumnGroupHtml}
     <tr>
       <td class="label center"><strong>项目名称</strong></td>
-      <td class="text-cell project-cell">${escapeHtml(doc.projectLabel || "")}</td>
-      <td class="label center wide-label"><strong>${escapeHtml(previewMeta.partyBlock)}</strong></td>
-      <td class="party-cell" colspan="2">${formatCounterpartyHtml(doc)}</td>
-      <td class="label center"><strong>${escapeHtml(previewMeta.numberLabel)}</strong></td>
-      <td class="center nowrap">${escapeHtml(doc.docNumber || "")}</td>
-      <td class="label center"><strong>${escapeHtml(previewMeta.dateLabel)}</strong></td>
-      <td class="center nowrap">${escapeHtml(formatWarehouseDocDate(doc))}</td>
+      <td class="text-cell project-cell">${esc(doc.projectLabel || "")}</td>
+      <td class="label center wide-label"><strong>${esc(previewMeta.partyBlock)}</strong></td>
+      <td class="party-cell" colspan="2">${formatCounterpartyHtml(doc, esc)}</td>
+      <td class="label center"><strong>${esc(previewMeta.numberLabel)}</strong></td>
+      <td class="center nowrap">${esc(doc.docNumber || "")}</td>
+      <td class="label center"><strong>${esc(previewMeta.dateLabel)}</strong></td>
+      <td class="center nowrap">${esc(formatWarehouseDocDate(doc))}</td>
     </tr>
   </table><table class="detail-table">
     ${documentColumnGroupHtml}
     <tr class="center"><th>序号</th><th>材料名称</th><th>型号及规格</th><th>品牌</th><th>单位</th><th>数量</th><th>单价</th><th>金额</th><th>备注</th></tr>
-    ${rows.map((item, index) => buildWarehouseDocumentItemRow(item, index)).join("")}
-    <tr><td colspan="7" class="center strong">合计：${escapeHtml(toChineseUppercaseRmb(doc.totalAmount || 0))}</td><td colspan="2" class="right strong">￥${escapeHtml(formatAmount(doc.totalAmount || 0))}</td></tr>
+    ${rows.map((item, index) => buildWarehouseDocumentItemRow(item, index, esc)).join("")}
+    <tr><td colspan="7" class="center strong">合计：${esc(toChineseUppercaseRmb(doc.totalAmount || 0))}</td><td colspan="2" class="right strong">￥${esc(formatAmount(doc.totalAmount || 0))}</td></tr>
   </table></div>${autoPrint ? "<script>window.onload=function(){window.print();}</script>" : ""}</body></html>`;
 }
 
-function buildWarehouseDocumentItemRow(item, index) {
+function buildWarehouseDocumentItemRow(item, index, esc = escapeHtml) {
   return `<tr>
     <td class="center nowrap">${index + 1}</td>
-    <td class="text-cell">${escapeHtml(item.displayName || item.materialName || "")}</td>
-    <td class="text-cell model-cell">${escapeHtml(item.displayModel || item.model || "")}</td>
-    <td class="center text-cell">${escapeHtml(item.brand || "")}</td>
-    <td class="center nowrap">${escapeHtml(item.unit || "")}</td>
-    <td class="right nowrap">${escapeHtml(item.quantity ?? "")}</td>
-    <td class="right nowrap">${item.unitPrice != null ? escapeHtml(Number(item.unitPrice).toFixed(4)) : ""}</td>
-    <td class="right nowrap">${item.amount != null ? escapeHtml(Number(item.amount).toFixed(2)) : ""}</td>
-    <td class="text-cell">${escapeHtml(item.remark || "")}</td>
+    <td class="text-cell">${esc(item.displayName || item.materialName || "")}</td>
+    <td class="text-cell model-cell">${esc(item.displayModel || item.model || "")}</td>
+    <td class="center text-cell">${esc(item.brand || "")}</td>
+    <td class="center nowrap">${esc(item.unit || "")}</td>
+    <td class="right nowrap">${esc(item.quantity ?? "")}</td>
+    <td class="right nowrap">${item.unitPrice != null ? esc(Number(item.unitPrice).toFixed(4)) : ""}</td>
+    <td class="right nowrap">${item.amount != null ? esc(Number(item.amount).toFixed(2)) : ""}</td>
+    <td class="text-cell">${esc(item.remark || "")}</td>
   </tr>`;
 }
 
@@ -674,9 +692,9 @@ function formatWarehouseDocDate(doc) {
   return doc.docDate ? dayjs(doc.docDate).format("YYYY年M月D日") : "";
 }
 
-function formatCounterpartyHtml(doc) {
+function formatCounterpartyHtml(doc, esc = escapeHtml) {
   return [doc.counterpartyName, doc.counterpartyAddress, doc.counterpartyContact]
-    .map((item) => escapeHtml(item || ""))
+    .map((item) => esc(item || ""))
     .filter(Boolean)
     .join("<br/>");
 }

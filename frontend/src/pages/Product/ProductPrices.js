@@ -1,35 +1,69 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Form, InputNumber, Select } from "antd";
+import { Form, InputNumber, Select, message } from "antd";
 import CRUDTable from "../../components/Common/CRUDTable";
 import { customerAPI, permissionAPI, productAPI } from "../../api/modules";
 import { sortSelectItems } from "../../utils/selectSorting";
 
 const { Option } = Select;
+const EMPTY_MODEL_SENTINEL = "__EMPTY_MODEL__";
 
 function normalizeResponseData(response) {
   return response?.data ?? response ?? [];
 }
 
-function MaterialCascadeFields({ form, products, categories, subcategories, bands }) {
+function MaterialCascadeFields({ form, products, categories, subcategories, bands, editingRecord }) {
   const selectedCategoryId = Form.useWatch("categoryId", form);
   const selectedSubcategoryId = Form.useWatch("subcategoryId", form);
   const selectedProductName = Form.useWatch("selectedProductName", form);
   const selectedProductModel = Form.useWatch("selectedProductModel", form);
   const selectedBandCode = Form.useWatch("selectedBandCode", form);
 
-  const activeCategories = useMemo(() => categories.filter((item) => item.isActive !== false), [categories]);
-  const activeSubcategories = useMemo(() => subcategories.filter((item) => item.isActive !== false), [subcategories]);
-  const activeBands = useMemo(() => bands.filter((item) => item.isActive !== false), [bands]);
+  const editingMaterial = useMemo(
+    () =>
+      editingRecord?.productBasicInfoUuid
+        ? products.find((item) => item.uuid === editingRecord.productBasicInfoUuid) || null
+        : null,
+    [editingRecord, products]
+  );
+
+  const activeCategories = useMemo(
+    () =>
+      categories.filter(
+        (item) =>
+          item.isActive !== false ||
+          (editingMaterial && Number(item.id) === Number(editingMaterial.categoryId))
+      ),
+    [categories, editingMaterial]
+  );
+  const activeSubcategories = useMemo(
+    () =>
+      subcategories.filter(
+        (item) =>
+          item.isActive !== false ||
+          (editingMaterial && Number(item.id) === Number(editingMaterial.subcategoryId))
+      ),
+    [editingMaterial, subcategories]
+  );
+  const activeBands = useMemo(
+    () =>
+      bands.filter(
+        (item) =>
+          item.isActive !== false ||
+          (editingMaterial &&
+            item.code === (editingMaterial.bandCode || editingMaterial.frequency))
+      ),
+    [bands, editingMaterial]
+  );
 
   const filteredProducts = useMemo(
     () =>
       products.filter(
         (item) =>
-          item.isActive !== false &&
+          (item.isActive !== false || (editingMaterial && item.uuid === editingMaterial.uuid)) &&
           (selectedCategoryId == null || Number(item.categoryId) === Number(selectedCategoryId)) &&
           (selectedSubcategoryId == null || Number(item.subcategoryId) === Number(selectedSubcategoryId))
       ),
-    [products, selectedCategoryId, selectedSubcategoryId]
+    [editingMaterial, products, selectedCategoryId, selectedSubcategoryId]
   );
 
   const productNameOptions = useMemo(
@@ -43,14 +77,16 @@ function MaterialCascadeFields({ form, products, categories, subcategories, band
   );
 
   const productModelOptions = useMemo(
-    () => [...new Set(filteredByName.map((item) => item.productModel || ""))],
+    () => [...new Set(filteredByName.map((item) => item.productModel || EMPTY_MODEL_SENTINEL))],
     [filteredByName]
   );
 
   const filteredByModel = useMemo(
     () =>
       filteredByName.filter(
-        (item) => !selectedProductModel || (item.productModel || "") === selectedProductModel
+        (item) =>
+          !selectedProductModel ||
+          (item.productModel || EMPTY_MODEL_SENTINEL) === selectedProductModel
       ),
     [filteredByName, selectedProductModel]
   );
@@ -87,7 +123,7 @@ function MaterialCascadeFields({ form, products, categories, subcategories, band
         >
           {sortSelectItems(activeCategories, ["sortOrder","code"]).map((item) => (
             <Option key={item.id} value={item.id}>
-              {item.name}
+              {item.name}{item.isActive === false ? "（已停用）" : ""}
             </Option>
           ))}
         </Select>
@@ -109,7 +145,7 @@ function MaterialCascadeFields({ form, products, categories, subcategories, band
         >
           {sortSelectItems(activeSubcategories, ["sortOrder","code"]).map((item) => (
             <Option key={item.id} value={item.id}>
-              {item.name}
+              {item.name}{item.isActive === false ? "（已停用）" : ""}
             </Option>
           ))}
         </Select>
@@ -149,16 +185,17 @@ function MaterialCascadeFields({ form, products, categories, subcategories, band
           }
         >
           {sortSelectItems(productModelOptions).map((model) => (
-            <Option key={model || "_empty"} value={model}>
-              {model || "未填写型号"}
+            <Option key={model} value={model}>
+              {model === EMPTY_MODEL_SENTINEL ? "未填写型号" : model}
             </Option>
           ))}
         </Select>
       </Form.Item>
 
-      <Form.Item name="selectedBandCode" label="频段" rules={[{ required: true, message: "请选择频段" }]}>
+      <Form.Item name="selectedBandCode" label="频段">
         <Select
           placeholder="请选择频段"
+          allowClear
           showSearch
           optionFilterProp="children"
           onChange={() => form.setFieldsValue({ productBasicInfoUuid: undefined })}
@@ -170,7 +207,7 @@ function MaterialCascadeFields({ form, products, categories, subcategories, band
             const band = activeBands.find((item) => item.code === bandCode);
             return (
               <Option key={bandCode} value={bandCode}>
-                {band?.description || bandCode}
+                {band?.description || bandCode}{band?.isActive === false ? "（已停用）" : ""}
               </Option>
             );
           })}
@@ -181,7 +218,7 @@ function MaterialCascadeFields({ form, products, categories, subcategories, band
         <Select placeholder="请选择物料" showSearch optionFilterProp="children">
           {sortSelectItems(materialOptions, ["materialCode"]).map((item) => (
             <Option key={item.uuid} value={item.uuid}>
-              {item.materialCode} / {item.productModel || "未填写型号"}
+              {item.materialCode} / {item.productModel || "未填写型号"}{item.isActive === false ? "（已停用）" : ""}
             </Option>
           ))}
         </Select>
@@ -272,6 +309,8 @@ export default function ProductPrices() {
       setCustomers(normalizeResponseData(customerResponse));
       setCustomerTypes(normalizeResponseData(customerTypeResponse));
       setUsers(Array.isArray(userResponse) ? userResponse : normalizeResponseData(userResponse));
+    } catch (error) {
+      message.error(error?.message || "加载物料价格数据失败");
     } finally {
       setLoading(false);
     }
@@ -303,7 +342,7 @@ export default function ProductPrices() {
       categoryId: material?.categoryId ?? undefined,
       subcategoryId: material?.subcategoryId ?? undefined,
       selectedProductName: material?.productName ?? undefined,
-      selectedProductModel: material?.productModel ?? undefined,
+      selectedProductModel: material ? (material.productModel || EMPTY_MODEL_SENTINEL) : undefined,
       selectedBandCode: material?.bandCode || material?.frequency || undefined,
       productBasicInfoUuid: material?.uuid ?? record.productBasicInfoUuid,
       supplierCustomerId: record.supplierCustomerId ?? undefined,
@@ -314,7 +353,6 @@ export default function ProductPrices() {
     productBasicInfoUuid: values.productBasicInfoUuid,
     referencePrice: values.referencePrice,
     supplierCustomerId: values.supplierCustomerId || null,
-    createUser: values.createUser || null,
   });
 
   return (
@@ -357,13 +395,14 @@ export default function ProductPrices() {
         {
           key: "materialCascade",
           renderOnly: true,
-          render: ({ form }) => (
+          render: ({ form, editingRecord }) => (
             <MaterialCascadeFields
               form={form}
               products={products}
               categories={categories}
               subcategories={subcategories}
               bands={bands}
+              editingRecord={editingRecord}
             />
           ),
         },
@@ -377,28 +416,28 @@ export default function ProductPrices() {
           name: "supplierCustomerId",
           label: "供应商",
           rules: [{ required: true, message: "请选择供应商" }],
-          component: (
-            <Select placeholder="请选择供应商" showSearch optionFilterProp="children">
-              {sortSelectItems(supplierOptions, ["customerCode"]).map((item) => (
-                <Option key={item.uuid} value={item.uuid}>
-                  {item.customerName}
-                </Option>
-              ))}
-            </Select>
-          ),
-        },
-        {
-          name: "createUser",
-          label: "创建人",
-          component: (
-            <Select placeholder="请选择创建人" allowClear showSearch optionFilterProp="children">
-              {users.map((item) => (
-                <Option key={item.id} value={item.id}>
-                  {item.realName || item.username}
-                </Option>
-              ))}
-            </Select>
-          ),
+          component: ({ editingRecord }) => {
+            const extraSupplier =
+              editingRecord?.supplierCustomerId &&
+              !supplierOptions.some((item) => item.uuid === editingRecord.supplierCustomerId)
+                ? customers.find((item) => item.uuid === editingRecord.supplierCustomerId) || {
+                    uuid: editingRecord.supplierCustomerId,
+                    customerName: editingRecord.supplier || editingRecord.supplierCustomerId,
+                  }
+                : null;
+            const mergedSuppliers = extraSupplier
+              ? [extraSupplier, ...sortSelectItems(supplierOptions, ["customerCode"])]
+              : sortSelectItems(supplierOptions, ["customerCode"]);
+            return (
+              <Select placeholder="请选择供应商" showSearch optionFilterProp="children">
+                {mergedSuppliers.map((item) => (
+                  <Option key={item.uuid} value={item.uuid}>
+                    {item.customerName}
+                  </Option>
+                ))}
+              </Select>
+            );
+          },
         },
       ]}
     />

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Card, Form, Input, Space, Table, Tag } from "antd";
+import { Button, Card, Form, Input, Space, Table, Tag, message } from "antd";
 import { DownloadOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { useAuth } from "../../context/AuthContext";
 import { logAPI } from "../../api/modules";
@@ -34,6 +34,7 @@ function getLogoutReasonLabel(reason) {
     TIMEOUT: "超时结束",
     BROWSER_CLOSED: "页面关闭",
     FORCED: "强制退出",
+    RELOGIN: "重复登录",
   };
   return labels[reason] || reason || "-";
 }
@@ -64,6 +65,8 @@ export default function LoginLogs() {
       }
       setRecords(nextRecords);
       setTotal(nextTotal);
+    } catch (error) {
+      message.error(error?.message || "加载登录日志失败");
     } finally {
       setLoading(false);
     }
@@ -126,8 +129,13 @@ export default function LoginLogs() {
   );
 
   const handleSearch = (values) => {
+    const trimmedUserId = values.userId == null ? "" : String(values.userId).trim();
+    if (trimmedUserId && (!/^\d+$/.test(trimmedUserId) || Number(trimmedUserId) <= 0)) {
+      message.warning("用户 ID 必须为正整数");
+      return;
+    }
     const nextFilters = {
-      userId: values.userId ? Number(values.userId) : undefined,
+      userId: trimmedUserId ? Number(trimmedUserId) : undefined,
     };
     setQuery((prev) => ({ ...prev, page: 1, filters: nextFilters }));
   };
@@ -160,6 +168,8 @@ export default function LoginLogs() {
           item.createdAt ? new Date(item.createdAt).toLocaleString() : "",
         ])
       );
+    } catch (error) {
+      message.error(error?.message || "导出登录日志失败");
     } finally {
       setExporting(false);
     }

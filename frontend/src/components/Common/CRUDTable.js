@@ -33,6 +33,27 @@ function hasSearchValue(value) {
   return value !== undefined && value !== null && value !== "";
 }
 
+function filterDataRecords(records, values, normalizedSearchFields) {
+  if (!values || Object.keys(values).length === 0) {
+    return records;
+  }
+  const searchFieldMap = Object.fromEntries(normalizedSearchFields.map((field) => [field.name, field]));
+  return records.filter((item) =>
+    Object.entries(values).every(([key, value]) => {
+      if (!hasSearchValue(value)) {
+        return true;
+      }
+      const searchField = searchFieldMap[key];
+      if (typeof searchField?.filter === "function") {
+        return searchField.filter(item, value, values);
+      }
+      return String(item?.[key] ?? "")
+        .toLowerCase()
+        .includes(String(value).toLowerCase());
+    })
+  );
+}
+
 function isFieldVisible(field, context) {
   if (typeof field.visible === "function") {
     return field.visible(context) !== false;
@@ -76,6 +97,8 @@ export default function CRUDTable({
   const [editingRecord, setEditingRecord] = useState(null);
   const [viewingRecord, setViewingRecord] = useState(null);
   const [filteredData, setFilteredData] = useState(dataSource);
+  const [activeSearchValues, setActiveSearchValues] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
   const { currentUser } = useAuth();
   const [initialFormValues, setInitialFormValues] = useState({});
   const [modalInitKey, setModalInitKey] = useState(0);
@@ -103,8 +126,12 @@ export default function CRUDTable({
   const canEditData = formFields.length > 0 && (canCreate || canUpdate);
 
   useEffect(() => {
+    if (!serverPagination && activeSearchValues) {
+      setFilteredData(filterDataRecords(dataSource, activeSearchValues, normalizedSearchFields));
+      return;
+    }
     setFilteredData(dataSource);
-  }, [dataSource]);
+  }, [activeSearchValues, dataSource, normalizedSearchFields, serverPagination]);
 
   useEffect(() => {
     onFilteredDataChange?.(filteredData);
@@ -168,6 +195,10 @@ export default function CRUDTable({
   };
 
   const handleSubmit = async () => {
+    if (submitting) {
+      return;
+    }
+    setSubmitting(true);
     try {
       const rawValues = await form.validateFields();
       const values = transformValues(rawValues, editingRecord);
@@ -198,6 +229,8 @@ export default function CRUDTable({
         return;
       }
       message.error(error?.message || (editingRecord ? "保存失败" : "新增失败"));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -206,26 +239,13 @@ export default function CRUDTable({
       await serverPagination.onSearch(values);
       return;
     }
-    const searchFieldMap = Object.fromEntries(normalizedSearchFields.map((field) => [field.name, field]));
-    const filtered = dataSource.filter((item) =>
-      Object.entries(values).every(([key, value]) => {
-        if (!hasSearchValue(value)) {
-          return true;
-        }
-        const searchField = searchFieldMap[key];
-        if (typeof searchField?.filter === "function") {
-          return searchField.filter(item, value, values);
-        }
-        return String(item?.[key] ?? "")
-          .toLowerCase()
-          .includes(String(value).toLowerCase());
-      })
-    );
-    setFilteredData(filtered);
+    setActiveSearchValues(values);
+    setFilteredData(filterDataRecords(dataSource, values, normalizedSearchFields));
   };
 
   const handleResetSearch = async () => {
     searchForm.resetFields();
+    setActiveSearchValues(null);
     if (serverPagination?.onReset) {
       await serverPagination.onReset();
       return;
@@ -462,6 +482,9 @@ export default function CRUDTable({
           open={isModalVisible}
           afterOpenChange={handleModalAfterOpenChange}
           onCancel={() => {
+            if (submitting) {
+              return;
+            }
             setIsModalVisible(false);
             form.resetFields();
             onModalCancel?.();
@@ -481,7 +504,11 @@ export default function CRUDTable({
             ) : null,
             <Button
               key="cancel"
+              disabled={submitting}
               onClick={() => {
+                if (submitting) {
+                  return;
+                }
                 setIsModalVisible(false);
                 form.resetFields();
                 onModalCancel?.();
@@ -489,7 +516,7 @@ export default function CRUDTable({
             >
               取消
             </Button>,
-            <Button key="submit" type="primary" onClick={handleSubmit}>
+            <Button key="submit" type="primary" loading={submitting} disabled={submitting} onClick={handleSubmit}>
               {editingRecord ? "保存" : "创建"}
             </Button>,
           ].filter(Boolean)}

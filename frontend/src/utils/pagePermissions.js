@@ -17,7 +17,7 @@ export function resolvePagePermissions(pathname = "") {
   if (pathname.startsWith("/customer")) {
     return { manageAuthorities: ["customer.manage"], exportAuthorities: ["customer.access", "customer.manage"] };
   }
-  if (pathname.startsWith("/project/lists")) {
+  if (pathname.startsWith("/project/lists") || pathname.startsWith("/project/list-dashboard")) {
     return {
       manageAuthorities: ["project.list.entry", "project.manage"],
       exportAuthorities: ["project.access", "project.manage", "project.list.entry", "project.list.audit"],
@@ -32,7 +32,7 @@ export function resolvePagePermissions(pathname = "") {
   if (pathname.startsWith("/product")) {
     return { manageAuthorities: ["product.manage"], exportAuthorities: ["product.access", "product.manage"] };
   }
-  if (pathname.startsWith("/inventory/warehouse")) {
+  if (pathname === "/inventory/warehouse" || pathname.startsWith("/inventory/warehouse/")) {
     return {
       manageAuthorities: ["inventory.warehouse-doc.entry", "inventory.manage"],
       exportAuthorities: [

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Input, InputNumber, Switch, Tag } from "antd";
+import { Input, InputNumber, Switch, Tag, message } from "antd";
 import CRUDTable from "../../components/Common/CRUDTable";
 import { financeAPI } from "../../api/modules";
 
@@ -12,6 +12,8 @@ export default function TaxRateManagement() {
     try {
       const response = await financeAPI.getTaxRateDicts();
       setTaxRates(response.data || []);
+    } catch (error) {
+      message.error(error?.message || "加载税率字典失败");
     } finally {
       setLoading(false);
     }
@@ -46,7 +48,7 @@ export default function TaxRateManagement() {
           dataIndex: "rate",
           key: "rate",
           width: 120,
-          render: (value) => <Tag color="blue">{`${Number(value || 0) * 100}%`}</Tag>,
+          render: (value) => <Tag color="blue">{`${Number((Number(value || 0) * 100).toFixed(2))}%`}</Tag>,
         },
         { title: "标签", dataIndex: "label", key: "label", width: 160 },
         { title: "排序", dataIndex: "sortOrder", key: "sortOrder", width: 120 },

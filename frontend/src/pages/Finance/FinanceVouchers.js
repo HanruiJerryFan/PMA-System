@@ -61,6 +61,14 @@ function normalizeApiData(response) {
   return response?.data ?? response ?? [];
 }
 
+function formatTaxRateKey(rate) {
+  return Number(rate || 0).toFixed(2);
+}
+
+function formatTaxRatePercent(rate) {
+  return `${Number((Number(rate || 0) * 100).toFixed(2))}%`;
+}
+
 function normalizeApiEntity(response) {
   return response?.data ?? response ?? null;
 }
@@ -391,18 +399,27 @@ export default function FinanceVouchers() {
   const taxRateOptions = useMemo(
     () =>
       activeTaxRates.map((item) => ({
-        value: String(item.rate),
-        label: item.label || `${Number(item.rate || 0) * 100}%`,
+        value: formatTaxRateKey(item.rate),
+        label: item.label || formatTaxRatePercent(item.rate),
       })),
     [activeTaxRates]
+  );
+
+  const allTaxRateOptions = useMemo(
+    () =>
+      sortSelectItems(taxRates, ["sortOrder", "rate"]).map((item) => ({
+        value: formatTaxRateKey(item.rate),
+        label: item.label || formatTaxRatePercent(item.rate),
+      })),
+    [taxRates]
   );
 
   const taxRateLabelMap = useMemo(
     () =>
       Object.fromEntries(
         taxRates.map((item) => [
-          Number(item.rate).toFixed(2),
-          item.label || `${Number(item.rate || 0) * 100}%`,
+          formatTaxRateKey(item.rate),
+          item.label || formatTaxRatePercent(item.rate),
         ])
       ),
     [taxRates]
@@ -423,7 +440,7 @@ export default function FinanceVouchers() {
           INVOICE_STATUS_OPTIONS.find((option) => option.value === item.invoiceStatus)?.label || item.invoiceStatus;
         const invoiceTypeLabel =
           INVOICE_TYPE_OPTIONS.find((option) => option.value === item.invoiceType)?.label || item.invoiceType;
-        const taxRateLabel = taxRateLabelMap[Number(item.taxRate || 0).toFixed(2)] || item.taxRate;
+        const taxRateLabel = taxRateLabelMap[formatTaxRateKey(item.taxRate)] || formatTaxRatePercent(item.taxRate);
         const receivablePayableInfo = calculateReceivablePayableInfo(item);
         const occurredOnLabel = item.occurredOn ? dayjs(item.occurredOn).format("YYYY-MM-DD") : "-";
         const invoiceAmountLabel = item.invoiceAmount == null ? "-" : formatAmount(item.invoiceAmount);
@@ -482,14 +499,17 @@ export default function FinanceVouchers() {
     () =>
       filteredVisibleVouchers.reduce(
         (accumulator, item) => {
+          const completed = Boolean(item.isCompleted);
           const bookedAmount = Number(item.bookedAmount || 0);
-          accumulator.income += Number(item.actualIncomeAmount || 0);
-          accumulator.expense += Number(item.actualExpenseAmount || 0);
-          if (item.transactionDirection === "RECEIVE") {
-            accumulator.incomeBooked += bookedAmount;
-          }
-          if (item.transactionDirection === "PAY") {
-            accumulator.expenseBooked += Math.abs(bookedAmount);
+          if (completed) {
+            accumulator.income += Number(item.actualIncomeAmount || 0);
+            accumulator.expense += Number(item.actualExpenseAmount || 0);
+            if (item.transactionDirection === "RECEIVE") {
+              accumulator.incomeBooked += bookedAmount;
+            }
+            if (item.transactionDirection === "PAY") {
+              accumulator.expenseBooked += bookedAmount;
+            }
           }
           accumulator.pending += item.isCompleted ? 0 : 1;
           const excludesNotInvoicedCount =
@@ -562,24 +582,38 @@ export default function FinanceVouchers() {
     try {
       const response = await financeAPI.getFinanceVouchers();
       setVouchers(normalizeApiData(response));
+    } catch (error) {
+      message.error(error?.message || "加载财务凭证失败");
     } finally {
       setLoading(false);
     }
   };
 
   const fetchProjects = async () => {
-    const response = await projectAPI.getProjectOptions();
-    setProjects(normalizeApiData(response));
+    try {
+      const response = await projectAPI.getProjectOptions();
+      setProjects(normalizeApiData(response));
+    } catch (error) {
+      message.error(error?.message || "加载项目列表失败");
+    }
   };
 
   const fetchCustomers = async () => {
-    const response = await customerAPI.getCustomerOptions();
-    setCustomers(normalizeApiData(response));
+    try {
+      const response = await customerAPI.getCustomerOptions();
+      setCustomers(normalizeApiData(response));
+    } catch (error) {
+      message.error(error?.message || "加载客户列表失败");
+    }
   };
 
   const fetchTaxRates = async () => {
-    const response = await financeAPI.getTaxRateDicts();
-    setTaxRates(normalizeApiData(response));
+    try {
+      const response = await financeAPI.getTaxRateDicts();
+      setTaxRates(normalizeApiData(response));
+    } catch (error) {
+      message.error(error?.message || "加载税率字典失败");
+    }
   };
 
   const fetchSubjects = async () => {
@@ -612,7 +646,13 @@ export default function FinanceVouchers() {
     const createdResponse = await financeAPI.createFinanceVoucher(values);
     const createdVoucher = normalizeApiEntity(createdResponse);
     if (pendingVoucherAttachmentFiles.length && createdVoucher?.uuid) {
-      await uploadBusinessAttachments("finance-vouchers", createdVoucher.uuid, pendingVoucherAttachmentFiles);
+      try {
+        await uploadBusinessAttachments("finance-vouchers", createdVoucher.uuid, pendingVoucherAttachmentFiles);
+      } catch (attachmentError) {
+        message.warning(
+          `财务凭证已创建，但票据附件上传失败：${attachmentError?.message || "请前往编辑或附件中心补传"}`
+        );
+      }
     }
     await fetchVouchers();
     return createdVoucher;
@@ -621,7 +661,13 @@ export default function FinanceVouchers() {
   const handleUpdate = async (uuid, values) => {
     const updatedResponse = await financeAPI.updateFinanceVoucher(uuid, values);
     if (pendingVoucherAttachmentFiles.length) {
-      await uploadBusinessAttachments("finance-vouchers", uuid, pendingVoucherAttachmentFiles);
+      try {
+        await uploadBusinessAttachments("finance-vouchers", uuid, pendingVoucherAttachmentFiles);
+      } catch (attachmentError) {
+        message.warning(
+          `财务凭证已保存，但新增附件上传失败：${attachmentError?.message || "请重试或前往附件中心补传"}`
+        );
+      }
     }
     await fetchVouchers();
     return normalizeApiEntity(updatedResponse);
@@ -637,9 +683,13 @@ export default function FinanceVouchers() {
       message.error("没有审核财务凭证的权限");
       return;
     }
-    await financeAPI.auditFinanceVoucher(uuid);
-    message.success("财务凭证已审核");
-    await fetchVouchers();
+    try {
+      await financeAPI.auditFinanceVoucher(uuid);
+      message.success("财务凭证已审核");
+      await fetchVouchers();
+    } catch (error) {
+      message.error(error?.message || "审核财务凭证失败");
+    }
   };
 
   const openAttachments = (uuid) => {
@@ -708,14 +758,15 @@ export default function FinanceVouchers() {
       return;
     }
 
-    const incomeTotal = exportRows.reduce((sum, item) => sum + Number(item.actualIncomeAmount || 0), 0);
-    const expenseTotal = exportRows.reduce((sum, item) => sum + Number(item.actualExpenseAmount || 0), 0);
-    const incomeBookedTotal = exportRows.reduce(
+    const completedRows = exportRows.filter((item) => Boolean(item.isCompleted));
+    const incomeTotal = completedRows.reduce((sum, item) => sum + Number(item.actualIncomeAmount || 0), 0);
+    const expenseTotal = completedRows.reduce((sum, item) => sum + Number(item.actualExpenseAmount || 0), 0);
+    const incomeBookedTotal = completedRows.reduce(
       (sum, item) => sum + (item.transactionDirection === "RECEIVE" ? Number(item.bookedAmount || 0) : 0),
       0
     );
-    const expenseBookedTotal = exportRows.reduce(
-      (sum, item) => sum + (item.transactionDirection === "PAY" ? Math.abs(Number(item.bookedAmount || 0)) : 0),
+    const expenseBookedTotal = completedRows.reduce(
+      (sum, item) => sum + (item.transactionDirection === "PAY" ? Number(item.bookedAmount || 0) : 0),
       0
     );
     const payableAmountTotal = exportRows.reduce((sum, item) => sum + calculatePayableAmount(item), 0);
@@ -1057,14 +1108,11 @@ export default function FinanceVouchers() {
             label: "税率",
             component: (
               <Select placeholder="筛选税率" allowClear showSearch optionFilterProp="children">
-                {activeTaxRates.map((item) => {
-                  const label = item.label || `${Number(item.rate || 0) * 100}%`;
-                  return (
-                    <Option key={item.id || item.rate} value={label}>
-                      {label}
-                    </Option>
-                  );
-                })}
+                {allTaxRateOptions.map((item) => (
+                  <Option key={item.value} value={item.label}>
+                    {item.label}
+                  </Option>
+                ))}
               </Select>
             ),
           },
@@ -1169,6 +1217,7 @@ export default function FinanceVouchers() {
         ]}
         mapRecordToFormValues={(record) => ({
           ...record,
+          taxRate: record.taxRate == null ? undefined : formatTaxRateKey(record.taxRate),
           counterpartyCustomerId:
             record.counterpartyCustomerId ||
             customerNameToUuidMap[record.counterpartyNameSnapshot] ||
@@ -1308,15 +1357,29 @@ export default function FinanceVouchers() {
             name: "taxRate",
             label: "税率",
             rules: [{ required: true, message: "请选择税率" }],
-            component: (
-              <Select placeholder="请选择税率">
-                {taxRateOptions.map((item) => (
-                  <Option key={item.value} value={item.value}>
-                    {item.label}
-                  </Option>
-                ))}
-              </Select>
-            ),
+            component: ({ editingRecord }) => {
+              const editingRateKey =
+                editingRecord?.taxRate != null ? formatTaxRateKey(editingRecord.taxRate) : null;
+              const options =
+                editingRateKey && !taxRateOptions.some((opt) => opt.value === editingRateKey)
+                  ? [
+                      ...taxRateOptions,
+                      {
+                        value: editingRateKey,
+                        label: `${taxRateLabelMap[editingRateKey] || formatTaxRatePercent(editingRateKey)}（已停用）`,
+                      },
+                    ]
+                  : taxRateOptions;
+              return (
+                <Select placeholder="请选择税率">
+                  {options.map((item) => (
+                    <Option key={item.value} value={item.value}>
+                      {item.label}
+                    </Option>
+                  ))}
+                </Select>
+              );
+            },
           },
           {
             name: "counterpartyCustomerId",
@@ -1379,6 +1442,7 @@ export default function FinanceVouchers() {
           {
             name: "isCompleted",
             label: "完成状态",
+            getDefaultValue: () => false,
             rules: [{ required: true, message: "请选择完成状态" }],
             valuePropName: "checked",
             component: <Switch checkedChildren="是" unCheckedChildren="否" />,
