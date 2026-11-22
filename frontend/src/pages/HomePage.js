@@ -216,6 +216,18 @@ export default function HomePage() {
     if (permissions.canViewLogs) {
       items.push({ label: "登录日志", route: "/logs/login" });
     }
+    if (
+      hasAnyAuthority(currentUser, [
+        "project.access",
+        "project.manage",
+        "finance.access",
+        "finance.manage",
+        "inventory.access",
+        "inventory.manage",
+      ])
+    ) {
+      items.push({ label: "智能经营分析", route: "/analytics/ai" });
+    }
     return items.slice(0, 8);
   }, [currentUser, permissions]);
 

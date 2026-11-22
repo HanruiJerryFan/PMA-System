@@ -12,6 +12,7 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   ProjectOutlined,
+  RobotOutlined,
   SafetyOutlined,
   ShoppingOutlined,
   TeamOutlined,
@@ -97,6 +98,20 @@ export default function Sidebar() {
           "inventory.manage",
           "finance.voucher.audit",
           "finance.manage",
+        ],
+      },
+      {
+        key: "/analytics/ai",
+        icon: <RobotOutlined />,
+        label: "智能分析",
+        onClick: () => navigate("/analytics/ai"),
+        requiredAuthorities: [
+          "project.access",
+          "project.manage",
+          "finance.access",
+          "finance.manage",
+          "inventory.access",
+          "inventory.manage",
         ],
       },
       {

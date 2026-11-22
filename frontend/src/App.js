@@ -27,6 +27,7 @@ import ProjectTrackingBoard from "./pages/Project/ProjectTrackingBoard";
 import ProjectMaterialReconciliation from "./pages/Project/ProjectMaterialReconciliation";
 import ApprovalWorkbench from "./pages/Approval/ApprovalWorkbench";
 import FinanceAnalytics from "./pages/Finance/FinanceAnalytics";
+import AiAnalytics from "./pages/Analytics/AiAnalytics";
 import ProjectDashboard from "./pages/Project/ProjectDashboard";
 import ProjectListDashboard from "./pages/Project/ProjectListDashboard";
 import ProjectTypes from "./pages/Project/ProjectTypes";
@@ -112,6 +113,23 @@ function AppContent() {
                     ]}
                   >
                     <ApprovalWorkbench />
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/analytics/ai"
+                element={
+                  <PrivateRoute
+                    requiredAuthorities={[
+                      "project.access",
+                      "project.manage",
+                      "finance.access",
+                      "finance.manage",
+                      "inventory.access",
+                      "inventory.manage",
+                    ]}
+                  >
+                    <AiAnalytics />
                   </PrivateRoute>
                 }
               />

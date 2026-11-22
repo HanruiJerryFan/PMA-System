@@ -225,6 +225,15 @@ public class SecurityConfig {
                                 "finance.voucher.audit",
                                 "finance.manage"
                         )
+                        .requestMatchers("/api/ai/**")
+                        .hasAnyAuthority(
+                                "project.access",
+                                "project.manage",
+                                "finance.access",
+                                "finance.manage",
+                                "inventory.access",
+                                "inventory.manage"
+                        )
                         .requestMatchers(HttpMethod.GET, "/api/tax-rate-dicts/**")
                         .hasAnyAuthority("finance.access", "finance.manage", "finance.voucher.entry", "finance.voucher.audit")
                         .requestMatchers(HttpMethod.GET, "/api/finance-subjects/**")

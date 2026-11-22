@@ -278,3 +278,10 @@ export const exportAPI = {
 export const approvalAPI = {
   getPendingApprovals: () => api.get("/approvals/pending"),
 };
+
+export const aiAPI = {
+  getStatus: () => api.get("/ai/status"),
+  generateBriefing: (projectUuid) =>
+    api.post("/ai/briefing", projectUuid ? { projectUuid } : {}),
+  ask: (data) => api.post("/ai/ask", data),
+};
