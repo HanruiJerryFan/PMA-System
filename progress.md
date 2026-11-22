@@ -321,3 +321,34 @@
 - 后端离线 H2+MyBatis 单元测试：**19 个测试类 / 81 项测试全部通过**（0 失败，0 跳过）。
 - 前端 Jest 单元测试：**9 个测试套件 / 32 项测试全部通过**（0 失败）。
 - 前端生产构建：`npm run build` 编译成功，0 错误，0 ESLint 警告。
+
+---
+
+## V1.2.1 权限控制与安全防线深度加固（阶段 H）
+
+### 1. 会话状态与实时鉴权
+- **非激活/已删除用户实时拦截与权限热同步**（`CustomUserDetailsService`、`PasswordChangeRequiredFilter`、`AuthController`）：
+  - 提取 `CustomUserDetailsService.loadAuthorities`，`PasswordChangeRequiredFilter` 每次受保护 API 请求实时校验用户仍处于 `ACTIVE` 状态，禁用/关闭/删除用户立即销毁 `HttpSession` 并返回 `401`。
+  - 当数据库中的角色/权限变更时，自动同步刷新 `SecurityContextHolder` 与 Session 中的 `SPRING_SECURITY_CONTEXT`，实现角色/权限实时生效；同步校验 `/api/auth/heartbeat` 与 `/api/auth/me`，并将心跳与 `/me` 纳入强制改密白名单避免误拦。
+
+### 2. 单据审批职责分离（SoD）与特权保护
+- **移除硬编码角色名绕过并落库防自审与防篡改**（`CurrentUserServiceImpl`、`EntryAuditServiceImpl`、`WarehouseDocumentServiceImpl`、`FinanceVoucherServiceImpl`、`ProjectListServiceImpl`、`ProjectListItemServiceImpl`）：
+  - 移除 `ROLE_System` / `ROLE_管理员` 硬编码特权判断，统一收敛为内置 `System` 账号或明确权限码 `document.entry-audit.manage`。
+  - 后端强制阻止重复审核覆盖审核人、阻止无特权的录入人审核自己录入的单据、锁定已审核单据的修改与删除（修复 `WarehouseDocumentServiceImpl.audit` 此前未查询 `entryUser` / `auditorUser` 的问题）。
+- **防止权限管理提权与误删内置 `System` 实体**（`SysUserServiceImpl`、`SysRoleServiceImpl`、`SysUserRoleServiceImpl`、`SysRolePermissionServiceImpl`、`SysRoleController`、`SysPermissionController`）：
+  - 禁止非 `System` 账号修改、禁用、删除或重置 `System` 用户密码，禁止修改或删除 `System` 角色，禁止当前用户自禁用、自删或自改角色，禁止分配/回收超出当前账号自身权限范围的角色或权限项。
+  - 新增 `/api/roles/options` 与 `/api/permissions/options` 选项接口，彻底解耦角色分配页与权限项管理页之间的跨权请求。
+
+### 3. 附件按模块隔离、日志防篡改与前后端一致性修复
+- **附件模块归属鉴权**（`AttachmentController`、`GlobalExceptionHandler`、`AttachmentCenter.js`）：按 `businessType` 严格校验并过滤对应业务模块访问/操作权限，统一 `AccessDeniedException` 返回 HTTP `403`。
+- **认证与日志纵深加固**（`SecurityConfig`、`LoginRecordController`、`SystemConfigServiceImpl`、`SystemConfigController`、`application.properties`）：
+  - 移除 `.httpBasic()` 与无效 `/api/admin/**` 规则，显式配置 `HttpStatusEntryPoint(401)` 与 Session Cookie `http-only` + `same-site=lax`。
+  - 下线 `POST / PUT /api/login-logs`，并在路由层 `.denyAll()` 禁止外部写删登录日志与审计日志；校验 `system_config` 路径类配置防目录穿越并补全审计记录。
+  - 补全 `/options` 与 `/api/pdf-exports/**` 对 `*.manage` / `*.entry` / `*.audit` / `logs.*` / `product.access` 的对齐放行。
+- **前端路由、菜单与页面权限对齐**（`App.js`、`Sidebar.js`、`HomePage.js`、`pagePermissions.js`、`entryAudit.js`、`CRUDTable.js`、`ApprovalWorkbench.js` 等）：
+  - 全站补齐 `*.manage` 自动包含查看与导出权限，释放 `product.access` 对物料主数据与价格管理页面的只读访问，`CRUDTable` 与各审核单据页面同步落实自审禁用与已审锁定提示。
+
+### 4. 阶段 H 验证结果
+- 后端离线单元测试（筛选 `service.impl.*`、`mapper.*`、`controller.*`、`config.*`，未包含依赖外部 MySQL 的 `SalesmanagementApplicationTests`）：**20 个测试类 / 89 项测试全部通过**（0 失败，0 错误，0 跳过）。
+- 前端 Jest 单元测试：**10 个测试套件 / 35 项测试全部通过**（0 失败）。
+- 前端生产构建：`npm run build` 编译成功，0 错误，0 ESLint 警告。
