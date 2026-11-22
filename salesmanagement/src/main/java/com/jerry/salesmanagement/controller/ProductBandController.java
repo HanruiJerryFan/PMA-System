@@ -2,6 +2,7 @@ package com.jerry.salesmanagement.controller;
 
 import com.jerry.salesmanagement.common.ApiResponse;
 import com.jerry.salesmanagement.pojo.ProductBand;
+import com.jerry.salesmanagement.service.AuditTrailService;
 import com.jerry.salesmanagement.service.ProductBandService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -14,6 +15,9 @@ public class ProductBandController {
 
     @Autowired
     private ProductBandService service;
+
+    @Autowired(required = false)
+    private AuditTrailService auditTrailService;
 
     @GetMapping
     public ApiResponse<List<ProductBand>> getAll() {
@@ -29,7 +33,11 @@ public class ProductBandController {
     @PostMapping
     public ApiResponse<ProductBand> create(@RequestBody ProductBand item) {
         try {
-            return ApiResponse.success("Created successfully", service.create(item));
+            ProductBand created = service.create(item);
+            if (auditTrailService != null && created != null) {
+                auditTrailService.record("material-band-dicts", "CREATE", "material-band-dicts", String.valueOf(created.getId()), "Created material band");
+            }
+            return ApiResponse.success("Created successfully", created);
         } catch (Exception e) {
             return ApiResponse.error("Failed to create band: " + e.getMessage());
         }
@@ -39,7 +47,11 @@ public class ProductBandController {
     public ApiResponse<ProductBand> update(@PathVariable Long id, @RequestBody ProductBand item) {
         try {
             item.setId(id);
-            return ApiResponse.success("Updated successfully", service.update(item));
+            ProductBand updated = service.update(item);
+            if (auditTrailService != null) {
+                auditTrailService.record("material-band-dicts", "UPDATE", "material-band-dicts", String.valueOf(id), "Updated material band");
+            }
+            return ApiResponse.success("Updated successfully", updated);
         } catch (Exception e) {
             return ApiResponse.error("Failed to update band: " + e.getMessage());
         }
@@ -49,6 +61,9 @@ public class ProductBandController {
     public ApiResponse<Void> delete(@PathVariable Long id) {
         try {
             service.delete(id);
+            if (auditTrailService != null) {
+                auditTrailService.record("material-band-dicts", "DELETE", "material-band-dicts", String.valueOf(id), "Deleted material band");
+            }
             return ApiResponse.success("Deleted successfully", null);
         } catch (Exception e) {
             return ApiResponse.error("Failed to delete band: " + e.getMessage());

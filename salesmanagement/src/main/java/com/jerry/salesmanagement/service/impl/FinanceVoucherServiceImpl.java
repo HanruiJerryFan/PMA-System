@@ -8,6 +8,7 @@ import com.jerry.salesmanagement.pojo.Customer;
 import com.jerry.salesmanagement.pojo.FinanceVoucher;
 import com.jerry.salesmanagement.pojo.FinanceSubject;
 import com.jerry.salesmanagement.pojo.TaxRateDict;
+import com.jerry.salesmanagement.service.AttachmentService;
 import com.jerry.salesmanagement.service.CodeSequenceService;
 import com.jerry.salesmanagement.service.CurrentUserService;
 import com.jerry.salesmanagement.service.CustomerService;
@@ -69,6 +70,9 @@ public class FinanceVoucherServiceImpl implements FinanceVoucherService {
     @Autowired
     private FinanceSubjectService financeSubjectService;
 
+    @Autowired(required = false)
+    private AttachmentService attachmentService;
+
     @Override
     public FinanceVoucher getByUuid(String uuid) {
         return mapper.selectByUuid(uuid);
@@ -91,7 +95,7 @@ public class FinanceVoucherServiceImpl implements FinanceVoucherService {
         if (!StringUtils.hasText(voucher.getVoucherNo())) {
             voucher.setVoucherNo(generateVoucherNo(voucher.getOccurredOn()));
         }
-        validateVoucher(voucher);
+        validateVoucher(voucher, null);
         voucher.setBookedAmount(calculateBookedAmount(voucher));
         mapper.insert(voucher);
         customerService.touchActivity(voucher.getCounterpartyCustomerId());
@@ -110,12 +114,10 @@ public class FinanceVoucherServiceImpl implements FinanceVoucherService {
         } else if (!voucher.getOccurredOn().equals(existing.getOccurredOn())) {
             throw new IllegalArgumentException("Occurred date cannot be changed");
         }
-        if (!StringUtils.hasText(voucher.getVoucherNo())) {
-            voucher.setVoucherNo(existing.getVoucherNo());
-        }
+        voucher.setVoucherNo(existing.getVoucherNo());
         entryAuditService.applyUpdate(voucher, existing);
         voucher.setUpdatedBy(currentUserService.requireCurrentUserId());
-        validateVoucher(voucher);
+        validateVoucher(voucher, existing);
         voucher.setBookedAmount(calculateBookedAmount(voucher));
         mapper.updateByUuid(voucher);
         customerService.touchActivity(voucher.getCounterpartyCustomerId());
@@ -147,22 +149,34 @@ public class FinanceVoucherServiceImpl implements FinanceVoucherService {
         String voucherNo = existing.getVoucherNo();
         if (!StringUtils.hasText(voucherNo) || !VOUCHER_NO_PATTERN.matcher(voucherNo).matches()) {
             mapper.deleteByUuid(uuid);
+            if (attachmentService != null) {
+                attachmentService.deleteByBusiness("finance-vouchers", uuid);
+            }
             return;
         }
         String monthPrefix = voucherNo.substring(0, 6);
         codeSequenceService.deleteAndReclaimTail("finance_voucher:" + monthPrefix,
                 () -> mapper.deleteByUuid(uuid),
                 () -> mapper.selectMaxVoucherSequenceByMonthPrefixForUpdate(monthPrefix));
+        if (attachmentService != null) {
+            attachmentService.deleteByBusiness("finance-vouchers", uuid);
+        }
     }
 
-    private void validateVoucher(FinanceVoucher voucher) {
+    private void validateVoucher(FinanceVoucher voucher, FinanceVoucher existing) {
         if (voucher.getOccurredOn() == null) {
             throw new IllegalArgumentException("Occurred date is required");
         }
-        if (!StringUtils.hasText(voucher.getVoucherNo()) || !VOUCHER_NO_PATTERN.matcher(voucher.getVoucherNo()).matches()) {
+        String normalizedVoucherNo = voucher.getVoucherNo() == null ? null : voucher.getVoucherNo().trim();
+        if (!StringUtils.hasText(normalizedVoucherNo) || !VOUCHER_NO_PATTERN.matcher(normalizedVoucherNo).matches()) {
             throw new IllegalArgumentException("Voucher number must be 10 digits");
         }
-        FinanceVoucher existingByVoucherNo = mapper.selectByVoucherNo(voucher.getVoucherNo().trim());
+        String expectedDatePrefix = voucher.getOccurredOn().format(VOUCHER_DAY_FORMATTER);
+        if (!normalizedVoucherNo.startsWith(expectedDatePrefix)) {
+            throw new IllegalArgumentException("Voucher number date prefix does not match occurred date");
+        }
+        voucher.setVoucherNo(normalizedVoucherNo);
+        FinanceVoucher existingByVoucherNo = mapper.selectByVoucherNo(normalizedVoucherNo);
         if (existingByVoucherNo != null && !sameVoucher(existingByVoucherNo, voucher)) {
             throw new IllegalArgumentException("Voucher number already exists");
         }
@@ -189,7 +203,10 @@ public class FinanceVoucherServiceImpl implements FinanceVoucherService {
         }
         BigDecimal normalizedTaxRate = voucher.getTaxRate().setScale(2, RoundingMode.HALF_UP);
         TaxRateDict taxRateDict = taxRateDictMapper.selectByRate(normalizedTaxRate);
-        if (taxRateDict == null || !Boolean.TRUE.equals(taxRateDict.getIsActive())) {
+        boolean unchangedDisabledRate = existing != null
+                && existing.getTaxRate() != null
+                && existing.getTaxRate().setScale(2, RoundingMode.HALF_UP).compareTo(normalizedTaxRate) == 0;
+        if (taxRateDict == null || (!Boolean.TRUE.equals(taxRateDict.getIsActive()) && !unchangedDisabledRate)) {
             throw new IllegalArgumentException("Tax rate is invalid");
         }
         voucher.setTaxRate(normalizedTaxRate);
@@ -251,6 +268,12 @@ public class FinanceVoucherServiceImpl implements FinanceVoucherService {
         if ("PAY".equals(voucher.getTransactionDirection()) && income.compareTo(BigDecimal.ZERO) > 0) {
             throw new IllegalArgumentException("Pay vouchers cannot set a positive income amount");
         }
+        if ("RECEIVE".equals(voucher.getTransactionDirection())) {
+            voucher.setActualExpenseAmount(null);
+        } else {
+            voucher.setActualIncomeAmount(null);
+        }
+        voucher.setRemark(StringUtils.hasText(voucher.getRemark()) ? voucher.getRemark().trim() : null);
     }
 
     private BigDecimal calculateBookedAmount(FinanceVoucher voucher) {

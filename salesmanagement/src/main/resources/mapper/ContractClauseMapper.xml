@@ -51,8 +51,8 @@
         <set>
             <if test="contractBasicInfoId != null">contract_basic_info_id = #{contractBasicInfoId},</if>
             <if test="clauseTypeId != null">clause_type_id = #{clauseTypeId},</if>
-            <if test="clauseDescription != null">clause_description = #{clauseDescription},</if>
-            <if test="clauseAmount != null">clause_amount = #{clauseAmount},</if>
+            clause_description = #{clauseDescription},
+            clause_amount = #{clauseAmount},
         </set>
         WHERE uuid = #{uuid}
     </update>

@@ -8,6 +8,7 @@ import com.jerry.salesmanagement.service.CustomerActivityRuleService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
@@ -15,6 +16,7 @@ import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 @Service
@@ -39,6 +41,7 @@ public class CustomerActivityRuleServiceImpl implements CustomerActivityRuleServ
     }
 
     @Override
+    @Transactional
     public CustomerActivityRule create(CustomerActivityRule rule) {
         validate(rule);
         mapper.insert(rule);
@@ -46,40 +49,56 @@ public class CustomerActivityRuleServiceImpl implements CustomerActivityRuleServ
     }
 
     @Override
+    @Transactional
     public CustomerActivityRule update(CustomerActivityRule rule) {
+        if (rule.getId() == null || mapper.selectById(rule.getId()) == null) {
+            throw new IllegalArgumentException("Activity rule does not exist");
+        }
         validate(rule);
         mapper.update(rule);
-        return rule;
+        CustomerActivityRule updated = mapper.selectById(rule.getId());
+        return updated != null ? updated : rule;
     }
 
     @Override
+    @Transactional
     public void delete(Long id) {
         mapper.deleteById(id);
     }
 
     @Override
     public String resolveStatusByIdleDays(Integer idleDays) {
-        int normalizedIdleDays = idleDays == null ? Integer.MAX_VALUE : Math.max(idleDays, 0);
-        return mapper.selectAll().stream()
-                .filter(rule -> Boolean.TRUE.equals(rule.getIsActive()))
-                .sorted(Comparator.comparing(CustomerActivityRule::getSortOrder))
-                .filter(rule -> inRange(normalizedIdleDays, rule))
-                .map(CustomerActivityRule::getStatusCode)
-                .findFirst()
-                .orElse("DORMANT");
+        return resolveStatusByIdleDays(idleDays, loadActiveSortedRules());
     }
 
     @Override
     public int refreshAllCustomerActivityStatuses() {
+        List<CustomerActivityRule> activeRules = loadActiveSortedRules();
         int updated = 0;
         for (Customer customer : customerMapper.selectAll()) {
-            String nextStatus = resolveStatusByIdleDays(calculateIdleDays(customer));
+            String nextStatus = resolveStatusByIdleDays(calculateIdleDays(customer), activeRules);
             if (!nextStatus.equals(customer.getActivityStatus())) {
                 customerMapper.updateActivityStatusByUuid(customer.getUuid(), nextStatus);
                 updated++;
             }
         }
         return updated;
+    }
+
+    private List<CustomerActivityRule> loadActiveSortedRules() {
+        return mapper.selectAll().stream()
+                .filter(rule -> Boolean.TRUE.equals(rule.getIsActive()))
+                .sorted(Comparator.comparing(CustomerActivityRule::getSortOrder))
+                .toList();
+    }
+
+    private String resolveStatusByIdleDays(Integer idleDays, List<CustomerActivityRule> activeRules) {
+        int normalizedIdleDays = idleDays == null ? Integer.MAX_VALUE : Math.max(idleDays, 0);
+        return activeRules.stream()
+                .filter(rule -> inRange(normalizedIdleDays, rule))
+                .map(CustomerActivityRule::getStatusCode)
+                .findFirst()
+                .orElse("DORMANT");
     }
 
     @Scheduled(cron = "0 0 2 * * *")
@@ -122,8 +141,22 @@ public class CustomerActivityRuleServiceImpl implements CustomerActivityRuleServ
             throw new IllegalArgumentException("Active flag is required");
         }
         CustomerActivityRule existing = mapper.selectByStatusCode(rule.getStatusCode());
-        if (existing != null && !existing.getId().equals(rule.getId())) {
+        if (existing != null && !Objects.equals(existing.getId(), rule.getId())) {
             throw new IllegalArgumentException("Status code already exists");
+        }
+        if (Boolean.TRUE.equals(rule.getIsActive())) {
+            int min = rule.getMinIdleDays();
+            int max = rule.getMaxIdleDays() == null ? Integer.MAX_VALUE : rule.getMaxIdleDays();
+            for (CustomerActivityRule other : mapper.selectAll()) {
+                if (Objects.equals(other.getId(), rule.getId()) || !Boolean.TRUE.equals(other.getIsActive())) {
+                    continue;
+                }
+                int otherMin = other.getMinIdleDays() == null ? 0 : other.getMinIdleDays();
+                int otherMax = other.getMaxIdleDays() == null ? Integer.MAX_VALUE : other.getMaxIdleDays();
+                if (min <= otherMax && otherMin <= max) {
+                    throw new IllegalArgumentException("Active rule idle day ranges cannot overlap");
+                }
+            }
         }
     }
 }

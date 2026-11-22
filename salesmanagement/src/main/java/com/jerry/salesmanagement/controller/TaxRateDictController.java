@@ -2,6 +2,7 @@ package com.jerry.salesmanagement.controller;
 
 import com.jerry.salesmanagement.common.ApiResponse;
 import com.jerry.salesmanagement.pojo.TaxRateDict;
+import com.jerry.salesmanagement.service.AuditTrailService;
 import com.jerry.salesmanagement.service.TaxRateDictService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -14,6 +15,9 @@ public class TaxRateDictController {
 
     @Autowired
     private TaxRateDictService taxRateDictService;
+
+    @Autowired(required = false)
+    private AuditTrailService auditTrailService;
 
     @GetMapping
     public ApiResponse<List<TaxRateDict>> getAll() {
@@ -29,7 +33,11 @@ public class TaxRateDictController {
     @PostMapping
     public ApiResponse<TaxRateDict> create(@RequestBody TaxRateDict taxRateDict) {
         try {
-            return ApiResponse.success("Tax rate created", taxRateDictService.create(taxRateDict));
+            TaxRateDict created = taxRateDictService.create(taxRateDict);
+            if (auditTrailService != null && created != null) {
+                auditTrailService.record("tax-rate-dicts", "CREATE", "tax-rate-dicts", String.valueOf(created.getId()), "Created tax rate");
+            }
+            return ApiResponse.success("Tax rate created", created);
         } catch (Exception e) {
             return ApiResponse.error("Failed to create tax rate: " + e.getMessage());
         }
@@ -39,7 +47,11 @@ public class TaxRateDictController {
     public ApiResponse<TaxRateDict> update(@PathVariable Long id, @RequestBody TaxRateDict taxRateDict) {
         try {
             taxRateDict.setId(id);
-            return ApiResponse.success("Tax rate updated", taxRateDictService.update(taxRateDict));
+            TaxRateDict updated = taxRateDictService.update(taxRateDict);
+            if (auditTrailService != null) {
+                auditTrailService.record("tax-rate-dicts", "UPDATE", "tax-rate-dicts", String.valueOf(id), "Updated tax rate");
+            }
+            return ApiResponse.success("Tax rate updated", updated);
         } catch (Exception e) {
             return ApiResponse.error("Failed to update tax rate: " + e.getMessage());
         }
@@ -49,6 +61,9 @@ public class TaxRateDictController {
     public ApiResponse<Void> delete(@PathVariable Long id) {
         try {
             taxRateDictService.delete(id);
+            if (auditTrailService != null) {
+                auditTrailService.record("tax-rate-dicts", "DELETE", "tax-rate-dicts", String.valueOf(id), "Deleted tax rate");
+            }
             return ApiResponse.success("Tax rate deleted", null);
         } catch (Exception e) {
             return ApiResponse.error("Failed to delete tax rate: " + e.getMessage());

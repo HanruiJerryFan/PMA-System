@@ -15,26 +15,36 @@ import com.jerry.salesmanagement.pojo.dto.ExcelImportError;
 import com.jerry.salesmanagement.pojo.dto.ExcelImportResult;
 import com.jerry.salesmanagement.pojo.dto.PageResult;
 import com.jerry.salesmanagement.service.CodeSequenceService;
+import com.jerry.salesmanagement.service.CurrentUserService;
 import com.jerry.salesmanagement.service.MaterialMasterService;
 import com.jerry.salesmanagement.service.SystemConfigService;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.FormulaEvaluator;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -51,6 +61,7 @@ public class MaterialMasterServiceImpl implements MaterialMasterService {
     private static final int DEFAULT_SEQUENCE_LENGTH = 3;
     private static final String DEFAULT_SEQUENCE_SCOPE = "CATEGORY_SUBCATEGORY_BRAND";
     private static final Pattern TOKEN_PATTERN = Pattern.compile("\\{(category|subcategory|brand|sequence|band)\\}");
+    private static final Pattern ALPHANUMERIC_CODE_PATTERN = Pattern.compile("^[A-Z0-9]+$");
     private static final Map<String, String> HEADER_ALIASES = Map.ofEntries(
             Map.entry("名称", "name"),
             Map.entry("物料名称", "name"),
@@ -100,6 +111,12 @@ public class MaterialMasterServiceImpl implements MaterialMasterService {
     @Autowired(required = false)
     private ReferenceCheckMapper referenceCheckMapper;
 
+    @Autowired(required = false)
+    private CurrentUserService currentUserService;
+
+    @Autowired(required = false)
+    private PlatformTransactionManager transactionManager;
+
     @Override
     public List<MaterialMaster> getAll() {
         return materialMasterMapper.selectAll();
@@ -132,9 +149,12 @@ public class MaterialMasterServiceImpl implements MaterialMasterService {
     @Override
     @Transactional
     public MaterialMaster create(MaterialMaster materialMaster) {
-        validateMaterial(materialMaster, false);
+        validateMaterial(materialMaster, null);
         if (!StringUtils.hasText(materialMaster.getUuid())) {
             materialMaster.setUuid(UUID.randomUUID().toString());
+        }
+        if (currentUserService != null) {
+            materialMaster.setCreatedBy(currentUserService.requireCurrentUserId());
         }
         fillGeneratedFieldsForCreate(materialMaster);
         materialMasterMapper.insert(materialMaster);
@@ -142,15 +162,20 @@ public class MaterialMasterServiceImpl implements MaterialMasterService {
     }
 
     @Override
+    @Transactional
     public MaterialMaster update(MaterialMaster materialMaster) {
         MaterialMaster existing = materialMasterMapper.selectByUuid(materialMaster.getUuid());
         if (existing == null) {
             throw new IllegalArgumentException("Material does not exist");
         }
-        validateMaterial(materialMaster, true);
+        validateMaterial(materialMaster, existing);
+        if (currentUserService != null) {
+            materialMaster.setUpdatedBy(currentUserService.requireCurrentUserId());
+        }
         preserveGeneratedFields(existing, materialMaster);
         materialMasterMapper.updateByUuid(materialMaster);
-        return materialMaster;
+        MaterialMaster updated = materialMasterMapper.selectByUuid(materialMaster.getUuid());
+        return updated != null ? updated : materialMaster;
     }
 
     @Override
@@ -195,7 +220,6 @@ public class MaterialMasterServiceImpl implements MaterialMasterService {
     }
 
     @Override
-    @Transactional
     public ExcelImportResult importFromExcel(MultipartFile file, String importMode) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("Excel file is required");
@@ -209,39 +233,54 @@ public class MaterialMasterServiceImpl implements MaterialMasterService {
                 throw new IllegalArgumentException("Excel sheet is empty");
             }
 
-            int headerRowIndex = findHeaderRowIndex(sheet);
+            DataFormatter formatter = new DataFormatter();
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+
+            int headerRowIndex = findHeaderRowIndex(sheet, formatter, evaluator);
             if (headerRowIndex < 0) {
                 throw new IllegalArgumentException("Header row was not found");
             }
 
-            Map<String, Integer> headerIndexMap = buildHeaderIndexMap(sheet.getRow(headerRowIndex));
+            Map<String, Integer> headerIndexMap = buildHeaderIndexMap(sheet.getRow(headerRowIndex), formatter, evaluator);
             if (!headerIndexMap.containsKey("name") || !headerIndexMap.containsKey("categorycode")
                     || !headerIndexMap.containsKey("subcategorycode") || !headerIndexMap.containsKey("brandcode")
                     || !headerIndexMap.containsKey("bandcode") || !headerIndexMap.containsKey("unit")) {
                 throw new IllegalArgumentException("Excel must contain Name, Category Code, Subcategory Code, Brand Code, Band Code, and Unit columns");
             }
 
+            DictionaryCache cache = loadDictionaryCache();
+            Set<String> seenMaterialKeys = new HashSet<>();
+            for (MaterialMaster existing : materialMasterMapper.selectAll()) {
+                seenMaterialKeys.add(materialDuplicateKey(existing));
+            }
+
             int totalRows = 0;
             int skippedRows = 0;
             int importedRows = 0;
-            List<MaterialMaster> validMaterials = new ArrayList<>();
+            List<ValidImportMaterial> validMaterials = new ArrayList<>();
             List<ExcelImportError> errors = new ArrayList<>();
 
             for (int rowIndex = headerRowIndex + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
                 Row row = sheet.getRow(rowIndex);
-                if (isEmptyDataRow(row, headerIndexMap)) {
+                if (isEmptyDataRow(row, headerIndexMap, formatter, evaluator)) {
                     skippedRows++;
                     continue;
                 }
 
                 totalRows++;
-                Map<String, String> rowData = extractRowData(row, headerIndexMap);
+                int excelRowNumber = rowIndex + 1;
+                Map<String, String> rowData = extractRowData(row, headerIndexMap, formatter, evaluator);
                 try {
-                    MaterialMaster materialMaster = mapRowToMaterial(row, headerIndexMap, rowIndex + 1);
-                    validateMaterial(materialMaster, false);
-                    validMaterials.add(materialMaster);
+                    MaterialMaster materialMaster = mapRowToMaterial(row, headerIndexMap, excelRowNumber, cache, formatter, evaluator);
+                    validateMaterial(materialMaster, null, cache);
+                    String dupKey = materialDuplicateKey(materialMaster);
+                    if (!seenMaterialKeys.add(dupKey)) {
+                        throw new IllegalArgumentException("Row " + excelRowNumber + ": 物料（分类、分项、品牌、频段、名称、型号）已存在或文件内重复");
+                    }
+                    String sortKey = buildSortKey(materialMaster, cache);
+                    validMaterials.add(new ValidImportMaterial(excelRowNumber, rowData, materialMaster, sortKey));
                 } catch (Exception e) {
-                    errors.add(buildImportError(rowIndex + 1, e.getMessage(), rowData));
+                    errors.add(buildImportError(excelRowNumber, e.getMessage(), rowData));
                 }
             }
 
@@ -249,9 +288,30 @@ public class MaterialMasterServiceImpl implements MaterialMasterService {
                 return buildImportResult(normalizedImportMode, totalRows, 0, skippedRows, errors);
             }
 
-            for (MaterialMaster materialMaster : validMaterials) {
-                create(materialMaster);
-                importedRows++;
+            validMaterials.sort(Comparator.comparing(ValidImportMaterial::sortKey)
+                    .thenComparingInt(ValidImportMaterial::excelRowNumber));
+
+            if (IMPORT_MODE_FAIL_FAST.equals(normalizedImportMode)) {
+                importedRows = executeInSingleTransaction(() -> {
+                    int count = 0;
+                    for (ValidImportMaterial entry : validMaterials) {
+                        persistCreatedMaterial(entry.material(), cache);
+                        count++;
+                    }
+                    return count;
+                });
+            } else {
+                for (ValidImportMaterial entry : validMaterials) {
+                    try {
+                        executeRowTransaction(() -> {
+                            persistCreatedMaterial(entry.material(), cache);
+                            return null;
+                        });
+                        importedRows++;
+                    } catch (Exception e) {
+                        errors.add(buildImportError(entry.excelRowNumber(), e.getMessage(), entry.rowData()));
+                    }
+                }
             }
 
             return buildImportResult(normalizedImportMode, totalRows, importedRows, skippedRows, errors);
@@ -262,46 +322,86 @@ public class MaterialMasterServiceImpl implements MaterialMasterService {
         }
     }
 
-    private void validateMaterial(MaterialMaster materialMaster, boolean updating) {
-        ProductCategory category = getCategory(materialMaster.getCategoryId());
-        ProductSubcategory subcategory = getSubcategory(materialMaster.getSubcategoryId());
-        ProductBrand brand = getBrand(materialMaster.getBrandId());
-        ProductBand band = getBand(materialMaster.getFrequency());
+    private void validateMaterial(MaterialMaster materialMaster, MaterialMaster existing) {
+        validateMaterial(materialMaster, existing, null);
+    }
+
+    private void validateMaterial(MaterialMaster materialMaster, MaterialMaster existing, DictionaryCache cache) {
+        ProductCategory category = resolveCategory(materialMaster.getCategoryId(), cache);
+        ProductSubcategory subcategory = resolveSubcategory(materialMaster.getSubcategoryId(), cache);
+        ProductBrand brand = resolveBrand(materialMaster.getBrandId(), cache);
+        ProductBand band = resolveBand(materialMaster.getFrequency(), cache);
+
+        if (existing == null) {
+            if (!Boolean.TRUE.equals(category.getIsActive())) {
+                throw new IllegalArgumentException("Category is disabled");
+            }
+            if (!Boolean.TRUE.equals(subcategory.getIsActive())) {
+                throw new IllegalArgumentException("Subcategory is disabled");
+            }
+            if (!Boolean.TRUE.equals(brand.getIsActive())) {
+                throw new IllegalArgumentException("Brand is disabled");
+            }
+            if (!Boolean.TRUE.equals(band.getIsActive())) {
+                throw new IllegalArgumentException("Band is disabled");
+            }
+        } else {
+            String normalizedFreq = trimToNull(materialMaster.getFrequency());
+            String existingFreq = trimToNull(existing.getFrequency());
+            boolean freqChanged = normalizedFreq == null ? existingFreq != null : !normalizedFreq.equalsIgnoreCase(existingFreq);
+            if (!Objects.equals(existing.getCategoryId(), materialMaster.getCategoryId())
+                    || !Objects.equals(existing.getSubcategoryId(), materialMaster.getSubcategoryId())
+                    || !Objects.equals(existing.getBrandId(), materialMaster.getBrandId())
+                    || freqChanged) {
+                throw new IllegalArgumentException("物料分类与频段已固化在物料编码中，创建后不可修改");
+            }
+        }
 
         if (!StringUtils.hasText(materialMaster.getProductName())) {
             throw new IllegalArgumentException("Material name is required");
         }
+        materialMaster.setProductName(materialMaster.getProductName().trim());
         if (!StringUtils.hasText(materialMaster.getUnit())) {
             throw new IllegalArgumentException("Material unit is required");
         }
+        materialMaster.setUnit(materialMaster.getUnit().trim());
         if (materialMaster.getIsActive() == null) {
             throw new IllegalArgumentException("Material active flag is required");
         }
+        materialMaster.setFrequency(band.getCode().trim().toUpperCase(Locale.ROOT));
+        materialMaster.setProductModel(trimToNull(materialMaster.getProductModel()));
+        materialMaster.setManufacturer(trimToNull(materialMaster.getManufacturer()));
+        materialMaster.setSpecification(trimToNull(materialMaster.getSpecification()));
+        materialMaster.setOtherNote(trimToNull(materialMaster.getOtherNote()));
 
         if (StringUtils.hasText(materialMaster.getMaterialCode())
                 && !matchesConfiguredPattern(materialMaster.getMaterialCode(), category, subcategory, brand, band)) {
             throw new IllegalArgumentException("Material code format is invalid");
         }
 
-        if (!StringUtils.hasText(category.getCode()) || category.getCode().length() != 2) {
+        if (!isValidDictionaryCode(category.getCode(), 2, 2)) {
             throw new IllegalArgumentException("Category code is invalid");
         }
-        if (!StringUtils.hasText(subcategory.getCode()) || subcategory.getCode().length() != 2) {
+        if (!isValidDictionaryCode(subcategory.getCode(), 2, 2)) {
             throw new IllegalArgumentException("Subcategory code is invalid");
         }
-        if (!StringUtils.hasText(brand.getCode()) || brand.getCode().length() != 2) {
+        if (!isValidDictionaryCode(brand.getCode(), 2, 2)) {
             throw new IllegalArgumentException("Brand code is invalid");
         }
-        if (!StringUtils.hasText(band.getCode()) || band.getCode().length() > 3) {
+        if (!isValidDictionaryCode(band.getCode(), 1, 3)) {
             throw new IllegalArgumentException("Band code is invalid");
         }
     }
 
     private void fillGeneratedFieldsForCreate(MaterialMaster materialMaster) {
-        ProductCategory category = getCategory(materialMaster.getCategoryId());
-        ProductSubcategory subcategory = getSubcategory(materialMaster.getSubcategoryId());
-        ProductBrand brand = getBrand(materialMaster.getBrandId());
-        ProductBand band = getBand(materialMaster.getFrequency());
+        fillGeneratedFieldsForCreate(materialMaster, null);
+    }
+
+    private void fillGeneratedFieldsForCreate(MaterialMaster materialMaster, DictionaryCache cache) {
+        ProductCategory category = resolveCategory(materialMaster.getCategoryId(), cache);
+        ProductSubcategory subcategory = resolveSubcategory(materialMaster.getSubcategoryId(), cache);
+        ProductBrand brand = resolveBrand(materialMaster.getBrandId(), cache);
+        ProductBand band = resolveBand(materialMaster.getFrequency(), cache);
         String pattern = resolveMaterialCodePattern();
         int sequenceLength = resolveSequenceLength();
         String sequenceScope = resolveSequenceScope();
@@ -381,13 +481,13 @@ public class MaterialMasterServiceImpl implements MaterialMasterService {
                 .orElseThrow(() -> new IllegalArgumentException("Band does not exist"));
     }
 
-    private int findHeaderRowIndex(Sheet sheet) {
+    private int findHeaderRowIndex(Sheet sheet, DataFormatter formatter, FormulaEvaluator evaluator) {
         for (int rowIndex = sheet.getFirstRowNum(); rowIndex <= sheet.getLastRowNum(); rowIndex++) {
             Row row = sheet.getRow(rowIndex);
             if (row == null) {
                 continue;
             }
-            Map<String, Integer> headerIndexMap = buildHeaderIndexMap(row);
+            Map<String, Integer> headerIndexMap = buildHeaderIndexMap(row, formatter, evaluator);
             if (headerIndexMap.containsKey("name") && headerIndexMap.containsKey("categorycode")) {
                 return rowIndex;
             }
@@ -395,15 +495,14 @@ public class MaterialMasterServiceImpl implements MaterialMasterService {
         return -1;
     }
 
-    private Map<String, Integer> buildHeaderIndexMap(Row headerRow) {
+    private Map<String, Integer> buildHeaderIndexMap(Row headerRow, DataFormatter formatter, FormulaEvaluator evaluator) {
         Map<String, Integer> headerIndexMap = new LinkedHashMap<>();
         if (headerRow == null) {
             return headerIndexMap;
         }
 
-        DataFormatter formatter = new DataFormatter();
         for (Cell cell : headerRow) {
-            String normalized = normalizeHeader(formatter.formatCellValue(cell));
+            String normalized = normalizeHeader(formatter.formatCellValue(cell, evaluator));
             if (!normalized.isEmpty()) {
                 headerIndexMap.putIfAbsent(normalized, cell.getColumnIndex());
             }
@@ -423,17 +522,19 @@ public class MaterialMasterServiceImpl implements MaterialMasterService {
         return HEADER_ALIASES.getOrDefault(normalized, normalized);
     }
 
-    private boolean isEmptyDataRow(Row row, Map<String, Integer> headerIndexMap) {
+    private boolean isEmptyDataRow(Row row, Map<String, Integer> headerIndexMap, DataFormatter formatter, FormulaEvaluator evaluator) {
         if (row == null) {
             return true;
         }
-        DataFormatter formatter = new DataFormatter();
-        for (String key : new String[]{"name", "categorycode", "subcategorycode", "brandcode", "bandcode", "unit"}) {
-            Integer columnIndex = headerIndexMap.get(key);
+        for (Integer columnIndex : headerIndexMap.values()) {
             if (columnIndex == null) {
                 continue;
             }
-            String value = formatter.formatCellValue(row.getCell(columnIndex)).trim();
+            Cell cell = row.getCell(columnIndex);
+            if (cell == null) {
+                continue;
+            }
+            String value = formatter.formatCellValue(cell, evaluator).trim();
             if (!value.isEmpty()) {
                 return false;
             }
@@ -441,44 +542,43 @@ public class MaterialMasterServiceImpl implements MaterialMasterService {
         return true;
     }
 
-    private Map<String, String> extractRowData(Row row, Map<String, Integer> headerIndexMap) {
+    private Map<String, String> extractRowData(Row row, Map<String, Integer> headerIndexMap, DataFormatter formatter, FormulaEvaluator evaluator) {
         Map<String, String> rowData = new LinkedHashMap<>();
-        DataFormatter formatter = new DataFormatter();
         headerIndexMap.forEach((key, columnIndex) -> {
             String value = row != null && row.getCell(columnIndex) != null
-                    ? formatter.formatCellValue(row.getCell(columnIndex)).trim()
+                    ? formatter.formatCellValue(row.getCell(columnIndex), evaluator).trim()
                     : "";
             rowData.put(key, value);
         });
         return rowData;
     }
 
-    private MaterialMaster mapRowToMaterial(Row row, Map<String, Integer> headerIndexMap, int excelRowNumber) {
+    private MaterialMaster mapRowToMaterial(Row row, Map<String, Integer> headerIndexMap, int excelRowNumber, DictionaryCache cache, DataFormatter formatter, FormulaEvaluator evaluator) {
         MaterialMaster materialMaster = new MaterialMaster();
-        materialMaster.setProductName(requiredCell(row, headerIndexMap, "name", "Name", excelRowNumber));
-        materialMaster.setCategoryId(findCategoryId(extractLeadingToken(requiredCell(row, headerIndexMap, "categorycode", "Category Code", excelRowNumber)), excelRowNumber));
-        materialMaster.setSubcategoryId(findSubcategoryId(extractLeadingToken(requiredCell(row, headerIndexMap, "subcategorycode", "Subcategory Code", excelRowNumber)), excelRowNumber));
-        materialMaster.setBrandId(findBrandId(extractLeadingToken(requiredCell(row, headerIndexMap, "brandcode", "Brand Code", excelRowNumber)), excelRowNumber));
-        materialMaster.setFrequency(extractLeadingToken(requiredCell(row, headerIndexMap, "bandcode", "Band Code", excelRowNumber)).toUpperCase(Locale.ROOT));
-        materialMaster.setUnit(requiredCell(row, headerIndexMap, "unit", "Unit", excelRowNumber));
-        materialMaster.setProductModel(optionalCell(row, headerIndexMap, "model"));
-        materialMaster.setSpecification(optionalCell(row, headerIndexMap, "specification"));
-        materialMaster.setOtherNote(optionalCell(row, headerIndexMap, "othernote"));
-        materialMaster.setManufacturer(optionalCell(row, headerIndexMap, "manufacturer"));
-        String activeValue = optionalCell(row, headerIndexMap, "isactive");
+        materialMaster.setProductName(requiredCell(row, headerIndexMap, "name", "Name", excelRowNumber, formatter, evaluator));
+        materialMaster.setCategoryId(findCategoryId(extractLeadingToken(requiredCell(row, headerIndexMap, "categorycode", "Category Code", excelRowNumber, formatter, evaluator)), excelRowNumber, cache));
+        materialMaster.setSubcategoryId(findSubcategoryId(extractLeadingToken(requiredCell(row, headerIndexMap, "subcategorycode", "Subcategory Code", excelRowNumber, formatter, evaluator)), excelRowNumber, cache));
+        materialMaster.setBrandId(findBrandId(extractLeadingToken(requiredCell(row, headerIndexMap, "brandcode", "Brand Code", excelRowNumber, formatter, evaluator)), excelRowNumber, cache));
+        materialMaster.setFrequency(extractLeadingToken(requiredCell(row, headerIndexMap, "bandcode", "Band Code", excelRowNumber, formatter, evaluator)).toUpperCase(Locale.ROOT));
+        materialMaster.setUnit(requiredCell(row, headerIndexMap, "unit", "Unit", excelRowNumber, formatter, evaluator));
+        materialMaster.setProductModel(optionalCell(row, headerIndexMap, "model", formatter, evaluator));
+        materialMaster.setSpecification(optionalCell(row, headerIndexMap, "specification", formatter, evaluator));
+        materialMaster.setOtherNote(optionalCell(row, headerIndexMap, "othernote", formatter, evaluator));
+        materialMaster.setManufacturer(optionalCell(row, headerIndexMap, "manufacturer", formatter, evaluator));
+        String activeValue = optionalCell(row, headerIndexMap, "isactive", formatter, evaluator);
         materialMaster.setIsActive(!StringUtils.hasText(activeValue) || parseBoolean(activeValue, excelRowNumber));
         return materialMaster;
     }
 
-    private String requiredCell(Row row, Map<String, Integer> headerIndexMap, String key, String fieldName, int excelRowNumber) {
-        String value = optionalCell(row, headerIndexMap, key);
+    private String requiredCell(Row row, Map<String, Integer> headerIndexMap, String key, String fieldName, int excelRowNumber, DataFormatter formatter, FormulaEvaluator evaluator) {
+        String value = optionalCell(row, headerIndexMap, key, formatter, evaluator);
         if (!StringUtils.hasText(value)) {
             throw new IllegalArgumentException("Row " + excelRowNumber + ": " + fieldName + " is required");
         }
         return value.trim();
     }
 
-    private String optionalCell(Row row, Map<String, Integer> headerIndexMap, String key) {
+    private String optionalCell(Row row, Map<String, Integer> headerIndexMap, String key, DataFormatter formatter, FormulaEvaluator evaluator) {
         Integer columnIndex = headerIndexMap.get(key);
         if (columnIndex == null) {
             return null;
@@ -487,9 +587,154 @@ public class MaterialMasterServiceImpl implements MaterialMasterService {
         if (cell == null) {
             return null;
         }
-        DataFormatter formatter = new DataFormatter();
-        String value = formatter.formatCellValue(cell);
+        String value = formatter.formatCellValue(cell, evaluator);
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private boolean isValidDictionaryCode(String code, int minLength, int maxLength) {
+        if (!StringUtils.hasText(code)) {
+            return false;
+        }
+        String trimmed = code.trim().toUpperCase(Locale.ROOT);
+        return trimmed.length() >= minLength
+                && trimmed.length() <= maxLength
+                && ALPHANUMERIC_CODE_PATTERN.matcher(trimmed).matches();
+    }
+
+    private String trimToNull(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private void persistCreatedMaterial(MaterialMaster materialMaster, DictionaryCache cache) {
+        if (!StringUtils.hasText(materialMaster.getUuid())) {
+            materialMaster.setUuid(UUID.randomUUID().toString());
+        }
+        if (currentUserService != null) {
+            materialMaster.setCreatedBy(currentUserService.requireCurrentUserId());
+        }
+        fillGeneratedFieldsForCreate(materialMaster, cache);
+        materialMasterMapper.insert(materialMaster);
+    }
+
+    private int executeInSingleTransaction(java.util.function.IntSupplier action) {
+        if (transactionManager == null) {
+            return action.getAsInt();
+        }
+        TransactionTemplate template = new TransactionTemplate(transactionManager);
+        Integer result = template.execute(status -> action.getAsInt());
+        return result == null ? 0 : result;
+    }
+
+    private void executeRowTransaction(java.util.function.Supplier<Void> action) {
+        if (transactionManager == null) {
+            action.get();
+            return;
+        }
+        TransactionTemplate template = new TransactionTemplate(transactionManager);
+        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        template.execute(status -> action.get());
+    }
+
+    private DictionaryCache loadDictionaryCache() {
+        Map<Long, ProductCategory> categoryById = new HashMap<>();
+        Map<String, ProductCategory> categoryByCode = new HashMap<>();
+        for (ProductCategory c : categoryMapper.selectAll()) {
+            if (c != null) {
+                if (c.getId() != null) categoryById.put(c.getId(), c);
+                if (StringUtils.hasText(c.getCode())) categoryByCode.put(c.getCode().trim().toUpperCase(Locale.ROOT), c);
+            }
+        }
+        Map<Long, ProductSubcategory> subcategoryById = new HashMap<>();
+        Map<String, ProductSubcategory> subcategoryByCode = new HashMap<>();
+        for (ProductSubcategory s : subcategoryMapper.selectAll()) {
+            if (s != null) {
+                if (s.getId() != null) subcategoryById.put(s.getId(), s);
+                if (StringUtils.hasText(s.getCode())) subcategoryByCode.put(s.getCode().trim().toUpperCase(Locale.ROOT), s);
+            }
+        }
+        Map<Long, ProductBrand> brandById = new HashMap<>();
+        Map<String, ProductBrand> brandByCode = new HashMap<>();
+        for (ProductBrand b : brandMapper.selectAll()) {
+            if (b != null) {
+                if (b.getId() != null) brandById.put(b.getId(), b);
+                if (StringUtils.hasText(b.getCode())) brandByCode.put(b.getCode().trim().toUpperCase(Locale.ROOT), b);
+            }
+        }
+        Map<String, ProductBand> bandByCode = new HashMap<>();
+        for (ProductBand band : bandMapper.selectAll()) {
+            if (band != null && StringUtils.hasText(band.getCode())) {
+                bandByCode.put(band.getCode().trim().toUpperCase(Locale.ROOT), band);
+            }
+        }
+        return new DictionaryCache(categoryById, categoryByCode, subcategoryById, subcategoryByCode, brandById, brandByCode, bandByCode);
+    }
+
+    private ProductCategory resolveCategory(Long id, DictionaryCache cache) {
+        if (cache != null && id != null) {
+            ProductCategory cached = cache.categoryById().get(id);
+            if (cached != null) return cached;
+        }
+        return getCategory(id);
+    }
+
+    private ProductSubcategory resolveSubcategory(Long id, DictionaryCache cache) {
+        if (cache != null && id != null) {
+            ProductSubcategory cached = cache.subcategoryById().get(id);
+            if (cached != null) return cached;
+        }
+        return getSubcategory(id);
+    }
+
+    private ProductBrand resolveBrand(Long id, DictionaryCache cache) {
+        if (cache != null && id != null) {
+            ProductBrand cached = cache.brandById().get(id);
+            if (cached != null) return cached;
+        }
+        return getBrand(id);
+    }
+
+    private ProductBand resolveBand(String bandCode, DictionaryCache cache) {
+        if (cache != null && StringUtils.hasText(bandCode)) {
+            ProductBand cached = cache.bandByCode().get(bandCode.trim().toUpperCase(Locale.ROOT));
+            if (cached != null) return cached;
+        }
+        return getBand(bandCode);
+    }
+
+    private String materialDuplicateKey(MaterialMaster item) {
+        String freq = item.getFrequency() != null ? item.getFrequency().trim().toUpperCase(Locale.ROOT)
+                : (item.getBandCode() != null ? item.getBandCode().trim().toUpperCase(Locale.ROOT) : "");
+        String name = item.getProductName() == null ? "" : item.getProductName().trim().toLowerCase(Locale.ROOT);
+        String model = item.getProductModel() == null ? "" : item.getProductModel().trim().toLowerCase(Locale.ROOT);
+        return item.getCategoryId() + "|" + item.getSubcategoryId() + "|" + item.getBrandId()
+                + "|" + freq + "|" + name + "|" + model;
+    }
+
+    private String buildSortKey(MaterialMaster materialMaster, DictionaryCache cache) {
+        String c = resolveCategory(materialMaster.getCategoryId(), cache).getCode();
+        String s = resolveSubcategory(materialMaster.getSubcategoryId(), cache).getCode();
+        String b = resolveBrand(materialMaster.getBrandId(), cache).getCode();
+        String f = materialMaster.getFrequency() == null ? "" : materialMaster.getFrequency();
+        return c + "|" + s + "|" + b + "|" + f;
+    }
+
+    private record ValidImportMaterial(
+            int excelRowNumber,
+            Map<String, String> rowData,
+            MaterialMaster material,
+            String sortKey
+    ) {
+    }
+
+    private record DictionaryCache(
+            Map<Long, ProductCategory> categoryById,
+            Map<String, ProductCategory> categoryByCode,
+            Map<Long, ProductSubcategory> subcategoryById,
+            Map<String, ProductSubcategory> subcategoryByCode,
+            Map<Long, ProductBrand> brandById,
+            Map<String, ProductBrand> brandByCode,
+            Map<String, ProductBand> bandByCode
+    ) {
     }
 
     private boolean parseBoolean(String value, int excelRowNumber) {
@@ -520,28 +765,28 @@ public class MaterialMasterServiceImpl implements MaterialMasterService {
         return firstSpace >= 0 ? trimmed.substring(0, firstSpace) : trimmed;
     }
 
-    private Long findCategoryId(String code, int excelRowNumber) {
-        return categoryMapper.selectAll().stream()
-                .filter(item -> code.equalsIgnoreCase(item.getCode()))
-                .findFirst()
-                .map(ProductCategory::getId)
-                .orElseThrow(() -> new IllegalArgumentException("Row " + excelRowNumber + ": category code does not exist"));
+    private Long findCategoryId(String code, int excelRowNumber, DictionaryCache cache) {
+        ProductCategory matched = cache.categoryByCode().get(code.toUpperCase(Locale.ROOT));
+        if (matched == null) {
+            throw new IllegalArgumentException("Row " + excelRowNumber + ": category code does not exist");
+        }
+        return matched.getId();
     }
 
-    private Long findSubcategoryId(String code, int excelRowNumber) {
-        return subcategoryMapper.selectAll().stream()
-                .filter(item -> code.equalsIgnoreCase(item.getCode()))
-                .findFirst()
-                .map(ProductSubcategory::getId)
-                .orElseThrow(() -> new IllegalArgumentException("Row " + excelRowNumber + ": subcategory code does not exist"));
+    private Long findSubcategoryId(String code, int excelRowNumber, DictionaryCache cache) {
+        ProductSubcategory matched = cache.subcategoryByCode().get(code.toUpperCase(Locale.ROOT));
+        if (matched == null) {
+            throw new IllegalArgumentException("Row " + excelRowNumber + ": subcategory code does not exist");
+        }
+        return matched.getId();
     }
 
-    private Long findBrandId(String code, int excelRowNumber) {
-        return brandMapper.selectAll().stream()
-                .filter(item -> code.equalsIgnoreCase(item.getCode()))
-                .findFirst()
-                .map(ProductBrand::getId)
-                .orElseThrow(() -> new IllegalArgumentException("Row " + excelRowNumber + ": brand code does not exist"));
+    private Long findBrandId(String code, int excelRowNumber, DictionaryCache cache) {
+        ProductBrand matched = cache.brandByCode().get(code.toUpperCase(Locale.ROOT));
+        if (matched == null) {
+            throw new IllegalArgumentException("Row " + excelRowNumber + ": brand code does not exist");
+        }
+        return matched.getId();
     }
 
     private boolean matchesConfiguredPattern(

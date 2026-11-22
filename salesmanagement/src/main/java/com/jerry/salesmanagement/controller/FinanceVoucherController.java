@@ -52,6 +52,7 @@ public class FinanceVoucherController {
     @PreAuthorize("hasAnyAuthority('finance.voucher.entry', 'finance.manage')")
     public ApiResponse<FinanceVoucher> create(@RequestBody FinanceVoucher voucher) {
         try {
+            voucher.setVoucherNo(null);
             FinanceVoucher created = service.create(voucher);
             auditTrailService.record("finance-vouchers", "CREATE", "finance-vouchers", created.getUuid(), "Created finance voucher");
             return ApiResponse.success("Finance voucher created", created);

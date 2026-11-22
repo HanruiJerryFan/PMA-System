@@ -10,7 +10,9 @@ import com.jerry.salesmanagement.pojo.CustomerIndustryDict;
 import com.jerry.salesmanagement.pojo.CustomerType;
 import com.jerry.salesmanagement.pojo.Region;
 import com.jerry.salesmanagement.pojo.dto.PageResult;
+import com.jerry.salesmanagement.service.AttachmentService;
 import com.jerry.salesmanagement.service.CodeSequenceService;
+import com.jerry.salesmanagement.service.CurrentUserService;
 import com.jerry.salesmanagement.service.CustomerService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -19,6 +21,7 @@ import org.springframework.util.StringUtils;
 
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -47,6 +50,12 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Autowired(required = false)
     private ReferenceCheckMapper referenceCheckMapper;
+
+    @Autowired(required = false)
+    private CurrentUserService currentUserService;
+
+    @Autowired(required = false)
+    private AttachmentService attachmentService;
 
     @Override
     public List<Customer> getAll() {
@@ -84,7 +93,10 @@ public class CustomerServiceImpl implements CustomerService {
         customer.setCustomerCode(generateCustomerCode(customer.getRegionId(), customer.getCustomerTypeId()));
         customer.setActivityStatus("ACTIVE");
         customer.setLastActiveAt(new Date());
-        validateCustomer(customer);
+        if (currentUserService != null) {
+            customer.setCreateUser(currentUserService.requireCurrentUserId());
+        }
+        validateCustomer(customer, null);
         if (!StringUtils.hasText(customer.getUuid())) {
             customer.setUuid(UUID.randomUUID().toString());
         }
@@ -101,20 +113,30 @@ public class CustomerServiceImpl implements CustomerService {
         }
 
         if (StringUtils.hasText(existing.getCustomerCode())) {
+            if (!Objects.equals(existing.getRegionId(), customer.getRegionId())
+                    || !Objects.equals(existing.getCustomerTypeId(), customer.getCustomerTypeId())) {
+                throw new IllegalArgumentException("客户编码已生成，创建后不可修改所属区域或客户类型");
+            }
             customer.setCustomerCode(existing.getCustomerCode());
         } else {
             Long regionId = customer.getRegionId() != null ? customer.getRegionId() : existing.getRegionId();
             Long customerTypeId = customer.getCustomerTypeId() != null
                     ? customer.getCustomerTypeId()
                     : existing.getCustomerTypeId();
+            customer.setRegionId(regionId);
+            customer.setCustomerTypeId(customerTypeId);
             customer.setCustomerCode(generateCustomerCode(regionId, customerTypeId));
         }
 
         customer.setActivityStatus(existing.getActivityStatus());
         customer.setLastActiveAt(existing.getLastActiveAt());
-        validateCustomer(customer);
+        if (currentUserService != null) {
+            customer.setUpdateUser(currentUserService.requireCurrentUserId());
+        }
+        validateCustomer(customer, existing);
         customerMapper.updateByUuid(customer);
-        return customer;
+        Customer updated = customerMapper.selectByUuid(customer.getUuid());
+        return updated != null ? updated : customer;
     }
 
     @Override
@@ -149,6 +171,9 @@ public class CustomerServiceImpl implements CustomerService {
         String code = existing.getCustomerCode();
         if (!StringUtils.hasText(code) || !CUSTOMER_CODE_PATTERN.matcher(code).matches()) {
             customerMapper.deleteByUuid(uuid);
+            if (attachmentService != null) {
+                attachmentService.deleteByBusiness("customers", uuid);
+            }
             return;
         }
         String prefix = code.substring(0, 5);
@@ -158,18 +183,36 @@ public class CustomerServiceImpl implements CustomerService {
                     String maxCode = customerMapper.selectMaxCustomerCodeByPrefixForUpdate(prefix);
                     return maxCode == null ? 0 : Integer.parseInt(maxCode.substring(5));
                 });
+        if (attachmentService != null) {
+            attachmentService.deleteByBusiness("customers", uuid);
+        }
     }
 
-    private void validateCustomer(Customer customer) {
+    private void validateCustomer(Customer customer, Customer existing) {
         if (!StringUtils.hasText(customer.getCustomerName())) {
             throw new IllegalArgumentException("Customer name is required");
         }
-        Customer existingByName = customerMapper.selectByCustomerName(customer.getCustomerName().trim());
+        customer.setCustomerName(customer.getCustomerName().trim());
+        customer.setRegisterAddress(trimToNull(customer.getRegisterAddress()));
+        customer.setOfficeAddress(trimToNull(customer.getOfficeAddress()));
+        customer.setTaxIdentificationNumber(trimToNull(customer.getTaxIdentificationNumber()));
+        customer.setBankName(trimToNull(customer.getBankName()));
+        customer.setBankAccount(trimToNull(customer.getBankAccount()));
+        customer.setIndustry(trimToNull(customer.getIndustry()));
+        customer.setRemark(trimToNull(customer.getRemark()));
+
+        Customer existingByName = customerMapper.selectByCustomerName(customer.getCustomerName());
         if (existingByName != null && !sameCustomer(existingByName, customer)) {
             throw new IllegalArgumentException("Customer name already exists");
         }
         if (customer.getRegionId() == null) {
             throw new IllegalArgumentException("Region is required");
+        }
+        if (regionMapper != null) {
+            Region region = regionMapper.selectById(Math.toIntExact(customer.getRegionId()));
+            if (region == null || region.getId() == null) {
+                throw new IllegalArgumentException("Region does not exist");
+            }
         }
         if (customer.getCustomerTypeId() == null) {
             throw new IllegalArgumentException("Customer type is required");
@@ -178,22 +221,25 @@ public class CustomerServiceImpl implements CustomerService {
         if (!StringUtils.hasText(customer.getCustomerCode())) {
             throw new IllegalArgumentException("Customer code is required");
         }
-        if (!CUSTOMER_CODE_PATTERN.matcher(customer.getCustomerCode().trim()).matches()) {
+        customer.setCustomerCode(customer.getCustomerCode().trim());
+        if (!CUSTOMER_CODE_PATTERN.matcher(customer.getCustomerCode()).matches()) {
             throw new IllegalArgumentException("Customer code must be a 9-digit system ID");
         }
-        if (StringUtils.hasText(customer.getTaxIdentificationNumber())
-                && customer.getTaxIdentificationNumber().trim().length() != 18) {
+        if (customer.getTaxIdentificationNumber() != null
+                && customer.getTaxIdentificationNumber().length() != 18) {
             throw new IllegalArgumentException("Tax identification number must be 18 characters");
         }
-        if (StringUtils.hasText(customer.getTaxIdentificationNumber())) {
-            Customer existingByTaxId = customerMapper.selectByTaxIdentificationNumber(customer.getTaxIdentificationNumber().trim());
+        if (customer.getTaxIdentificationNumber() != null) {
+            Customer existingByTaxId = customerMapper.selectByTaxIdentificationNumber(customer.getTaxIdentificationNumber());
             if (existingByTaxId != null && !sameCustomer(existingByTaxId, customer)) {
                 throw new IllegalArgumentException("Tax identification number already exists");
             }
         }
-        if (StringUtils.hasText(customer.getIndustry())
-                && !industryExists(customer.getIndustry().trim())) {
-            throw new IllegalArgumentException("Industry must use a configured dictionary value");
+        if (customer.getIndustry() != null) {
+            boolean unchangedIndustry = existing != null && Objects.equals(customer.getIndustry(), trimToNull(existing.getIndustry()));
+            if (!unchangedIndustry && !industryExists(customer.getIndustry())) {
+                throw new IllegalArgumentException("Industry must use a configured dictionary value");
+            }
         }
         if (!StringUtils.hasText(customer.getActivityStatus())) {
             throw new IllegalArgumentException("Activity status is required");
@@ -201,6 +247,10 @@ public class CustomerServiceImpl implements CustomerService {
         if (!ACTIVITY_STATUS_VALUES.contains(customer.getActivityStatus().trim())) {
             throw new IllegalArgumentException("Activity status must be ACTIVE, NORMAL, INACTIVE, or DORMANT");
         }
+    }
+
+    private String trimToNull(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
     }
 
     private String generateCustomerCode(Long regionId, Long customerTypeId) {

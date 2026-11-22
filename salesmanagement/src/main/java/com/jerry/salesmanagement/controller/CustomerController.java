@@ -3,6 +3,7 @@ package com.jerry.salesmanagement.controller;
 import com.jerry.salesmanagement.common.ApiResponse;
 import com.jerry.salesmanagement.pojo.Customer;
 import com.jerry.salesmanagement.pojo.dto.PageResult;
+import com.jerry.salesmanagement.service.AuditTrailService;
 import com.jerry.salesmanagement.service.CustomerService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -23,6 +24,9 @@ public class CustomerController {
 
     @Autowired
     private CustomerService customerService;
+
+    @Autowired(required = false)
+    private AuditTrailService auditTrailService;
 
     @GetMapping
     public ApiResponse<List<Customer>> getAll() {
@@ -74,7 +78,11 @@ public class CustomerController {
     @PostMapping
     public ApiResponse<Customer> create(@RequestBody Customer customer) {
         try {
-            return ApiResponse.success("Customer created", customerService.create(customer));
+            Customer created = customerService.create(customer);
+            if (auditTrailService != null && created != null) {
+                auditTrailService.record("customers", "CREATE", "customers", created.getUuid(), "Created customer");
+            }
+            return ApiResponse.success("Customer created", created);
         } catch (Exception e) {
             return ApiResponse.error("Failed to create customer: " + e.getMessage());
         }
@@ -84,7 +92,11 @@ public class CustomerController {
     public ApiResponse<Customer> update(@PathVariable String uuid, @RequestBody Customer customer) {
         try {
             customer.setUuid(uuid);
-            return ApiResponse.success("Customer updated", customerService.update(customer));
+            Customer updated = customerService.update(customer);
+            if (auditTrailService != null) {
+                auditTrailService.record("customers", "UPDATE", "customers", uuid, "Updated customer");
+            }
+            return ApiResponse.success("Customer updated", updated);
         } catch (Exception e) {
             return ApiResponse.error("Failed to update customer: " + e.getMessage());
         }
@@ -94,6 +106,9 @@ public class CustomerController {
     public ApiResponse<Void> delete(@PathVariable String uuid) {
         try {
             customerService.delete(uuid);
+            if (auditTrailService != null) {
+                auditTrailService.record("customers", "DELETE", "customers", uuid, "Deleted customer");
+            }
             return ApiResponse.success("Customer deleted", null);
         } catch (Exception e) {
             return ApiResponse.error("Failed to delete customer: " + e.getMessage());

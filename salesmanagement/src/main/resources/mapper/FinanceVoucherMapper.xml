@@ -216,13 +216,13 @@
             invoice_type = #{invoiceType},
             invoice_no = #{invoiceNo},
             invoice_amount = #{invoiceAmount},
-            <if test="actualIncomeAmount != null">actual_income_amount = #{actualIncomeAmount},</if>
-            <if test="actualExpenseAmount != null">actual_expense_amount = #{actualExpenseAmount},</if>
+            actual_income_amount = #{actualIncomeAmount},
+            actual_expense_amount = #{actualExpenseAmount},
             <if test="bookedAmount != null">booked_amount = #{bookedAmount},</if>
             <if test="isCompleted != null">is_completed = #{isCompleted},</if>
             entry_user = #{entryUser},
             auditor_user = #{auditorUser},
-            <if test="remark != null">remark = #{remark},</if>
+            remark = #{remark},
             updated_at = NOW(),
             updated_by = #{updatedBy}
         </set>

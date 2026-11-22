@@ -1,6 +1,7 @@
 package com.jerry.salesmanagement.service.impl;
 
 import com.jerry.salesmanagement.mapper.ContractBasicInfoMapper;
+import com.jerry.salesmanagement.mapper.ContractTypeMapper;
 import com.jerry.salesmanagement.mapper.CustomerMapper;
 import com.jerry.salesmanagement.mapper.FinanceSubjectMapper;
 import com.jerry.salesmanagement.mapper.FinanceVoucherMapper;
@@ -46,6 +47,7 @@ class FinanceAnalyticsServiceTests {
         jdbc.execute("CREATE TABLE stage (id BIGINT PRIMARY KEY, stage_code VARCHAR(16), description VARCHAR(128), sort_order INT, is_active BOOLEAN)");
         jdbc.execute("CREATE TABLE project_basic_info (id BIGINT AUTO_INCREMENT PRIMARY KEY, uuid VARCHAR(36), project_number VARCHAR(10), project_name VARCHAR(200), customer_id VARCHAR(36), customer_uuid VARCHAR(36), manager_id BIGINT, participant_1_user_id BIGINT, participant_2_user_id BIGINT, participant_3_user_id BIGINT, region_id BIGINT, project_type_id BIGINT, warranty_until DATE, plan_start_time TIMESTAMP, plan_end_time TIMESTAMP, sales_contract_attachment_uuid VARCHAR(36), create_time TIMESTAMP, create_user BIGINT, update_time TIMESTAMP, update_user BIGINT)");
         jdbc.execute("CREATE TABLE project_status_history (id BIGINT AUTO_INCREMENT PRIMARY KEY, uuid VARCHAR(64), project_id VARCHAR(64), stage_id BIGINT, created_at TIMESTAMP, created_by BIGINT)");
+        jdbc.execute("CREATE TABLE contract_type (id BIGINT PRIMARY KEY, type_code VARCHAR(16), type_name VARCHAR(64))");
         jdbc.execute("CREATE TABLE contract_basic_info (id BIGINT AUTO_INCREMENT PRIMARY KEY, uuid VARCHAR(36), project_basic_info_id VARCHAR(36), sub_item_no VARCHAR(2), contract_type_id BIGINT, sub_item_content TEXT, contract_number VARCHAR(50), client_id VARCHAR(36), contact_id VARCHAR(36), sign_date DATE, contract_amount DECIMAL(15,2), create_time TIMESTAMP, create_user BIGINT, update_time TIMESTAMP, update_user BIGINT)");
         jdbc.execute("CREATE TABLE finance_subject (id BIGINT PRIMARY KEY, subject_level TINYINT, subject_code VARCHAR(64), subject_name VARCHAR(64), sort_order INT)");
         jdbc.execute("CREATE TABLE finance_voucher (id BIGINT AUTO_INCREMENT PRIMARY KEY, uuid VARCHAR(36), voucher_no VARCHAR(10), occurred_on DATE, project_id VARCHAR(36), level_1_subject_id BIGINT, level_2_subject_id BIGINT, summary VARCHAR(500), transaction_direction VARCHAR(16), tax_rate DECIMAL(5,4), counterparty_customer_id VARCHAR(36), counterparty_name_snapshot VARCHAR(255), invoice_status VARCHAR(32), invoice_type VARCHAR(32), invoice_no VARCHAR(128), invoice_amount DECIMAL(18,2), actual_income_amount DECIMAL(18,2), actual_expense_amount DECIMAL(18,2), booked_amount DECIMAL(18,2), is_completed BOOLEAN, entry_user BIGINT, auditor_user BIGINT, remark TEXT, created_at TIMESTAMP, created_by BIGINT, updated_at TIMESTAMP, updated_by BIGINT)");
@@ -57,6 +59,7 @@ class FinanceAnalyticsServiceTests {
                 new ClassPathResource("mapper/StageMapper.xml"),
                 new ClassPathResource("mapper/ProjectMapper.xml"),
                 new ClassPathResource("mapper/ProjectStatusHistoryMapper.xml"),
+                new ClassPathResource("mapper/ContractTypeMapper.xml"),
                 new ClassPathResource("mapper/ContractBasicInfoMapper.xml"),
                 new ClassPathResource("mapper/FinanceSubjectMapper.xml"),
                 new ClassPathResource("mapper/FinanceVoucherMapper.xml")
@@ -68,7 +71,8 @@ class FinanceAnalyticsServiceTests {
         jdbc.update("INSERT INTO stage(id, stage_code, description, sort_order, is_active) VALUES (1, '3.6', '执行中-验收', 12, true)");
         jdbc.update("INSERT INTO project_basic_info(uuid, project_number, project_name, customer_id, customer_uuid, manager_id, region_id, project_type_id) VALUES ('p1', 'AB-3001', '利润分析项目', 'c1', 'c1', 1, 1, 1)");
         jdbc.update("INSERT INTO project_status_history(uuid, project_id, stage_id, created_at, created_by) VALUES ('h1', 'p1', 1, '2026-06-01 10:00:00', 1)");
-        jdbc.update("INSERT INTO contract_basic_info(uuid, project_basic_info_id, sub_item_no, contract_type_id, contract_number, client_id, contract_amount) VALUES ('ct1', 'p1', '01', 1, 'HT-3001', 'c1', 2000.00)");
+        jdbc.update("INSERT INTO contract_type(id, type_code, type_name) VALUES (1, 'XS', '产品销售'), (2, 'C', '采购合同')");
+        jdbc.update("INSERT INTO contract_basic_info(uuid, project_basic_info_id, sub_item_no, contract_type_id, contract_number, client_id, contract_amount) VALUES ('ct1', 'p1', '01', 1, 'HT-3001', 'c1', 2000.00), ('ct2', 'p1', '02', 2, 'CG-3001', 'c1', 1500.00)");
 
         jdbc.update("INSERT INTO finance_subject(id, subject_level, subject_code, subject_name, sort_order) VALUES " +
                 "(1, 1, 'PROJECT', '项目', 1), (2, 1, 'NON_PROJECT', '非项目', 2), " +
@@ -82,7 +86,7 @@ class FinanceAnalyticsServiceTests {
         // fv4: completed PAY PROJECT_TRANSFER_OUT 100, booked -100.00 (cost offset)
         // fv5: NON_PROJECT completed PAY TRAVEL 200, booked 229.89
         jdbc.update("INSERT INTO finance_voucher(uuid, voucher_no, occurred_on, project_id, level_1_subject_id, level_2_subject_id, summary, transaction_direction, tax_rate, counterparty_customer_id, counterparty_name_snapshot, invoice_status, invoice_amount, actual_income_amount, actual_expense_amount, booked_amount, is_completed) VALUES " +
-                "('fv1', '2026060101', '2026-06-01', 'p1', 1, 3, '一期回款', 'RECEIVE', 0.1300, 'c1', '客户A', 'INVOICED', 1200.00, 800.00, NULL, 800.00, true), " +
+                "('fv1', '2026060101', '2026-06-01', 'p1', 1, 3, '一期回款', 'RECEIVE', 0.1300, 'c1', '旧客户名', 'INVOICED', 1200.00, 800.00, NULL, 800.00, true), " +
                 "('fv2', '2026030101', '2026-03-01', 'p1', 1, 3, '待收尾款', 'RECEIVE', 0.1300, 'c1', '客户A', 'NOT_INVOICED', NULL, 300.00, NULL, 300.00, false), " +
                 "('fv3', '2026050101', '2026-05-01', 'p1', 1, 4, '设备采购', 'PAY', 0.1300, 'c2', '供应商B', 'INVOICED', 650.00, NULL, 500.00, 500.00, true), " +
                 "('fv4', '2026060501', '2026-06-05', 'p1', 1, 5, '项目调出', 'PAY', 0.1300, 'c2', '供应商B', 'NOT_INVOICED', NULL, NULL, 100.00, -100.00, true), " +
@@ -109,6 +113,7 @@ class FinanceAnalyticsServiceTests {
         ReflectionTestUtils.setField(service, "customerMapper", sql.getMapper(CustomerMapper.class));
         ReflectionTestUtils.setField(service, "stageMapper", sql.getMapper(StageMapper.class));
         ReflectionTestUtils.setField(service, "projectStatusHistoryMapper", sql.getMapper(ProjectStatusHistoryMapper.class));
+        ReflectionTestUtils.setField(service, "contractTypeMapper", sql.getMapper(ContractTypeMapper.class));
         ReflectionTestUtils.setField(service, "contractBasicInfoMapper", sql.getMapper(ContractBasicInfoMapper.class));
         ReflectionTestUtils.setField(service, "currentUserService", currentUserService);
         ReflectionTestUtils.setField(service, "clock", Clock.fixed(Instant.parse("2026-06-15T00:00:00Z"), ZoneId.of("UTC")));
@@ -137,5 +142,8 @@ class FinanceAnalyticsServiceTests {
         assertEquals(new BigDecimal("150.00"), p1.getPayableAmount());
         assertEquals(4, p1.getVoucherCount());
         assertEquals(1, p1.getUncompletedVoucherCount());
+        assertEquals(1, overview.getReceivableByCounterparty().size());
+        assertEquals("客户A", overview.getReceivableByCounterparty().get(0).getCustomerName());
+        assertEquals(new BigDecimal("700.00"), overview.getReceivableByCounterparty().get(0).getTotal());
     }
 }

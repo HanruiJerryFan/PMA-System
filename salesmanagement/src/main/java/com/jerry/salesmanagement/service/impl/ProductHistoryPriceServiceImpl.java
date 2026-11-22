@@ -8,6 +8,7 @@ import com.jerry.salesmanagement.pojo.Customer;
 import com.jerry.salesmanagement.pojo.CustomerType;
 import com.jerry.salesmanagement.pojo.MaterialMaster;
 import com.jerry.salesmanagement.pojo.ProductHistoryPrice;
+import com.jerry.salesmanagement.service.CurrentUserService;
 import com.jerry.salesmanagement.service.CustomerService;
 import com.jerry.salesmanagement.service.ProductHistoryPriceService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,6 +39,9 @@ public class ProductHistoryPriceServiceImpl implements ProductHistoryPriceServic
     @Autowired
     private CustomerService customerService;
 
+    @Autowired(required = false)
+    private CurrentUserService currentUserService;
+
     @Override
     public ProductHistoryPrice getById(Long id) {
         return mapper.selectById(id);
@@ -56,7 +60,10 @@ public class ProductHistoryPriceServiceImpl implements ProductHistoryPriceServic
     @Override
     @Transactional
     public ProductHistoryPrice create(ProductHistoryPrice historyPrice) {
-        validate(historyPrice);
+        validate(historyPrice, false);
+        if (currentUserService != null) {
+            historyPrice.setCreateUser(currentUserService.requireCurrentUserId());
+        }
         mapper.insert(historyPrice);
         customerService.touchActivity(historyPrice.getSupplierCustomerId());
         return historyPrice;
@@ -65,24 +72,38 @@ public class ProductHistoryPriceServiceImpl implements ProductHistoryPriceServic
     @Override
     @Transactional
     public ProductHistoryPrice update(ProductHistoryPrice historyPrice) {
-        validate(historyPrice);
+        if (historyPrice.getId() == null) {
+            throw new IllegalArgumentException("History price id is required");
+        }
+        ProductHistoryPrice existing = mapper.selectById(historyPrice.getId());
+        if (existing == null) {
+            throw new IllegalArgumentException("History price does not exist");
+        }
+        validate(historyPrice, true);
+        historyPrice.setCreateUser(existing.getCreateUser());
         mapper.update(historyPrice);
         customerService.touchActivity(historyPrice.getSupplierCustomerId());
-        return mapper.selectById(historyPrice.getId());
+        ProductHistoryPrice updated = mapper.selectById(historyPrice.getId());
+        return updated != null ? updated : historyPrice;
     }
 
     @Override
+    @Transactional
     public void delete(Long id) {
         mapper.deleteById(id);
     }
 
-    private void validate(ProductHistoryPrice historyPrice) {
+    private void validate(ProductHistoryPrice historyPrice, boolean updating) {
         if (!StringUtils.hasText(historyPrice.getProductBasicInfoUuid())) {
             throw new IllegalArgumentException("Product is required");
         }
+        historyPrice.setProductBasicInfoUuid(historyPrice.getProductBasicInfoUuid().trim());
         MaterialMaster materialMaster = materialMasterMapper.selectByUuid(historyPrice.getProductBasicInfoUuid());
         if (materialMaster == null) {
             throw new IllegalArgumentException("Product does not exist");
+        }
+        if (!updating && Boolean.FALSE.equals(materialMaster.getIsActive())) {
+            throw new IllegalArgumentException("Product is disabled");
         }
         if (historyPrice.getReferencePrice() == null || historyPrice.getReferencePrice().compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("Reference price must be greater than or equal to 0");
@@ -90,6 +111,7 @@ public class ProductHistoryPriceServiceImpl implements ProductHistoryPriceServic
         if (!StringUtils.hasText(historyPrice.getSupplierCustomerId())) {
             throw new IllegalArgumentException("Supplier is required");
         }
+        historyPrice.setSupplierCustomerId(historyPrice.getSupplierCustomerId().trim());
         Customer customer = customerMapper.selectByUuid(historyPrice.getSupplierCustomerId());
         if (customer == null) {
             throw new IllegalArgumentException("Supplier does not exist");

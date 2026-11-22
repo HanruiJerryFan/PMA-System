@@ -44,7 +44,7 @@
         WHERE uuid = #{uuid}
     </select>
 
-    <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.ContractBasicInfo">
+    <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.ContractBasicInfo" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO contract_basic_info (
             uuid,
             project_basic_info_id,
@@ -80,12 +80,12 @@
             <if test="projectBasicInfoId != null">project_basic_info_id = #{projectBasicInfoId},</if>
             <if test="subItemNo != null">sub_item_no = #{subItemNo},</if>
             <if test="contractTypeId != null">contract_type_id = #{contractTypeId},</if>
-            <if test="subItemContent != null">sub_item_content = #{subItemContent},</if>
+            sub_item_content = #{subItemContent},
             <if test="contractNumber != null">contract_number = #{contractNumber},</if>
             <if test="clientId != null">client_id = #{clientId},</if>
-            <if test="contactId != null">contact_id = #{contactId},</if>
-            <if test="signDate != null">sign_date = #{signDate},</if>
-            <if test="contractAmount != null">contract_amount = #{contractAmount},</if>
+            contact_id = #{contactId},
+            sign_date = #{signDate},
+            contract_amount = #{contractAmount},
             update_time = NOW(),
             update_user = #{updateUser}
         </set>

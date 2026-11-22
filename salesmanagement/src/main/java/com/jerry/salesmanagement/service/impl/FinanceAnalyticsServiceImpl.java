@@ -2,6 +2,7 @@ package com.jerry.salesmanagement.service.impl;
 
 import com.jerry.salesmanagement.common.FinanceVoucherMetrics;
 import com.jerry.salesmanagement.mapper.ContractBasicInfoMapper;
+import com.jerry.salesmanagement.mapper.ContractTypeMapper;
 import com.jerry.salesmanagement.mapper.CustomerMapper;
 import com.jerry.salesmanagement.mapper.FinanceSubjectMapper;
 import com.jerry.salesmanagement.mapper.FinanceVoucherMapper;
@@ -9,6 +10,7 @@ import com.jerry.salesmanagement.mapper.ProjectMapper;
 import com.jerry.salesmanagement.mapper.ProjectStatusHistoryMapper;
 import com.jerry.salesmanagement.mapper.StageMapper;
 import com.jerry.salesmanagement.pojo.ContractBasicInfo;
+import com.jerry.salesmanagement.pojo.ContractType;
 import com.jerry.salesmanagement.pojo.Customer;
 import com.jerry.salesmanagement.pojo.FinanceSubject;
 import com.jerry.salesmanagement.pojo.FinanceVoucher;
@@ -68,6 +70,9 @@ public class FinanceAnalyticsServiceImpl implements FinanceAnalyticsService {
     @Autowired
     private ContractBasicInfoMapper contractBasicInfoMapper;
 
+    @Autowired(required = false)
+    private ContractTypeMapper contractTypeMapper;
+
     @Autowired
     private CurrentUserService currentUserService;
 
@@ -106,11 +111,12 @@ public class FinanceAnalyticsServiceImpl implements FinanceAnalyticsService {
                 .filter(p -> p != null && StringUtils.hasText(p.getUuid()))
                 .forEach(p -> projectByUuid.put(p.getUuid(), p));
 
+        Map<Long, ContractType> contractTypeById = indexContractTypes();
         Map<String, BigDecimal> contractSumByProjectId = new HashMap<>();
         BigDecimal totalContractAmount = BigDecimal.ZERO;
         if (canViewContracts && contractBasicInfoMapper != null) {
             for (ContractBasicInfo contract : contractBasicInfoMapper.selectAll()) {
-                if (contract == null) {
+                if (contract == null || !isSalesContract(contract, contractTypeById)) {
                     continue;
                 }
                 BigDecimal amount = defaultZero(contract.getContractAmount());
@@ -205,9 +211,9 @@ public class FinanceAnalyticsServiceImpl implements FinanceAnalyticsService {
 
             if (gap.type() == FinanceVoucherMetrics.GapType.RECEIVABLE || gap.type() == FinanceVoucherMetrics.GapType.PAYABLE) {
                 long agingDays = resolveAgingDays(voucher.getOccurredOn(), today);
-                String customerId = StringUtils.hasText(voucher.getCounterpartyCustomerId()) ? voucher.getCounterpartyCustomerId() : "";
-                String customerName = resolveCounterpartyName(voucher, customerByUuid);
-                String partyKey = customerId + "::" + customerName;
+                String customerId = StringUtils.hasText(voucher.getCounterpartyCustomerId()) ? voucher.getCounterpartyCustomerId().trim() : "";
+                String customerName = resolveCurrentCounterpartyName(voucher, customerByUuid);
+                String partyKey = StringUtils.hasText(customerId) ? "ID::" + customerId : "NAME::" + customerName;
 
                 if (gap.type() == FinanceVoucherMetrics.GapType.RECEIVABLE) {
                     receivableAging.add(agingDays, gap.amount());
@@ -344,13 +350,47 @@ public class FinanceAnalyticsServiceImpl implements FinanceAnalyticsService {
         return stageByProjectId;
     }
 
-    private String resolveCounterpartyName(FinanceVoucher voucher, Map<String, Customer> customerByUuid) {
+    private Map<Long, ContractType> indexContractTypes() {
+        Map<Long, ContractType> map = new HashMap<>();
+        if (contractTypeMapper == null) {
+            return map;
+        }
+        for (ContractType type : contractTypeMapper.selectAll()) {
+            if (type != null && type.getId() != null) {
+                map.put(type.getId(), type);
+            }
+        }
+        return map;
+    }
+
+    private boolean isSalesContract(ContractBasicInfo contract, Map<Long, ContractType> contractTypeById) {
+        if (contractTypeById == null || contractTypeById.isEmpty() || contract.getContractTypeId() == null) {
+            return true;
+        }
+        ContractType type = contractTypeById.get(contract.getContractTypeId());
+        if (type == null) {
+            return true;
+        }
+        String code = type.getTypeCode() == null ? "" : type.getTypeCode().trim().toUpperCase();
+        if ("XS".equals(code) || "XL".equals(code)) {
+            return true;
+        }
+        if ("C".equals(code) || "LW".equals(code) || "CL".equals(code)) {
+            return false;
+        }
+        String name = type.getTypeName() == null ? "" : type.getTypeName();
+        return name.contains("销售") && !name.contains("采购") && !name.contains("劳务");
+    }
+
+    private String resolveCurrentCounterpartyName(FinanceVoucher voucher, Map<String, Customer> customerByUuid) {
+        Customer customer = StringUtils.hasText(voucher.getCounterpartyCustomerId())
+                ? customerByUuid.get(voucher.getCounterpartyCustomerId().trim())
+                : null;
+        if (customer != null && StringUtils.hasText(customer.getCustomerName())) {
+            return customer.getCustomerName().trim();
+        }
         if (StringUtils.hasText(voucher.getCounterpartyNameSnapshot())) {
             return voucher.getCounterpartyNameSnapshot().trim();
-        }
-        Customer customer = customerByUuid.get(voucher.getCounterpartyCustomerId());
-        if (customer != null && StringUtils.hasText(customer.getCustomerName())) {
-            return customer.getCustomerName();
         }
         return "未指定往来方";
     }

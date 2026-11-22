@@ -160,12 +160,13 @@
         FROM product_basic_info
         WHERE category_code = #{categoryCode} AND subcategory_code = #{subcategoryCode}
           AND brand_code = #{brandCode} AND CHAR_LENGTH(sequence_no) = #{sequenceLength}
+          AND sequence_no REGEXP '^[0-9]+$'
         <if test="bandCode != null">AND band_code = #{bandCode}</if>
         ORDER BY CAST(sequence_no AS DECIMAL(10,0)) DESC
         LIMIT 1 FOR UPDATE
     </select>
 
-    <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.MaterialMaster">
+    <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.MaterialMaster" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO product_basic_info (
             uuid,
             brand_code,
@@ -217,13 +218,13 @@
             <if test="categoryId != null">category_id = #{categoryId},</if>
             <if test="subcategoryId != null">subcategory_id = #{subcategoryId},</if>
             <if test="productName != null">product_name = #{productName},</if>
-            <if test="productModel != null">product_model = #{productModel},</if>
+            product_model = #{productModel},
             <if test="brandId != null">brand_id = #{brandId},</if>
-            <if test="manufacturer != null">manufacturer = #{manufacturer},</if>
+            manufacturer = #{manufacturer},
             <if test="unit != null">unit = #{unit},</if>
             <if test="frequency != null">frequency = #{frequency},</if>
-            <if test="specification != null">specification = #{specification},</if>
-            <if test="otherNote != null">other_note = #{otherNote},</if>
+            specification = #{specification},
+            other_note = #{otherNote},
             <if test="isActive != null">is_active = #{isActive},</if>
             updated_at = NOW(),
             updated_by = #{updatedBy}

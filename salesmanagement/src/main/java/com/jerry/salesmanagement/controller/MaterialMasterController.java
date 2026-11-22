@@ -5,6 +5,7 @@ import com.jerry.salesmanagement.common.DownloadResponseBuilder;
 import com.jerry.salesmanagement.pojo.MaterialMaster;
 import com.jerry.salesmanagement.pojo.dto.ExcelImportResult;
 import com.jerry.salesmanagement.pojo.dto.PageResult;
+import com.jerry.salesmanagement.service.AuditTrailService;
 import com.jerry.salesmanagement.service.ExcelImportTemplateService;
 import com.jerry.salesmanagement.service.MaterialMasterService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +35,9 @@ public class MaterialMasterController {
 
     @Autowired
     private ExcelImportTemplateService excelImportTemplateService;
+
+    @Autowired(required = false)
+    private AuditTrailService auditTrailService;
 
     @GetMapping
     public ApiResponse<List<MaterialMaster>> getAll() {
@@ -85,7 +89,11 @@ public class MaterialMasterController {
     @PostMapping
     public ApiResponse<MaterialMaster> create(@RequestBody MaterialMaster materialMaster) {
         try {
-            return ApiResponse.success("Material created", materialMasterService.create(materialMaster));
+            MaterialMaster created = materialMasterService.create(materialMaster);
+            if (auditTrailService != null && created != null) {
+                auditTrailService.record("materials", "CREATE", "materials", created.getUuid(), "Created material");
+            }
+            return ApiResponse.success("Material created", created);
         } catch (Exception e) {
             return ApiResponse.error("Failed to create material: " + e.getMessage());
         }
@@ -95,7 +103,11 @@ public class MaterialMasterController {
     public ApiResponse<MaterialMaster> update(@PathVariable String uuid, @RequestBody MaterialMaster materialMaster) {
         try {
             materialMaster.setUuid(uuid);
-            return ApiResponse.success("Material updated", materialMasterService.update(materialMaster));
+            MaterialMaster updated = materialMasterService.update(materialMaster);
+            if (auditTrailService != null) {
+                auditTrailService.record("materials", "UPDATE", "materials", uuid, "Updated material");
+            }
+            return ApiResponse.success("Material updated", updated);
         } catch (Exception e) {
             return ApiResponse.error("Failed to update material: " + e.getMessage());
         }
@@ -105,6 +117,9 @@ public class MaterialMasterController {
     public ApiResponse<Void> delete(@PathVariable String uuid) {
         try {
             materialMasterService.delete(uuid);
+            if (auditTrailService != null) {
+                auditTrailService.record("materials", "DELETE", "materials", uuid, "Deleted material");
+            }
             return ApiResponse.success("Material deleted", null);
         } catch (Exception e) {
             return ApiResponse.error("Failed to delete material: " + e.getMessage());
@@ -117,7 +132,12 @@ public class MaterialMasterController {
             @RequestParam(defaultValue = "PARTIAL_SUCCESS") String importMode
     ) {
         try {
-            return ApiResponse.success("Material import completed", materialMasterService.importFromExcel(file, importMode));
+            ExcelImportResult result = materialMasterService.importFromExcel(file, importMode);
+            if (auditTrailService != null && result != null && result.getImportedRows() > 0) {
+                auditTrailService.record("materials", "IMPORT", "materials", "batch",
+                        "Imported " + result.getImportedRows() + " materials");
+            }
+            return ApiResponse.success("Material import completed", result);
         } catch (IllegalArgumentException e) {
             return ApiResponse.badRequest(e.getMessage());
         } catch (Exception e) {

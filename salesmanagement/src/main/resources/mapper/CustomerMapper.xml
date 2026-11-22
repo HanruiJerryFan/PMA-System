@@ -198,14 +198,14 @@
             <if test="customerCode != null">customer_code = #{customerCode},</if>
             <if test="customerName != null">customer_name = #{customerName},</if>
             <if test="regionId != null">region_id = #{regionId},</if>
-            <if test="registerAddress != null">register_address = #{registerAddress},</if>
-            <if test="officeAddress != null">office_address = #{officeAddress},</if>
-            <if test="taxIdentificationNumber != null">tax_identification_number = #{taxIdentificationNumber},</if>
+            register_address = #{registerAddress},
+            office_address = #{officeAddress},
+            tax_identification_number = #{taxIdentificationNumber},
             <if test="customerTypeId != null">customer_type_id = #{customerTypeId},</if>
-            <if test="bankName != null">bank_name = #{bankName},</if>
-            <if test="bankAccount != null">bank_account = #{bankAccount},</if>
-            <if test="industry != null">industry = #{industry},</if>
-            <if test="remark != null">remark = #{remark},</if>
+            bank_name = #{bankName},
+            bank_account = #{bankAccount},
+            industry = #{industry},
+            remark = #{remark},
             <if test="activityStatus != null">activity_status = #{activityStatus},</if>
             <if test="lastActiveAt != null">last_active_at = #{lastActiveAt},</if>
             update_time = NOW(),

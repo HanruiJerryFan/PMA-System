@@ -1,6 +1,7 @@
 package com.jerry.salesmanagement.controller;
 
 import com.jerry.salesmanagement.pojo.ContractClause;
+import com.jerry.salesmanagement.service.AuditTrailService;
 import com.jerry.salesmanagement.service.ContractClauseService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -14,6 +15,9 @@ public class ContractClauseController {
     @Autowired
     private ContractClauseService service;
 
+    @Autowired(required = false)
+    private AuditTrailService auditTrailService;
+
     @GetMapping("/{uuid}")
     public ContractClause getByUuid(@PathVariable String uuid) {
         return service.getByUuid(uuid);
@@ -26,17 +30,28 @@ public class ContractClauseController {
 
     @PostMapping
     public ContractClause create(@RequestBody ContractClause clause) {
-        return service.create(clause);
+        ContractClause created = service.create(clause);
+        if (auditTrailService != null && created != null) {
+            auditTrailService.record("contract-clauses", "CREATE", "contract-clauses", created.getUuid(), "Created contract clause");
+        }
+        return created;
     }
 
     @PutMapping("/{uuid}")
     public ContractClause update(@PathVariable String uuid, @RequestBody ContractClause clause) {
         clause.setUuid(uuid);
-        return service.update(clause);
+        ContractClause updated = service.update(clause);
+        if (auditTrailService != null) {
+            auditTrailService.record("contract-clauses", "UPDATE", "contract-clauses", uuid, "Updated contract clause");
+        }
+        return updated;
     }
 
     @DeleteMapping("/{uuid}")
     public void delete(@PathVariable String uuid) {
         service.delete(uuid);
+        if (auditTrailService != null) {
+            auditTrailService.record("contract-clauses", "DELETE", "contract-clauses", uuid, "Deleted contract clause");
+        }
     }
 }
