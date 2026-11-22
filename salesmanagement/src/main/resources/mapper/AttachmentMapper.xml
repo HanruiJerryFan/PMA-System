@@ -110,8 +110,7 @@
             <if test="mimeType != null">mime_type = #{mimeType},</if>
             <if test="fileSize != null">file_size = #{fileSize},</if>
             <if test="storagePath != null">storage_path = #{storagePath},</if>
-            <if test="uploadedBy != null">uploaded_by = #{uploadedBy},</if>
-            uploaded_at = NOW()
+            <if test="uploadedBy != null">uploaded_by = #{uploadedBy}</if>
         </set>
         WHERE uuid = #{uuid}
     </update>
@@ -119,5 +118,11 @@
     <delete id="deleteByUuid" parameterType="string">
         DELETE FROM attachment
         WHERE uuid = #{uuid}
+    </delete>
+
+    <delete id="deleteByBusiness">
+        DELETE FROM attachment
+        WHERE business_type = #{businessType}
+          AND business_uuid = #{businessUuid}
     </delete>
 </mapper>

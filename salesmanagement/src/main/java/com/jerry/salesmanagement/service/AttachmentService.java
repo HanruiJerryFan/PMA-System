@@ -11,4 +11,5 @@ public interface AttachmentService {
     Attachment create(Attachment attachment);
     Attachment update(Attachment attachment);
     void delete(String uuid);
+    void deleteByBusiness(String businessType, String businessUuid);
 }

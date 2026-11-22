@@ -8,6 +8,8 @@ import com.jerry.salesmanagement.service.AuditTrailService;
 import com.jerry.salesmanagement.service.CurrentUserService;
 import com.jerry.salesmanagement.service.SysUserService;
 import com.jerry.salesmanagement.service.SystemConfigService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,6 +27,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
+import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -38,6 +41,9 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/attachments")
 public class AttachmentController {
+
+    private static final Logger log = LoggerFactory.getLogger(AttachmentController.class);
+    private static final int MAX_SAFE_FILENAME_LENGTH = 218;
 
     @Autowired
     private AttachmentService service;
@@ -167,7 +173,7 @@ public class AttachmentController {
             if (!canAccessBusinessType(attachment.getBusinessType())) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
-            return buildFileResponse(attachment, parseMediaType(attachment.getMimeType()), false);
+            return buildFileResponse(attachment, MediaType.APPLICATION_OCTET_STREAM, false);
         } catch (SecurityException e) {
             return ResponseEntity.notFound().build();
         } catch (Exception e) {
@@ -184,6 +190,13 @@ public class AttachmentController {
             }
             if (!canAccessBusinessType(attachment.getBusinessType())) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            Path filePath = resolveAttachmentPath(attachment);
+            if (filePath == null || !Files.exists(filePath)) {
+                return ResponseEntity.notFound().build();
+            }
+            if (!hasPdfMagicBytes(filePath)) {
+                return ResponseEntity.badRequest().build();
             }
             return buildFileResponse(attachment, MediaType.APPLICATION_PDF, true);
         } catch (SecurityException e) {
@@ -230,10 +243,14 @@ public class AttachmentController {
             }
             Path filePath = attachment != null ? resolveAttachmentPath(attachment) : null;
             service.delete(uuid);
-            if (filePath != null) {
-                Files.deleteIfExists(filePath);
-            }
             auditTrailService.record("attachments", "DELETE", "attachments", uuid, "Deleted attachment");
+            if (filePath != null) {
+                try {
+                    Files.deleteIfExists(filePath);
+                } catch (Exception e) {
+                    log.warn("Failed to remove attachment file {}: {}", filePath, e.getMessage());
+                }
+            }
             return ApiResponse.success("Attachment deleted", null);
         } catch (AccessDeniedException e) {
             throw e;
@@ -293,9 +310,10 @@ public class AttachmentController {
 
         return ResponseEntity.ok()
                 .contentType(mediaType)
+                .header("X-Content-Type-Options", "nosniff")
                 .header(
                         HttpHeaders.CONTENT_DISPOSITION,
-                        dispositionType + "; filename*=UTF-8''" + URLEncoder.encode(displayName, StandardCharsets.UTF_8)
+                        dispositionType + "; filename*=UTF-8''" + URLEncoder.encode(displayName, StandardCharsets.UTF_8).replace("+", "%20")
                 )
                 .body(resource);
     }
@@ -376,11 +394,48 @@ public class AttachmentController {
             return "file";
         }
         String normalized = originalFileName.replace('\\', '/');
-        String baseName = Paths.get(normalized).getFileName().toString().trim();
-        if (!StringUtils.hasText(baseName) || ".".equals(baseName) || "..".equals(baseName)) {
+        int lastSlash = normalized.lastIndexOf('/');
+        String baseName = lastSlash >= 0 ? normalized.substring(lastSlash + 1) : normalized;
+        StringBuilder sb = new StringBuilder(baseName.length());
+        for (int i = 0; i < baseName.length(); i++) {
+            char c = baseName.charAt(i);
+            if (c < 0x20 || c == 0x7F || c == '<' || c == '>' || c == ':' || c == '"'
+                    || c == '/' || c == '\\' || c == '|' || c == '?' || c == '*') {
+                sb.append('_');
+            } else {
+                sb.append(c);
+            }
+        }
+        String cleaned = sb.toString().trim();
+        while (cleaned.endsWith(".") || cleaned.endsWith(" ")) {
+            cleaned = cleaned.substring(0, cleaned.length() - 1).trim();
+        }
+        if (!StringUtils.hasText(cleaned) || ".".equals(cleaned) || "..".equals(cleaned)) {
             return "file";
         }
-        return baseName;
+        if (cleaned.length() <= MAX_SAFE_FILENAME_LENGTH) {
+            return cleaned;
+        }
+        int lastDot = cleaned.lastIndexOf('.');
+        if (lastDot > 0 && lastDot < cleaned.length() - 1) {
+            String ext = cleaned.substring(lastDot);
+            if (ext.length() <= 32) {
+                int maxPrefixLength = MAX_SAFE_FILENAME_LENGTH - ext.length();
+                if (maxPrefixLength > 0) {
+                    return cleaned.substring(0, maxPrefixLength) + ext;
+                }
+            }
+        }
+        return cleaned.substring(0, MAX_SAFE_FILENAME_LENGTH);
+    }
+
+    private boolean hasPdfMagicBytes(Path filePath) {
+        try (InputStream inputStream = Files.newInputStream(filePath)) {
+            byte[] header = inputStream.readNBytes(5);
+            return header.length == 5 && "%PDF-".equals(new String(header, StandardCharsets.US_ASCII));
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private MediaType parseMediaType(String mimeType) {

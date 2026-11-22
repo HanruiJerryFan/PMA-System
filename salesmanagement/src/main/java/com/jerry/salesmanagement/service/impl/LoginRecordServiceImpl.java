@@ -8,9 +8,11 @@ import com.jerry.salesmanagement.service.LoginRecordService;
 import com.jerry.salesmanagement.service.SysUserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.convert.DurationStyle;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.List;
 
@@ -25,8 +27,21 @@ public class LoginRecordServiceImpl implements LoginRecordService {
     @Autowired
     private SysUserService sysUserService;
 
+    private int sessionTimeoutSeconds = 900;
+
     @Value("${server.servlet.session.timeout:900}")
-    private int sessionTimeoutSeconds;
+    public void setSessionTimeout(String rawTimeout) {
+        if (rawTimeout == null || rawTimeout.isBlank()) {
+            this.sessionTimeoutSeconds = 900;
+            return;
+        }
+        try {
+            long seconds = DurationStyle.detectAndParse(rawTimeout.trim(), ChronoUnit.SECONDS).getSeconds();
+            this.sessionTimeoutSeconds = (int) Math.max(60L, Math.min(Integer.MAX_VALUE, seconds));
+        } catch (Exception e) {
+            this.sessionTimeoutSeconds = 900;
+        }
+    }
 
     @Override
     public LoginRecord getById(Long id) {
@@ -86,10 +101,7 @@ public class LoginRecordServiceImpl implements LoginRecordService {
         if (loginRecordId == null || lastSeenAt == null) {
             return;
         }
-        LoginRecord record = new LoginRecord();
-        record.setId(loginRecordId);
-        record.setLastSeenAt(lastSeenAt);
-        loginRecordMapper.update(record);
+        loginRecordMapper.touchSession(loginRecordId, lastSeenAt);
     }
 
     @Override

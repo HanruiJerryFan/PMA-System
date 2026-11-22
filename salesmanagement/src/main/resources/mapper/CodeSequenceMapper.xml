@@ -5,7 +5,7 @@
 <mapper namespace="com.jerry.salesmanagement.mapper.CodeSequenceMapper">
 
     <insert id="insertIfAbsent">
-        INSERT IGNORE INTO code_sequence (
+        INSERT INTO code_sequence (
             sequence_key,
             current_value,
             description,
@@ -18,6 +18,8 @@
             NOW(),
             NOW()
         )
+        ON DUPLICATE KEY UPDATE
+            current_value = current_value
     </insert>
 
     <select id="selectCurrentValueForUpdate" resultType="java.lang.Integer">

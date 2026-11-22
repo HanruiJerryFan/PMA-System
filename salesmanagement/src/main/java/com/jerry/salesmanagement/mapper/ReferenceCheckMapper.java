@@ -3,6 +3,7 @@ package com.jerry.salesmanagement.mapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -44,6 +45,28 @@ public interface ReferenceCheckMapper {
     long countInventoryTransactionsByProjectUuid(@Param("projectUuid") String projectUuid);
 
     long countContractClausesByContractUuid(@Param("contractUuid") String contractUuid);
+
+    long countWarehouseDocsByContractNumber(@Param("contractNumber") String contractNumber);
+
+    long countInventoryTransactionsByContractUuid(@Param("contractUuid") String contractUuid);
+
+    long countContractsByContactUuid(@Param("contactUuid") String contactUuid);
+
+    long countCustomersByIndustry(@Param("industryName") String industryName);
+
+    long countProjectStatusHistoryByStageId(@Param("stageId") Long stageId);
+
+    long countProjectsByProjectTypeId(@Param("projectTypeId") Long projectTypeId);
+
+    long countFinanceVouchersByTaxRate(@Param("taxRate") BigDecimal taxRate);
+
+    long countMaterialsByCategoryId(@Param("categoryId") Long categoryId);
+
+    long countMaterialsBySubcategoryId(@Param("subcategoryId") Long subcategoryId);
+
+    long countMaterialsByBrandId(@Param("brandId") Long brandId);
+
+    long countMaterialsByBandCode(@Param("bandCode") String bandCode);
 
     record ReferenceUsage(String label, long count) {
     }

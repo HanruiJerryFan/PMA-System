@@ -17,4 +17,5 @@ public interface LoginRecordMapper {
     long countPage(@Param("userId") Long userId);
     int insert(LoginRecord record);
     int update(LoginRecord record);
+    int touchSession(@Param("id") Long id, @Param("lastSeenAt") Date lastSeenAt);
 }

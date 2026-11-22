@@ -113,4 +113,72 @@
         WHERE contract_basic_info_id = #{contractUuid}
     </select>
 
+    <select id="countWarehouseDocsByContractNumber" parameterType="string" resultType="long">
+        SELECT COUNT(*)
+        FROM warehouse_doc
+        WHERE contract_number = #{contractNumber}
+    </select>
+
+    <select id="countInventoryTransactionsByContractUuid" parameterType="string" resultType="long">
+        SELECT COUNT(*)
+        FROM goods_transaction_dynamic_info
+        WHERE source_ref_type = 'CONTRACT'
+          AND source_ref_id = #{contractUuid}
+    </select>
+
+    <select id="countContractsByContactUuid" parameterType="string" resultType="long">
+        SELECT COUNT(*)
+        FROM contract_basic_info
+        WHERE contact_id = #{contactUuid}
+    </select>
+
+    <select id="countCustomersByIndustry" parameterType="string" resultType="long">
+        SELECT COUNT(*)
+        FROM customer_info
+        WHERE LOWER(TRIM(industry)) = LOWER(TRIM(#{industryName}))
+    </select>
+
+    <select id="countProjectStatusHistoryByStageId" parameterType="long" resultType="long">
+        SELECT COUNT(*)
+        FROM project_status_history
+        WHERE stage_id = #{stageId}
+    </select>
+
+    <select id="countProjectsByProjectTypeId" parameterType="long" resultType="long">
+        SELECT COUNT(*)
+        FROM project_basic_info
+        WHERE project_type_id = #{projectTypeId}
+    </select>
+
+    <select id="countFinanceVouchersByTaxRate" parameterType="java.math.BigDecimal" resultType="long">
+        SELECT COUNT(*)
+        FROM finance_voucher
+        WHERE tax_rate = #{taxRate}
+    </select>
+
+    <select id="countMaterialsByCategoryId" parameterType="long" resultType="long">
+        SELECT COUNT(*)
+        FROM product_basic_info
+        WHERE category_id = #{categoryId}
+    </select>
+
+    <select id="countMaterialsBySubcategoryId" parameterType="long" resultType="long">
+        SELECT COUNT(*)
+        FROM product_basic_info
+        WHERE subcategory_id = #{subcategoryId}
+    </select>
+
+    <select id="countMaterialsByBrandId" parameterType="long" resultType="long">
+        SELECT COUNT(*)
+        FROM product_basic_info
+        WHERE brand_id = #{brandId}
+    </select>
+
+    <select id="countMaterialsByBandCode" parameterType="string" resultType="long">
+        SELECT COUNT(*)
+        FROM product_basic_info
+        WHERE UPPER(TRIM(COALESCE(band_code, ''))) = UPPER(TRIM(#{bandCode}))
+           OR UPPER(TRIM(COALESCE(frequency, ''))) = UPPER(TRIM(#{bandCode}))
+    </select>
+
 </mapper>

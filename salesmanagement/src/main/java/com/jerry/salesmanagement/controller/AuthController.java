@@ -5,6 +5,7 @@ import com.jerry.salesmanagement.pojo.SysUser;
 import com.jerry.salesmanagement.pojo.dto.ChangePasswordRequest;
 import com.jerry.salesmanagement.pojo.dto.LoginRequest;
 import com.jerry.salesmanagement.pojo.dto.RegisterRequest;
+import com.jerry.salesmanagement.service.AuditTrailService;
 import com.jerry.salesmanagement.service.LoginRecordService;
 import com.jerry.salesmanagement.service.SysUserService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -48,8 +49,14 @@ public class AuthController {
     @Autowired
     private LoginRecordService loginRecordService;
 
+    @Autowired(required = false)
+    private AuditTrailService auditTrailService;
+
     @Value("${app.auth.self-registration-enabled:false}")
     private boolean selfRegistrationEnabled = false;
+
+    @Value("${app.security.trust-forward-headers:false}")
+    private boolean trustForwardHeaders = false;
 
     @PostMapping("/login")
     public ResponseEntity<String> login(@RequestBody LoginRequest loginRequest, HttpServletRequest request) {
@@ -63,11 +70,29 @@ public class AuthController {
                 new UsernamePasswordAuthenticationToken(loginRequest.getUsername(), loginRequest.getPassword());
         try {
             Authentication authentication = authenticationManager.authenticate(authToken);
-            SecurityContext securityContext = SecurityContextHolder.getContext();
+            HttpSession previousSession = request.getSession(false);
+            if (previousSession != null) {
+                recordLoginEnd(previousSession, "RELOGIN");
+            }
+            SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
             securityContext.setAuthentication(authentication);
             HttpSession session = request.getSession(true);
+            try {
+                request.changeSessionId();
+            } catch (IllegalStateException ignored) {
+            }
+            try {
+                recordLoginStart(authentication, request, session);
+            } catch (Exception e) {
+                try {
+                    session.invalidate();
+                } catch (Exception ignored) {
+                }
+                SecurityContextHolder.clearContext();
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Login failed");
+            }
+            SecurityContextHolder.setContext(securityContext);
             session.setAttribute("SPRING_SECURITY_CONTEXT", securityContext);
-            recordLoginStart(authentication, request, session);
             return ResponseEntity.ok("Login success!");
         } catch (DisabledException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("User is not active");
@@ -121,7 +146,7 @@ public class AuthController {
         if (session == null) {
             return ResponseEntity.ok("No Session");
         }
-        recordLoginEnd(session, "BROWSER_CLOSED");
+        touchLoginRecord(session);
         return ResponseEntity.ok("Logout beacon success!");
     }
 
@@ -177,6 +202,9 @@ public class AuthController {
                     request.getNewPassword(),
                     currentUser.getId()
             );
+            if (auditTrailService != null) {
+                auditTrailService.record("auth", "CHANGE_PASSWORD", "sys_user", String.valueOf(currentUser.getId()), "Changed own password");
+            }
             recordLoginEnd(session, "FORCED");
             session.invalidate();
             SecurityContextHolder.clearContext();
@@ -235,8 +263,8 @@ public class AuthController {
         Date loginStartTime = new Date();
         record.setUserId(currentUser.getId());
         record.setLoginStartTime(loginStartTime);
-        record.setLoginIp(extractClientIp(request));
-        record.setUserAgent(request.getHeader("User-Agent"));
+        record.setLoginIp(truncateText(extractClientIp(request), 64));
+        record.setUserAgent(truncateText(request.getHeader("User-Agent"), 512));
         record.setLastSeenAt(loginStartTime);
         record.setCreatedAt(loginStartTime);
         LoginRecord created = loginRecordService.create(record);
@@ -259,17 +287,27 @@ public class AuthController {
             return;
         }
         loginRecordService.completeSession(loginRecordId, new Date(), logoutReason);
+        session.removeAttribute(LOGIN_RECORD_ID);
     }
 
     private String extractClientIp(HttpServletRequest request) {
-        String[] headers = {"X-Forwarded-For", "X-Real-IP", "Proxy-Client-IP", "WL-Proxy-Client-IP"};
-        for (String header : headers) {
-            String value = request.getHeader(header);
-            if (value != null && !value.isBlank() && !"unknown".equalsIgnoreCase(value)) {
-                return value.split(",")[0].trim();
+        if (trustForwardHeaders) {
+            String[] headers = {"X-Forwarded-For", "X-Real-IP", "Proxy-Client-IP", "WL-Proxy-Client-IP"};
+            for (String header : headers) {
+                String value = request.getHeader(header);
+                if (value != null && !value.isBlank() && !"unknown".equalsIgnoreCase(value)) {
+                    return value.split(",")[0].trim();
+                }
             }
         }
         return request.getRemoteAddr();
+    }
+
+    private String truncateText(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength);
     }
 
     private boolean isSystemUser(SysUser user) {

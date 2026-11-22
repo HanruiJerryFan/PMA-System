@@ -34,6 +34,7 @@ public abstract class PdfExportSupport {
             "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc,0",
             "/usr/share/fonts/truetype/arphic/uming.ttc,0"
     );
+    private static final BigDecimal MAX_RMB_AMOUNT = new BigDecimal("99999999999999.99");
     private static final DateTimeFormatter CHINESE_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy年M月d日");
     private static final ThreadLocal<DecimalFormat> MONEY_FORMAT = ThreadLocal.withInitial(() -> {
         DecimalFormat format = new DecimalFormat("0.00");
@@ -43,7 +44,7 @@ public abstract class PdfExportSupport {
 
     private final SystemConfigService systemConfigService;
     private final String configuredFontPath;
-    private volatile BaseFont cachedBaseFont;
+    private volatile CachedFont cachedFont;
 
     protected PdfExportSupport(SystemConfigService systemConfigService, String configuredFontPath) {
         this.systemConfigService = systemConfigService;
@@ -104,6 +105,9 @@ public abstract class PdfExportSupport {
         if (value == null) {
             return "";
         }
+        if (value instanceof java.sql.Date sqlDate) {
+            return sqlDate.toLocalDate().format(CHINESE_DATE_FORMATTER);
+        }
         return value.toInstant()
                 .atZone(ZoneId.systemDefault())
                 .toLocalDate()
@@ -116,7 +120,11 @@ public abstract class PdfExportSupport {
             return "人民币零元整";
         }
         boolean negative = amount.compareTo(BigDecimal.ZERO) < 0;
-        long normalizedAmount = amount.abs().movePointRight(2).longValue();
+        BigDecimal absAmount = amount.abs();
+        if (absAmount.compareTo(MAX_RMB_AMOUNT) > 0) {
+            throw new IllegalArgumentException("金额超出人民币大写转换支持范围");
+        }
+        long normalizedAmount = absAmount.movePointRight(2).longValue();
         long integerPart = normalizedAmount / 100;
         int fractionPart = (int) (normalizedAmount % 100);
         int jiao = fractionPart / 10;
@@ -198,22 +206,27 @@ public abstract class PdfExportSupport {
     }
 
     private BaseFont resolveBaseFont() {
-        BaseFont existing = cachedBaseFont;
-        if (existing != null) {
-            return existing;
+        String fontPath = resolvePdfFontPath();
+        CachedFont existing = cachedFont;
+        if (existing != null && existing.path().equals(fontPath)) {
+            return existing.font();
         }
         synchronized (this) {
-            if (cachedBaseFont != null) {
-                return cachedBaseFont;
+            existing = cachedFont;
+            if (existing != null && existing.path().equals(fontPath)) {
+                return existing.font();
             }
-            String fontPath = resolvePdfFontPath();
             try {
-                cachedBaseFont = BaseFont.createFont(fontPath, BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
-                return cachedBaseFont;
+                BaseFont loaded = BaseFont.createFont(fontPath, BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+                cachedFont = new CachedFont(fontPath, loaded);
+                return loaded;
             } catch (Exception e) {
                 throw new IllegalStateException("Failed to load PDF font from " + fontPath, e);
             }
         }
+    }
+
+    private record CachedFont(String path, BaseFont font) {
     }
 
     protected String resolvePdfFontPath() {

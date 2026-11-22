@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jerry.salesmanagement.config.AiAnalysisProperties;
 import com.jerry.salesmanagement.service.AiLlmClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -20,6 +22,8 @@ import java.util.Map;
 
 @Component
 public class OpenAiCompatibleLlmClient implements AiLlmClient {
+
+    private static final Logger log = LoggerFactory.getLogger(OpenAiCompatibleLlmClient.class);
 
     private final AiAnalysisProperties properties;
     private final ObjectMapper objectMapper;
@@ -74,7 +78,7 @@ public class OpenAiCompatibleLlmClient implements AiLlmClient {
             JsonNode root = objectMapper.readTree(response.body());
             JsonNode choices = root.path("choices");
             if (choices.isArray() && !choices.isEmpty()) {
-                String content = choices.get(0).path("message").path("content").asText("");
+                String content = extractMessageContent(choices.get(0).path("message").path("content"));
                 if (StringUtils.hasText(content)) {
                     return content.trim();
                 }
@@ -84,8 +88,36 @@ public class OpenAiCompatibleLlmClient implements AiLlmClient {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("AI request interrupted");
         } catch (IOException e) {
-            throw new IllegalStateException("AI endpoint unreachable: " + e.getMessage());
+            log.warn("Failed to communicate with AI endpoint {}: {}", endpointUri, e.getMessage());
+            throw new IllegalStateException("AI endpoint is temporarily unreachable");
         }
+    }
+
+    private String extractMessageContent(JsonNode contentNode) {
+        if (contentNode == null || contentNode.isMissingNode() || contentNode.isNull()) {
+            return "";
+        }
+        if (contentNode.isTextual()) {
+            return contentNode.asText("");
+        }
+        if (contentNode.isArray()) {
+            StringBuilder sb = new StringBuilder();
+            for (JsonNode part : contentNode) {
+                if (part == null || part.isNull()) {
+                    continue;
+                }
+                if (part.isTextual()) {
+                    sb.append(part.asText(""));
+                } else if (part.hasNonNull("text")) {
+                    String type = part.path("type").asText("text");
+                    if ("text".equalsIgnoreCase(type) || !part.has("type")) {
+                        sb.append(part.path("text").asText(""));
+                    }
+                }
+            }
+            return sb.toString();
+        }
+        return contentNode.asText("");
     }
 
     private URI resolveEndpointUri(String rawBaseUrl) {

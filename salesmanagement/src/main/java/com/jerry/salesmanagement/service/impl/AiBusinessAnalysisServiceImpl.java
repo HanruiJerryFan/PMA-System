@@ -1,6 +1,10 @@
 package com.jerry.salesmanagement.service.impl;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 import com.jerry.salesmanagement.config.AiAnalysisProperties;
 import com.jerry.salesmanagement.pojo.dto.AiAnalysisResponse;
 import com.jerry.salesmanagement.pojo.dto.AiAskRequest;
@@ -35,11 +39,17 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Service
 public class AiBusinessAnalysisServiceImpl implements AiBusinessAnalysisService {
 
     private static final Logger log = LoggerFactory.getLogger(AiBusinessAnalysisServiceImpl.class);
+    private static final int MAX_QUESTION_LENGTH = 2000;
+    private static final int MAX_RECONCILIATION_ITEMS = 30;
 
     @Autowired
     private AiAnalysisProperties properties;
@@ -88,14 +98,15 @@ public class AiBusinessAnalysisServiceImpl implements AiBusinessAnalysisService 
         if (properties.isConfigured()) {
             try {
                 NameMasker masker = snapshot.masker;
-                String contextJson = toCompactJson(snapshot.evidence);
+                String contextJson = snapshot.maskSensitive
+                        ? maskEvidenceJson(snapshot.evidence, masker)
+                        : toCompactJson(snapshot.evidence);
                 String systemPrompt = """
                         你是 PMA（项目管理与财务核算系统）的智能经营分析助手。
                         请严格基于用户提供的 JSON 统计数据进行分析，禁止编造任何数字或结论，禁止推测未授权模块的指标。
                         请用简洁专业的中文输出一份高管经营简报，包含：1）总体进展；2）核心风险点；3）待办与行动建议。
                         """;
-                String userPrompt = "请基于以下已授权业务快照生成经营简报：\n"
-                        + (snapshot.maskSensitive ? masker.mask(contextJson) : contextJson);
+                String userPrompt = "请基于以下已授权业务快照生成经营简报：\n" + contextJson;
                 String llmText = aiLlmClient.chat(systemPrompt, userPrompt);
                 response.setSummary(snapshot.maskSensitive ? masker.unmask(llmText) : llmText);
                 response.setMode("LLM");
@@ -119,6 +130,9 @@ public class AiBusinessAnalysisServiceImpl implements AiBusinessAnalysisService 
         if (!StringUtils.hasText(question)) {
             throw new IllegalArgumentException("Question is required");
         }
+        if (question.length() > MAX_QUESTION_LENGTH) {
+            throw new IllegalArgumentException("Question cannot exceed " + MAX_QUESTION_LENGTH + " characters");
+        }
         String projectUuid = request != null && StringUtils.hasText(request.getProjectUuid())
                 ? request.getProjectUuid().trim()
                 : null;
@@ -129,7 +143,9 @@ public class AiBusinessAnalysisServiceImpl implements AiBusinessAnalysisService 
         if (properties.isConfigured() && !snapshot.unauthorizedIntentMessage) {
             try {
                 NameMasker masker = snapshot.masker;
-                String contextJson = toCompactJson(snapshot.evidence);
+                String contextJson = snapshot.maskSensitive
+                        ? maskEvidenceJson(snapshot.evidence, masker)
+                        : toCompactJson(snapshot.evidence);
                 String systemPrompt = """
                         你是 PMA（项目管理与财务核算系统）的智能问答助手。
                         规则：
@@ -137,8 +153,8 @@ public class AiBusinessAnalysisServiceImpl implements AiBusinessAnalysisService 
                         2. 若问题涉及当前 JSON 中未提供的未授权模块指标，必须明确告知无对应权限或无相关数据。
                         3. 回答要直接、条理清晰，引用具体项目编号与金额指标。
                         """;
-                String rawPrompt = "用户问题：" + question + "\n\n已授权业务数据快照：\n" + contextJson;
-                String userPrompt = snapshot.maskSensitive ? masker.mask(rawPrompt) : rawPrompt;
+                String maskedQuestion = snapshot.maskSensitive ? masker.maskQuestion(question) : question;
+                String userPrompt = "用户问题：" + maskedQuestion + "\n\n已授权业务数据快照：\n" + contextJson;
                 String llmAnswer = aiLlmClient.chat(systemPrompt, userPrompt);
                 response.setAnswer(snapshot.maskSensitive ? masker.unmask(llmAnswer) : llmAnswer);
                 response.setMode("LLM");
@@ -163,7 +179,7 @@ public class AiBusinessAnalysisServiceImpl implements AiBusinessAnalysisService 
         if (snapshot.scopes.contains("PROJECT")) {
             ProjectTrackingBoardDto board = projectTrackingBoardService.getTrackingBoard(null, null, null, null);
             snapshot.board = board;
-            if (board.getItems() != null) {
+            if (board != null && board.getItems() != null) {
                 snapshot.scopedCards = StringUtils.hasText(projectUuid)
                         ? board.getItems().stream().filter(c -> projectUuid.equals(c.getUuid())).toList()
                         : board.getItems();
@@ -172,7 +188,10 @@ public class AiBusinessAnalysisServiceImpl implements AiBusinessAnalysisService 
         }
 
         if (snapshot.scopes.contains("APPROVAL")) {
-            snapshot.approvals = approvalWorkbenchService.getPendingApprovals();
+            PendingApprovalSummaryDto rawApprovals = approvalWorkbenchService.getPendingApprovals();
+            snapshot.approvals = StringUtils.hasText(projectUuid) && rawApprovals != null
+                    ? scopeApprovals(rawApprovals, projectUuid)
+                    : rawApprovals;
             if (snapshot.approvals != null) {
                 snapshot.approvals.getProjectLists().forEach(i -> snapshot.masker.register(i.getCounterpartyName()));
                 snapshot.approvals.getWarehouseDocs().forEach(i -> snapshot.masker.register(i.getCounterpartyName()));
@@ -195,9 +214,19 @@ public class AiBusinessAnalysisServiceImpl implements AiBusinessAnalysisService 
         if (snapshot.scopes.contains("FINANCE")) {
             snapshot.finance = financeAnalyticsService.getOverview();
             if (snapshot.finance != null) {
-                snapshot.finance.getProjectProfits().forEach(r -> snapshot.masker.register(r.getCustomerName()));
-                snapshot.finance.getReceivableByCounterparty().forEach(r -> snapshot.masker.register(r.getCustomerName()));
-                snapshot.finance.getPayableByCounterparty().forEach(r -> snapshot.masker.register(r.getCustomerName()));
+                if (StringUtils.hasText(projectUuid)) {
+                    snapshot.scopedProjectProfit = snapshot.finance.getProjectProfits().stream()
+                            .filter(r -> projectUuid.equals(r.getProjectId()))
+                            .findFirst()
+                            .orElse(null);
+                    if (snapshot.scopedProjectProfit != null) {
+                        snapshot.masker.register(snapshot.scopedProjectProfit.getCustomerName());
+                    }
+                } else {
+                    snapshot.finance.getProjectProfits().forEach(r -> snapshot.masker.register(r.getCustomerName()));
+                    snapshot.finance.getReceivableByCounterparty().forEach(r -> snapshot.masker.register(r.getCustomerName()));
+                    snapshot.finance.getPayableByCounterparty().forEach(r -> snapshot.masker.register(r.getCustomerName()));
+                }
             }
         }
 
@@ -309,38 +338,65 @@ public class AiBusinessAnalysisServiceImpl implements AiBusinessAnalysisService 
         }
 
         if (snapshot.finance != null) {
-            FinanceAnalyticsOverviewDto fin = snapshot.finance;
-            highlights.add(String.format(
-                    "财务汇总：累计实收 %s，累计实付 %s，毛利 %s（应收 %s / 应付 %s）。",
-                    fin.getTotalActualIncome(),
-                    fin.getTotalActualExpense(),
-                    fin.getTotalGrossProfit(),
-                    fin.getTotalReceivable(),
-                    fin.getTotalPayable()
-            ));
-            if (fin.getReceivableAging() != null && fin.getReceivableAging().getBucketOver90().compareTo(BigDecimal.ZERO) > 0) {
-                risks.add(new AiRiskItemDto(
-                        "HIGH",
-                        "长账龄应收",
-                        "90天以上应收账款 " + fin.getReceivableAging().getBucketOver90(),
-                        "存在超 90 天未收回款项，建议重点催收并核对开票回款状态。",
-                        "/finance/analytics"
-                ));
-                recommendations.add("前往「利润与账龄分析」针对 90 天以上应收客户建立专项催收计划。");
-            }
-            for (ProjectProfitRowDto row : fin.getProjectProfits()) {
-                if (StringUtils.hasText(snapshot.projectUuid) && !snapshot.projectUuid.equals(row.getProjectId())) {
-                    continue;
+            if (StringUtils.hasText(snapshot.projectUuid)) {
+                ProjectProfitRowDto row = snapshot.scopedProjectProfit;
+                if (row != null) {
+                    highlights.add(String.format(
+                            "项目财务汇总（%s）：合同额 %s，累计实收 %s，累计实付 %s，毛利 %s（应收 %s / 应付 %s）。",
+                            row.getProjectNumber(),
+                            row.getContractAmount(),
+                            row.getActualIncomeAmount(),
+                            row.getActualExpenseAmount(),
+                            row.getGrossProfit(),
+                            row.getReceivableAmount(),
+                            row.getPayableAmount()
+                    ));
+                    if (row.getActualIncomeAmount() != null
+                            && row.getActualIncomeAmount().compareTo(BigDecimal.ZERO) > 0
+                            && row.getGrossProfit() != null
+                            && row.getGrossProfit().compareTo(BigDecimal.ZERO) < 0) {
+                        risks.add(new AiRiskItemDto(
+                                "HIGH",
+                                "负毛利",
+                                row.getProjectNumber() + " · " + row.getProjectName(),
+                                "已实现收入 " + row.getActualIncomeAmount() + " 低于支出 " + row.getActualExpenseAmount() + "，当前毛利 " + row.getGrossProfit(),
+                                "/finance/analytics"
+                        ));
+                    }
+                } else {
+                    highlights.add("项目财务汇总：当前项目暂无关联销售合同或已完成财务凭证记录。");
                 }
-                if (row.getActualIncomeAmount().compareTo(BigDecimal.ZERO) > 0
-                        && row.getGrossProfit().compareTo(BigDecimal.ZERO) < 0) {
+            } else {
+                FinanceAnalyticsOverviewDto fin = snapshot.finance;
+                highlights.add(String.format(
+                        "财务汇总：累计实收 %s，累计实付 %s，毛利 %s（应收 %s / 应付 %s）。",
+                        fin.getTotalActualIncome(),
+                        fin.getTotalActualExpense(),
+                        fin.getTotalGrossProfit(),
+                        fin.getTotalReceivable(),
+                        fin.getTotalPayable()
+                ));
+                if (fin.getReceivableAging() != null && fin.getReceivableAging().getBucketOver90().compareTo(BigDecimal.ZERO) > 0) {
                     risks.add(new AiRiskItemDto(
                             "HIGH",
-                            "负毛利",
-                            row.getProjectNumber() + " · " + row.getProjectName(),
-                            "已实现收入 " + row.getActualIncomeAmount() + " 低于支出 " + row.getActualExpenseAmount() + "，当前毛利 " + row.getGrossProfit(),
+                            "长账龄应收",
+                            "90天以上应收账款 " + fin.getReceivableAging().getBucketOver90(),
+                            "存在超 90 天未收回款项，建议重点催收并核对开票回款状态。",
                             "/finance/analytics"
                     ));
+                    recommendations.add("前往「利润与账龄分析」针对 90 天以上应收客户建立专项催收计划。");
+                }
+                for (ProjectProfitRowDto row : fin.getProjectProfits()) {
+                    if (row.getActualIncomeAmount().compareTo(BigDecimal.ZERO) > 0
+                            && row.getGrossProfit().compareTo(BigDecimal.ZERO) < 0) {
+                        risks.add(new AiRiskItemDto(
+                                "HIGH",
+                                "负毛利",
+                                row.getProjectNumber() + " · " + row.getProjectName(),
+                                "已实现收入 " + row.getActualIncomeAmount() + " 低于支出 " + row.getActualExpenseAmount() + "，当前毛利 " + row.getGrossProfit(),
+                                "/finance/analytics"
+                        ));
+                    }
                 }
             }
         }
@@ -394,19 +450,40 @@ public class AiBusinessAnalysisServiceImpl implements AiBusinessAnalysisService 
                 || q.contains("账龄") || q.contains("回款") || q.contains("收入") || q.contains("支出");
         boolean asksInventory = q.contains("采购缺口") || q.contains("对账") || q.contains("发货") || q.contains("库存") || q.contains("缺料");
         boolean asksApproval = q.contains("待审") || q.contains("审批") || q.contains("审核");
-        boolean asksProject = q.contains("超期") || q.contains("滞留") || q.contains("质保") || q.contains("项目") || q.contains("风险");
+        boolean asksProject = q.contains("超期") || q.contains("滞留") || q.contains("质保")
+                || q.contains("风险") || q.contains("阶段") || q.contains("看板") || q.contains("进度")
+                || q.contains("项目风险") || q.contains("项目状态") || q.contains("项目概况") || q.contains("项目进展");
 
-        if (asksFinance && !snapshot.scopes.contains("FINANCE")) {
-            snapshot.unauthorizedIntentMessage = true;
-            return "当前账号未授予财务访问权限（finance.access），无法查询收支、毛利或应收应付账龄数据。";
+        List<String> unauthorizedMessages = new ArrayList<>();
+        int askedDomainCount = 0;
+        if (asksFinance) {
+            askedDomainCount++;
+            if (!snapshot.scopes.contains("FINANCE")) {
+                unauthorizedMessages.add("当前账号未授予财务访问权限（finance.access），无法查询收支、毛利或应收应付账龄数据。");
+            }
         }
-        if (asksInventory && !snapshot.scopes.contains("INVENTORY")) {
-            snapshot.unauthorizedIntentMessage = true;
-            return "当前账号未授予库存访问权限（inventory.access），无法查询物料库存或采购/发货对账数据。";
+        if (asksInventory) {
+            askedDomainCount++;
+            if (!snapshot.scopes.contains("INVENTORY")) {
+                unauthorizedMessages.add("当前账号未授予库存访问权限（inventory.access），无法查询物料库存或采购/发货对账数据。");
+            }
         }
-        if (asksApproval && !snapshot.scopes.contains("APPROVAL")) {
+        if (asksApproval) {
+            askedDomainCount++;
+            if (!snapshot.scopes.contains("APPROVAL")) {
+                unauthorizedMessages.add("当前账号未授予审核权限，无法查看或统计待审核单据列表。");
+            }
+        }
+        if (asksProject) {
+            askedDomainCount++;
+            if (!snapshot.scopes.contains("PROJECT")) {
+                unauthorizedMessages.add("当前账号未授予项目访问权限（project.access），无法查询项目进度、阶段滞留或看板风险数据。");
+            }
+        }
+
+        if (askedDomainCount > 0 && unauthorizedMessages.size() == askedDomainCount) {
             snapshot.unauthorizedIntentMessage = true;
-            return "当前账号未授予审核权限，无法查看或统计待审核单据列表。";
+            return String.join(" ", unauthorizedMessages);
         }
 
         if (asksApproval && snapshot.approvals != null) {
@@ -420,6 +497,22 @@ public class AiBusinessAnalysisServiceImpl implements AiBusinessAnalysisService 
         }
 
         if (asksFinance && snapshot.finance != null) {
+            if (StringUtils.hasText(snapshot.projectUuid)) {
+                ProjectProfitRowDto row = snapshot.scopedProjectProfit;
+                if (row == null) {
+                    return "当前选定项目暂无关联销售合同或已完成财务凭证数据。";
+                }
+                StringBuilder sb = new StringBuilder();
+                sb.append(String.format("项目 %s（%s）财务统计：合同额 %s，累计实收 %s，累计实付 %s，毛利 %s",
+                        row.getProjectNumber(), row.getProjectName(),
+                        row.getContractAmount(), row.getActualIncomeAmount(),
+                        row.getActualExpenseAmount(), row.getGrossProfit()));
+                if (row.getGrossMarginRate() != null) {
+                    sb.append("（毛利率 ").append(row.getGrossMarginRate()).append("%）");
+                }
+                sb.append(String.format("；应收 %s，应付 %s。", row.getReceivableAmount(), row.getPayableAmount()));
+                return sb.toString();
+            }
             FinanceAnalyticsOverviewDto fin = snapshot.finance;
             StringBuilder sb = new StringBuilder();
             sb.append(String.format("财务统计总览：累计实收 %s，累计实付 %s，汇总毛利 %s",
@@ -482,7 +575,9 @@ public class AiBusinessAnalysisServiceImpl implements AiBusinessAnalysisService 
             evidence.put("projectUuid", snapshot.projectUuid);
         }
         if (snapshot.board != null) {
-            evidence.put("projectSummary", snapshot.board.getSummary());
+            evidence.put("projectSummary", StringUtils.hasText(snapshot.projectUuid)
+                    ? buildScopedSummary(snapshot.board, snapshot.scopedCards)
+                    : snapshot.board.getSummary());
             evidence.put("projects", snapshot.scopedCards.stream()
                     .limit(15)
                     .map(c -> {
@@ -513,24 +608,143 @@ public class AiBusinessAnalysisServiceImpl implements AiBusinessAnalysisService 
             ));
         }
         if (snapshot.projectReconciliation != null) {
-            evidence.put("reconciliation", snapshot.projectReconciliation);
+            evidence.put("reconciliation", buildCappedReconciliationEvidence(snapshot.projectReconciliation));
         } else if (snapshot.reconciliationOverview != null) {
             evidence.put("reconciliationSummary", snapshot.reconciliationOverview.stream().limit(15).toList());
         }
         if (snapshot.finance != null) {
-            Map<String, Object> finSummary = new LinkedHashMap<>();
-            finSummary.put("totalActualIncome", snapshot.finance.getTotalActualIncome());
-            finSummary.put("totalActualExpense", snapshot.finance.getTotalActualExpense());
-            finSummary.put("totalGrossProfit", snapshot.finance.getTotalGrossProfit());
-            finSummary.put("nonProjectExpense", snapshot.finance.getNonProjectExpense());
-            finSummary.put("totalReceivable", snapshot.finance.getTotalReceivable());
-            finSummary.put("totalPayable", snapshot.finance.getTotalPayable());
-            finSummary.put("receivableAging", snapshot.finance.getReceivableAging());
-            finSummary.put("payableAging", snapshot.finance.getPayableAging());
-            evidence.put("financeSummary", finSummary);
-            evidence.put("topReceivableParties", snapshot.finance.getReceivableByCounterparty().stream().limit(8).toList());
+            if (StringUtils.hasText(snapshot.projectUuid)) {
+                evidence.put("projectFinance", snapshot.scopedProjectProfit);
+            } else {
+                Map<String, Object> finSummary = new LinkedHashMap<>();
+                finSummary.put("totalActualIncome", snapshot.finance.getTotalActualIncome());
+                finSummary.put("totalActualExpense", snapshot.finance.getTotalActualExpense());
+                finSummary.put("totalGrossProfit", snapshot.finance.getTotalGrossProfit());
+                finSummary.put("nonProjectExpense", snapshot.finance.getNonProjectExpense());
+                finSummary.put("totalReceivable", snapshot.finance.getTotalReceivable());
+                finSummary.put("totalPayable", snapshot.finance.getTotalPayable());
+                finSummary.put("receivableAging", snapshot.finance.getReceivableAging());
+                finSummary.put("payableAging", snapshot.finance.getPayableAging());
+                evidence.put("financeSummary", finSummary);
+                evidence.put("topReceivableParties", snapshot.finance.getReceivableByCounterparty().stream().limit(8).toList());
+            }
         }
         return evidence;
+    }
+
+    private PendingApprovalSummaryDto scopeApprovals(PendingApprovalSummaryDto source, String projectUuid) {
+        PendingApprovalSummaryDto scoped = new PendingApprovalSummaryDto();
+        scoped.setCanAuditProjectLists(source.isCanAuditProjectLists());
+        scoped.setCanAuditWarehouseDocs(source.isCanAuditWarehouseDocs());
+        scoped.setCanAuditFinanceVouchers(source.isCanAuditFinanceVouchers());
+        scoped.setProjectLists(source.getProjectLists().stream()
+                .filter(i -> projectUuid.equals(i.getProjectId()))
+                .toList());
+        scoped.setWarehouseDocs(source.getWarehouseDocs().stream()
+                .filter(i -> projectUuid.equals(i.getProjectId()))
+                .toList());
+        scoped.setFinanceVouchers(source.getFinanceVouchers().stream()
+                .filter(i -> projectUuid.equals(i.getProjectId()))
+                .toList());
+        scoped.setProjectListCount(scoped.getProjectLists().size());
+        scoped.setWarehouseDocCount(scoped.getWarehouseDocs().size());
+        scoped.setFinanceVoucherCount(scoped.getFinanceVouchers().size());
+        scoped.setTotalPendingCount(scoped.getProjectListCount() + scoped.getWarehouseDocCount() + scoped.getFinanceVoucherCount());
+        return scoped;
+    }
+
+    private ProjectTrackingBoardDto.Summary buildScopedSummary(
+            ProjectTrackingBoardDto board,
+            List<ProjectTrackingCardDto> cards
+    ) {
+        ProjectTrackingBoardDto.Summary summary = new ProjectTrackingBoardDto.Summary();
+        ProjectTrackingBoardDto.Permissions perms = board.getPermissions();
+        summary.setTotalProjects(cards.size());
+        int completed = (int) cards.stream().filter(ProjectTrackingCardDto::isCompleted).count();
+        summary.setCompletedProjects(completed);
+        summary.setActiveProjects(cards.size() - completed);
+        summary.setOverdueCount((int) cards.stream().filter(ProjectTrackingCardDto::isOverdue).count());
+        summary.setStalledCount((int) cards.stream().filter(c -> c.getRiskTags().contains("STALLED")).count());
+        summary.setWarrantyExpiringCount((int) cards.stream().filter(c -> "EXPIRING_SOON".equals(c.getWarrantyStatus())).count());
+        summary.setWarrantyExpiredCount((int) cards.stream().filter(c -> "EXPIRED".equals(c.getWarrantyStatus())).count());
+        summary.setPendingAuditProjectCount((int) cards.stream()
+                .filter(c -> ((c.getPendingListCount() != null ? c.getPendingListCount() : 0)
+                        + (c.getPendingWarehouseDocCount() != null ? c.getPendingWarehouseDocCount() : 0)
+                        + (c.getPendingFinanceVoucherCount() != null ? c.getPendingFinanceVoucherCount() : 0)) > 0)
+                .count());
+        boolean includeContract = perms == null || perms.isCanViewContracts() || perms.isCanViewFinance();
+        boolean includeFinance = perms == null || perms.isCanViewFinance();
+        if (includeContract) {
+            summary.setTotalContractAmount(cards.stream()
+                    .map(ProjectTrackingCardDto::getContractAmount)
+                    .filter(Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add));
+        }
+        if (includeFinance) {
+            summary.setTotalReceivedAmount(cards.stream()
+                    .map(ProjectTrackingCardDto::getReceivedAmount)
+                    .filter(Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add));
+            summary.setTotalReceivableAmount(cards.stream()
+                    .map(ProjectTrackingCardDto::getReceivableAmount)
+                    .filter(Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add));
+        }
+        return summary;
+    }
+
+    private Map<String, Object> buildCappedReconciliationEvidence(ProjectMaterialReconciliationDto recon) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("projectId", recon.getProjectId());
+        result.put("projectNumber", recon.getProjectNumber());
+        result.put("projectName", recon.getProjectName());
+        result.put("customerName", recon.getCustomerName());
+        result.put("totalMaterialLines", recon.getTotalMaterialLines());
+        result.put("shortageLineCount", recon.getShortageLineCount());
+        result.put("pendingShipmentLineCount", recon.getPendingShipmentLineCount());
+        result.put("overShippedLineCount", recon.getOverShippedLineCount());
+        result.put("fulfillmentRate", recon.getFulfillmentRate());
+        List<MaterialReconciliationItemDto> items = recon.getItems() == null ? List.of() : recon.getItems();
+        List<MaterialReconciliationItemDto> prioritized = items.stream()
+                .sorted(Comparator.comparingInt(item -> ("NORMAL".equals(item.getStatus()) || "COMPLETED".equals(item.getStatus())) ? 1 : 0))
+                .limit(MAX_RECONCILIATION_ITEMS)
+                .toList();
+        result.put("totalItemCount", items.size());
+        result.put("truncated", items.size() > MAX_RECONCILIATION_ITEMS);
+        result.put("items", prioritized);
+        return result;
+    }
+
+    private String maskEvidenceJson(Map<String, Object> map, NameMasker masker) {
+        try {
+            JsonNode tree = objectMapper.valueToTree(map);
+            JsonNode masked = maskJsonNode(tree, masker);
+            return objectMapper.writeValueAsString(masked);
+        } catch (Exception e) {
+            return masker.mask(toCompactJson(map));
+        }
+    }
+
+    private JsonNode maskJsonNode(JsonNode node, NameMasker masker) {
+        if (node == null || node.isNull()) {
+            return node;
+        }
+        if (node.isTextual()) {
+            return TextNode.valueOf(masker.mask(node.asText()));
+        }
+        if (node.isArray()) {
+            ArrayNode arr = objectMapper.createArrayNode();
+            for (JsonNode child : node) {
+                arr.add(maskJsonNode(child, masker));
+            }
+            return arr;
+        }
+        if (node.isObject()) {
+            ObjectNode obj = objectMapper.createObjectNode();
+            node.fields().forEachRemaining(entry -> obj.set(entry.getKey(), maskJsonNode(entry.getValue(), masker)));
+            return obj;
+        }
+        return node;
     }
 
     private List<String> resolveAuthorizedScopes() {
@@ -577,6 +791,7 @@ public class AiBusinessAnalysisServiceImpl implements AiBusinessAnalysisService 
         private ProjectMaterialReconciliationDto projectReconciliation;
         private List<ProjectReconciliationOverviewItemDto> reconciliationOverview;
         private FinanceAnalyticsOverviewDto finance;
+        private ProjectProfitRowDto scopedProjectProfit;
         private Map<String, Object> evidence = new LinkedHashMap<>();
         private boolean maskSensitive;
         private final NameMasker masker = new NameMasker();
@@ -587,6 +802,9 @@ public class AiBusinessAnalysisServiceImpl implements AiBusinessAnalysisService 
         private final Map<String, String> realToAlias = new LinkedHashMap<>();
         private final Map<String, String> aliasToReal = new LinkedHashMap<>();
         private int counter = 1;
+        private Pattern maskPattern;
+        private Pattern unmaskPattern;
+        private Pattern questionMaskPattern;
 
         void register(String realName) {
             if (!StringUtils.hasText(realName)) {
@@ -597,6 +815,9 @@ public class AiBusinessAnalysisServiceImpl implements AiBusinessAnalysisService 
                 String alias = "客户#" + counter++;
                 realToAlias.put(trimmed, alias);
                 aliasToReal.put(alias, trimmed);
+                maskPattern = null;
+                unmaskPattern = null;
+                questionMaskPattern = null;
             }
         }
 
@@ -604,28 +825,54 @@ public class AiBusinessAnalysisServiceImpl implements AiBusinessAnalysisService 
             if (text == null || realToAlias.isEmpty()) {
                 return text;
             }
-            String result = text;
-            List<Map.Entry<String, String>> entries = realToAlias.entrySet().stream()
-                    .sorted(Comparator.comparingInt((Map.Entry<String, String> e) -> e.getKey().length()).reversed())
-                    .toList();
-            for (Map.Entry<String, String> entry : entries) {
-                result = result.replace(entry.getKey(), entry.getValue());
+            if (maskPattern == null) {
+                maskPattern = compileSortedPattern(realToAlias.keySet(), 1);
             }
-            return result;
+            return applyPattern(text, maskPattern, realToAlias);
+        }
+
+        String maskQuestion(String text) {
+            if (text == null || realToAlias.isEmpty()) {
+                return text;
+            }
+            if (questionMaskPattern == null) {
+                questionMaskPattern = compileSortedPattern(realToAlias.keySet(), 2);
+            }
+            return applyPattern(text, questionMaskPattern, realToAlias);
         }
 
         String unmask(String text) {
             if (text == null || aliasToReal.isEmpty()) {
                 return text;
             }
-            String result = text;
-            List<Map.Entry<String, String>> entries = aliasToReal.entrySet().stream()
-                    .sorted(Comparator.comparingInt((Map.Entry<String, String> e) -> e.getKey().length()).reversed())
-                    .toList();
-            for (Map.Entry<String, String> entry : entries) {
-                result = result.replace(entry.getKey(), entry.getValue());
+            if (unmaskPattern == null) {
+                unmaskPattern = compileSortedPattern(aliasToReal.keySet(), 1);
             }
-            return result;
+            return applyPattern(text, unmaskPattern, aliasToReal);
+        }
+
+        private Pattern compileSortedPattern(java.util.Set<String> keys, int minLength) {
+            String alternation = keys.stream()
+                    .filter(k -> k != null && k.length() >= minLength)
+                    .sorted(Comparator.comparingInt(String::length).reversed())
+                    .map(Pattern::quote)
+                    .collect(Collectors.joining("|"));
+            return alternation.isEmpty() ? null : Pattern.compile(alternation);
+        }
+
+        private String applyPattern(String text, Pattern pattern, Map<String, String> lookup) {
+            if (pattern == null) {
+                return text;
+            }
+            Matcher matcher = pattern.matcher(text);
+            StringBuilder sb = new StringBuilder(text.length());
+            while (matcher.find()) {
+                String matched = matcher.group();
+                String replacement = lookup.getOrDefault(matched, matched);
+                matcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
+            }
+            matcher.appendTail(sb);
+            return sb.toString();
         }
     }
 }

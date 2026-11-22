@@ -1,6 +1,7 @@
 package com.jerry.salesmanagement.config;
 
 import com.jerry.salesmanagement.pojo.SysUser;
+import com.jerry.salesmanagement.service.LoginRecordService;
 import com.jerry.salesmanagement.service.SysUserService;
 import com.jerry.salesmanagement.service.impl.CustomUserDetailsService;
 import jakarta.servlet.FilterChain;
@@ -8,6 +9,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -19,12 +21,15 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Date;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 @Component
 public class PasswordChangeRequiredFilter extends OncePerRequestFilter {
+
+    private static final String LOGIN_RECORD_ID = "LOGIN_RECORD_ID";
 
     private static final Set<String> PUBLIC_OR_LOGOUT_PATHS = Set.of(
             "/api/auth/login",
@@ -46,13 +51,20 @@ public class PasswordChangeRequiredFilter extends OncePerRequestFilter {
 
     private final SysUserService sysUserService;
     private final CustomUserDetailsService customUserDetailsService;
+    private LoginRecordService loginRecordService;
 
+    @Autowired
     public PasswordChangeRequiredFilter(
             SysUserService sysUserService,
             CustomUserDetailsService customUserDetailsService
     ) {
         this.sysUserService = sysUserService;
         this.customUserDetailsService = customUserDetailsService;
+    }
+
+    @Autowired(required = false)
+    public void setLoginRecordService(LoginRecordService loginRecordService) {
+        this.loginRecordService = loginRecordService;
     }
 
     @Override
@@ -82,6 +94,12 @@ public class PasswordChangeRequiredFilter extends OncePerRequestFilter {
         if (currentUser == null || !"ACTIVE".equalsIgnoreCase(currentUser.getStatus())) {
             HttpSession session = request.getSession(false);
             if (session != null) {
+                if (loginRecordService != null) {
+                    Object loginRecordId = session.getAttribute(LOGIN_RECORD_ID);
+                    if (loginRecordId instanceof Long id) {
+                        loginRecordService.completeSession(id, new Date(), "FORCED");
+                    }
+                }
                 session.invalidate();
             }
             SecurityContextHolder.clearContext();

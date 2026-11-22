@@ -25,7 +25,7 @@
                 AND LOWER(TRIM(a.module)) = LOWER(TRIM(#{module}))
             </if>
             <if test="action != null and action != ''">
-                AND a.action = #{action}
+                AND LOWER(TRIM(a.action)) = LOWER(TRIM(#{action}))
             </if>
         </where>
         ORDER BY a.occurred_at DESC, a.id DESC

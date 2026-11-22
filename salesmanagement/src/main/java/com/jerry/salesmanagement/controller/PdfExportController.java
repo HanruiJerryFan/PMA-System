@@ -27,6 +27,10 @@ public class PdfExportController {
         try {
             byte[] pdf = tablePdfExportService.exportTable(request);
             return DownloadResponseBuilder.build(normalizeFileName(request), MediaType.APPLICATION_PDF, pdf);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .contentType(MediaType.TEXT_PLAIN)
+                    .body(("Invalid PDF export request: " + e.getMessage()).getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {
             return ResponseEntity.internalServerError()
                     .contentType(MediaType.TEXT_PLAIN)

@@ -89,20 +89,21 @@
 
     <select id="selectTimedOutActive" parameterType="java.util.Date" resultType="com.jerry.salesmanagement.pojo.LoginRecord">
         SELECT
-            id,
-            user_id AS userId,
-            login_start_time AS loginStartTime,
-            login_end_time AS loginEndTime,
-            duration_seconds AS durationSeconds,
-            login_ip AS loginIp,
-            user_agent AS userAgent,
-            last_seen_at AS lastSeenAt,
-            logout_reason AS logoutReason,
-            created_at AS createdAt
-        FROM login_record
-        WHERE login_end_time IS NULL
-          AND last_seen_at IS NOT NULL
-          AND last_seen_at &lt;= #{cutoffTime}
+            l.id,
+            l.user_id AS userId,
+            l.login_start_time AS loginStartTime,
+            l.login_end_time AS loginEndTime,
+            l.duration_seconds AS durationSeconds,
+            l.login_ip AS loginIp,
+            l.user_agent AS userAgent,
+            l.last_seen_at AS lastSeenAt,
+            l.logout_reason AS logoutReason,
+            l.created_at AS createdAt
+        FROM login_record l
+        LEFT JOIN sys_user u ON l.user_id = u.id
+        WHERE l.login_end_time IS NULL
+          AND (u.username IS NULL OR LOWER(u.username) &lt;&gt; 'system')
+          AND COALESCE(l.last_seen_at, l.login_start_time) &lt;= #{cutoffTime}
     </select>
 
     <insert id="insert" parameterType="com.jerry.salesmanagement.pojo.LoginRecord"
@@ -139,5 +140,12 @@
             <if test="logoutReason != null">logout_reason = #{logoutReason},</if>
         </set>
         WHERE id = #{id}
+    </update>
+
+    <update id="touchSession">
+        UPDATE login_record
+        SET last_seen_at = #{lastSeenAt}
+        WHERE id = #{id}
+          AND login_end_time IS NULL
     </update>
 </mapper>

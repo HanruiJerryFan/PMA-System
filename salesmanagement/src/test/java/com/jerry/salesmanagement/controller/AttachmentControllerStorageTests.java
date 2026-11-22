@@ -52,7 +52,7 @@ class AttachmentControllerStorageTests {
                 "file",
                 "../../contract.pdf",
                 "application/pdf",
-                "pdf-bytes".getBytes(StandardCharsets.UTF_8)
+                "%PDF-1.4\npdf-bytes".getBytes(StandardCharsets.UTF_8)
         );
 
         ApiResponse<Attachment> response = controller.upload("contracts", "c-1", file);
@@ -82,13 +82,13 @@ class AttachmentControllerStorageTests {
         Path root = tempDir.resolve("uploads");
         Files.createDirectories(root);
         Path insideAbsoluteFile = root.resolve("u0-inside.pdf");
-        Files.writeString(insideAbsoluteFile, "inside-absolute-content");
+        Files.writeString(insideAbsoluteFile, "%PDF-1.4\ninside-absolute-content");
 
         Path relativeFile = root.resolve("u1-doc.pdf");
-        Files.writeString(relativeFile, "relative-content");
+        Files.writeString(relativeFile, "%PDF-1.4\nrelative-content");
 
         Path migratedFile = root.resolve("u2-legacy.pdf");
-        Files.writeString(migratedFile, "migrated-content");
+        Files.writeString(migratedFile, "%PDF-1.4\nmigrated-content");
 
         Attachment insideLegacyAttachment = new Attachment();
         insideLegacyAttachment.setUuid("u0");
@@ -133,22 +133,76 @@ class AttachmentControllerStorageTests {
         ResponseEntity<Resource> insideResponse = controller.download("u0");
         assertEquals(HttpStatus.OK, insideResponse.getStatusCode());
         assertNotNull(insideResponse.getBody());
-        assertEquals("inside-absolute-content", insideResponse.getBody().getContentAsString(StandardCharsets.UTF_8));
+        assertEquals("%PDF-1.4\ninside-absolute-content", insideResponse.getBody().getContentAsString(StandardCharsets.UTF_8));
+        assertEquals("application/octet-stream", insideResponse.getHeaders().getContentType().toString());
+        assertEquals("nosniff", insideResponse.getHeaders().getFirst("X-Content-Type-Options"));
 
         ResponseEntity<Resource> downloadResponse = controller.download("u1");
         assertEquals(HttpStatus.OK, downloadResponse.getStatusCode());
         assertNotNull(downloadResponse.getBody());
-        assertEquals("relative-content", downloadResponse.getBody().getContentAsString(StandardCharsets.UTF_8));
+        assertEquals("%PDF-1.4\nrelative-content", downloadResponse.getBody().getContentAsString(StandardCharsets.UTF_8));
 
         ResponseEntity<Resource> previewResponse = controller.previewPdf("u2");
         assertEquals(HttpStatus.OK, previewResponse.getStatusCode());
         assertNotNull(previewResponse.getBody());
-        assertEquals("migrated-content", previewResponse.getBody().getContentAsString(StandardCharsets.UTF_8));
+        assertEquals("%PDF-1.4\nmigrated-content", previewResponse.getBody().getContentAsString(StandardCharsets.UTF_8));
+        assertEquals("nosniff", previewResponse.getHeaders().getFirst("X-Content-Type-Options"));
 
         ResponseEntity<Resource> winPreviewResponse = controller.previewPdf("u2-win");
         assertEquals(HttpStatus.OK, winPreviewResponse.getStatusCode());
         assertNotNull(winPreviewResponse.getBody());
-        assertEquals("migrated-content", winPreviewResponse.getBody().getContentAsString(StandardCharsets.UTF_8));
+        assertEquals("%PDF-1.4\nmigrated-content", winPreviewResponse.getBody().getContentAsString(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void rejectsSpoofedPdfPreviewAndSanitizesIllegalAndLongFilenames() throws Exception {
+        Path root = tempDir.resolve("uploads");
+        Files.createDirectories(root);
+        Path spoofed = root.resolve("u9-fake.pdf");
+        Files.writeString(spoofed, "<html><script>alert(1)</script></html>");
+
+        Attachment fakePdf = new Attachment();
+        fakePdf.setUuid("u9");
+        fakePdf.setOriginalFileName("fake.pdf");
+        fakePdf.setFileExt("pdf");
+        fakePdf.setMimeType("application/pdf");
+        fakePdf.setStoragePath("u9-fake.pdf");
+
+        AttachmentService service = mock(AttachmentService.class);
+        when(service.getByUuid("u9")).thenReturn(fakePdf);
+        when(service.create(any(Attachment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        AttachmentController controller = createController(root, service);
+
+        assertEquals(HttpStatus.BAD_REQUEST, controller.previewPdf("u9").getStatusCode());
+        ResponseEntity<Resource> downloadFake = controller.download("u9");
+        assertEquals(HttpStatus.OK, downloadFake.getStatusCode());
+        assertEquals("application/octet-stream", downloadFake.getHeaders().getContentType().toString());
+        assertEquals("nosniff", downloadFake.getHeaders().getFirst("X-Content-Type-Options"));
+
+        MockMultipartFile illegalChars = new MockMultipartFile(
+                "file",
+                "bad:name*?.pdf",
+                "application/pdf",
+                "%PDF-1.4\nok".getBytes(StandardCharsets.UTF_8)
+        );
+        ApiResponse<Attachment> uploadedIllegal = controller.upload("contracts", "c-1", illegalChars);
+        assertEquals(200, uploadedIllegal.getCode());
+        assertEquals("bad_name__.pdf", uploadedIllegal.getData().getOriginalFileName());
+
+        String longName = "a".repeat(260) + ".xlsx";
+        MockMultipartFile longFile = new MockMultipartFile(
+                "file",
+                longName,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                new byte[]{1, 2, 3}
+        );
+        ApiResponse<Attachment> uploadedLong = controller.upload("contracts", "c-1", longFile);
+        assertEquals(200, uploadedLong.getCode());
+        ArgumentCaptor<Attachment> captor = ArgumentCaptor.forClass(Attachment.class);
+        verify(service, org.mockito.Mockito.times(2)).create(captor.capture());
+        assertTrue(captor.getAllValues().get(1).getFileName().length() <= 255);
+        assertTrue(uploadedLong.getData().getOriginalFileName().length() <= 218);
+        assertTrue(uploadedLong.getData().getOriginalFileName().endsWith(".xlsx"));
     }
 
     @Test

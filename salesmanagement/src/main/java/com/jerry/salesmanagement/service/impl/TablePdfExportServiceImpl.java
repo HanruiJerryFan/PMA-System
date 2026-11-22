@@ -25,10 +25,14 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 public class TablePdfExportServiceImpl extends PdfExportSupport implements TablePdfExportService {
 
+    private static final int MAX_EXPORT_ROWS = 5000;
+    private static final int MAX_EXPORT_COLUMNS = 40;
+    private static final int MAX_EXTRA_SECTIONS = 20;
     private static final DateTimeFormatter GENERATED_AT_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     public TablePdfExportServiceImpl(
@@ -46,6 +50,15 @@ public class TablePdfExportServiceImpl extends PdfExportSupport implements Table
         List<PdfTableColumn> columns = safeColumns(request.getColumns());
         if (columns.isEmpty()) {
             throw new IllegalArgumentException("PDF export columns are required");
+        }
+        List<List<Object>> rows = safeRows(request.getRows());
+        validateTableLimits(columns, rows, "主表格");
+        List<PdfTableSection> sections = safeSections(request.getExtraSections());
+        if (sections.size() > MAX_EXTRA_SECTIONS) {
+            throw new IllegalArgumentException("PDF extra sections exceed limit of " + MAX_EXTRA_SECTIONS);
+        }
+        for (PdfTableSection section : sections) {
+            validateTableLimits(safeColumns(section.getColumns()), safeRows(section.getRows()), "附表");
         }
 
         Rectangle pageSize = "PORTRAIT".equalsIgnoreCase(request.getOrientation())
@@ -76,9 +89,9 @@ public class TablePdfExportServiceImpl extends PdfExportSupport implements Table
                 document.add(buildKeyValueTable(metadata));
             }
 
-            document.add(buildDataTable(columns, safeRows(request.getRows())));
+            document.add(buildDataTable(columns, rows));
 
-            for (PdfTableSection section : safeSections(request.getExtraSections())) {
+            for (PdfTableSection section : sections) {
                 List<PdfTableColumn> sectionColumns = safeColumns(section.getColumns());
                 if (sectionColumns.isEmpty()) {
                     continue;
@@ -92,6 +105,11 @@ public class TablePdfExportServiceImpl extends PdfExportSupport implements Table
 
             document.close();
             return outputStream.toByteArray();
+        } catch (IllegalArgumentException e) {
+            if (document.isOpen()) {
+                document.close();
+            }
+            throw e;
         } catch (Exception e) {
             if (document.isOpen()) {
                 document.close();
@@ -159,7 +177,7 @@ public class TablePdfExportServiceImpl extends PdfExportSupport implements Table
         float[] widths = new float[columns.size()];
         for (int i = 0; i < columns.size(); i++) {
             Float width = columns.get(i).getWidth();
-            widths[i] = width != null && width > 0 ? width : 1f;
+            widths[i] = width != null && Float.isFinite(width) && width > 0 ? width : 1f;
         }
         return widths;
     }
@@ -202,8 +220,17 @@ public class TablePdfExportServiceImpl extends PdfExportSupport implements Table
         return String.valueOf(value);
     }
 
+    private void validateTableLimits(List<PdfTableColumn> columns, List<List<Object>> rows, String tableLabel) {
+        if (columns.size() > MAX_EXPORT_COLUMNS) {
+            throw new IllegalArgumentException(tableLabel + " columns exceed limit of " + MAX_EXPORT_COLUMNS);
+        }
+        if (rows.size() > MAX_EXPORT_ROWS) {
+            throw new IllegalArgumentException(tableLabel + " rows exceed limit of " + MAX_EXPORT_ROWS);
+        }
+    }
+
     private List<PdfTableColumn> safeColumns(List<PdfTableColumn> columns) {
-        return columns == null ? List.of() : columns;
+        return columns == null ? List.of() : columns.stream().filter(Objects::nonNull).toList();
     }
 
     private List<List<Object>> safeRows(List<List<Object>> rows) {
@@ -211,16 +238,16 @@ public class TablePdfExportServiceImpl extends PdfExportSupport implements Table
     }
 
     private List<PdfTableSection> safeSections(List<PdfTableSection> sections) {
-        return sections == null ? List.of() : sections;
+        return sections == null ? List.of() : sections.stream().filter(Objects::nonNull).toList();
     }
 
     private List<PdfTableKeyValue> combineKeyValues(List<PdfTableKeyValue> metadata, List<PdfTableKeyValue> summaries) {
         List<PdfTableKeyValue> combined = new ArrayList<>();
         if (metadata != null) {
-            combined.addAll(metadata);
+            metadata.stream().filter(Objects::nonNull).forEach(combined::add);
         }
         if (summaries != null) {
-            combined.addAll(summaries);
+            summaries.stream().filter(Objects::nonNull).forEach(combined::add);
         }
         return combined;
     }

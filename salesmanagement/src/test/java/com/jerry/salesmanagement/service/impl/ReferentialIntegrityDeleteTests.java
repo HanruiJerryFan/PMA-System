@@ -63,9 +63,9 @@ class ReferentialIntegrityDeleteTests {
         jdbc.execute("CREATE TABLE contract_clause (id BIGINT AUTO_INCREMENT PRIMARY KEY, uuid VARCHAR(36), contract_basic_info_id VARCHAR(36))");
         jdbc.execute("CREATE TABLE finance_voucher (id BIGINT AUTO_INCREMENT PRIMARY KEY, uuid VARCHAR(36), project_id VARCHAR(36), counterparty_customer_id VARCHAR(36))");
         jdbc.execute("CREATE TABLE warehouse_info (id BIGINT AUTO_INCREMENT PRIMARY KEY, warehouse_code VARCHAR(32), warehouse_name VARCHAR(100), warehouse_address VARCHAR(255), contact_name VARCHAR(100), contact_phone VARCHAR(50), remark VARCHAR(255))");
-        jdbc.execute("CREATE TABLE warehouse_doc (doc_number VARCHAR(50) PRIMARY KEY, project_id VARCHAR(36), warehouse_id BIGINT, counterparty_customer_id VARCHAR(36))");
+        jdbc.execute("CREATE TABLE warehouse_doc (doc_number VARCHAR(50) PRIMARY KEY, project_id VARCHAR(36), warehouse_id BIGINT, counterparty_customer_id VARCHAR(36), contract_number VARCHAR(64))");
         jdbc.execute("CREATE TABLE warehouse_doc_item (id BIGINT AUTO_INCREMENT PRIMARY KEY, uuid VARCHAR(36), doc_number VARCHAR(50), material_id VARCHAR(36))");
-        jdbc.execute("CREATE TABLE goods_transaction_dynamic_info (id BIGINT AUTO_INCREMENT PRIMARY KEY, uuid VARCHAR(36), material_id VARCHAR(36), project_id VARCHAR(36), warehouse_id BIGINT)");
+        jdbc.execute("CREATE TABLE goods_transaction_dynamic_info (id BIGINT AUTO_INCREMENT PRIMARY KEY, uuid VARCHAR(36), material_id VARCHAR(36), project_id VARCHAR(36), warehouse_id BIGINT, source_ref_type VARCHAR(64), source_ref_id VARCHAR(64))");
         jdbc.execute("CREATE TABLE product_basic_info (id BIGINT AUTO_INCREMENT PRIMARY KEY, uuid VARCHAR(36), brand_code VARCHAR(2), category_code VARCHAR(2), subcategory_code VARCHAR(2), sequence_no VARCHAR(3), band_code VARCHAR(3), material_code VARCHAR(12), category_id BIGINT, subcategory_id BIGINT, product_name VARCHAR(200), product_model VARCHAR(200), brand_id BIGINT, manufacturer VARCHAR(200), unit VARCHAR(50), frequency VARCHAR(100), specification TEXT, other_note TEXT, is_active BOOLEAN, created_at TIMESTAMP, created_by BIGINT, updated_at TIMESTAMP, updated_by BIGINT)");
         jdbc.execute("CREATE TABLE product_history_price (id BIGINT AUTO_INCREMENT PRIMARY KEY, product_basic_info_uuid VARCHAR(36), supplier_customer_id VARCHAR(36))");
 
