@@ -18,7 +18,7 @@ export default function AuditTrails() {
   const [query, setQuery] = useState({ page: 1, pageSize: 10, filters: {}, reloadKey: 0 });
   const { currentUser } = useAuth();
   const [form] = Form.useForm();
-  const canExport = hasAnyAuthority(currentUser, ["logs.view"]);
+  const canExport = hasAnyAuthority(currentUser, ["logs.view", "logs.manage"]);
 
   const fetchRecords = useCallback(async ({ page, pageSize, filters }) => {
     setLoading(true);

@@ -10,11 +10,13 @@ export const permissionAPI = {
   deleteUser: (id) => api.delete(`/users/${id}`),
 
   getRoles: () => api.get("/roles").then((response) => response?.data ?? response),
+  getRoleOptions: () => api.get("/roles/options").then((response) => response?.data ?? response),
   createRole: (data) => api.post("/roles", data),
   updateRole: (id, data) => api.put(`/roles/${id}`, data),
   deleteRole: (id) => api.delete(`/roles/${id}`),
 
   getPermissions: () => api.get("/permissions").then((response) => response?.data ?? response),
+  getPermissionOptions: () => api.get("/permissions/options").then((response) => response?.data ?? response),
   createPermission: (data) => api.post("/permissions", data),
   updatePermission: (id, data) => api.put(`/permissions/${id}`, data),
   deletePermission: (id) => api.delete(`/permissions/${id}`),

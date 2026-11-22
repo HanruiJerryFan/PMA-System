@@ -14,6 +14,7 @@ import {
   Table,
   Tabs,
   Tag,
+  Tooltip,
   Typography,
   message,
 } from "antd";
@@ -26,6 +27,9 @@ import {
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { approvalAPI, financeAPI, inventoryAPI, projectAPI } from "../../api/modules";
+import { useAuth } from "../../context/AuthContext";
+import { hasAnyAuthority } from "../../utils/authorities";
+import { canMaintainEntryAuditUsers, isSelfEntryRecord } from "../../utils/entryAudit";
 
 const { Text, Title } = Typography;
 
@@ -57,6 +61,9 @@ function matchesKeyword(item, keyword) {
 
 export default function ApprovalWorkbench() {
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
+  const canViewProjects = hasAnyAuthority(currentUser, ["project.access", "project.manage"]);
+  const canMaintainEntryAudit = canMaintainEntryAuditUsers(currentUser);
   const [loading, setLoading] = useState(false);
   const [auditingKey, setAuditingKey] = useState(null);
   const [keyword, setKeyword] = useState("");
@@ -146,14 +153,21 @@ export default function ApprovalWorkbench() {
       width: 220,
       render: (_, record) =>
         record.projectId ? (
-          <Button
-            type="link"
-            style={{ padding: 0, height: "auto", whiteSpace: "normal", textAlign: "left" }}
-            onClick={() => navigate(`/project/dashboard?projectUuid=${record.projectId}`)}
-          >
-            {record.projectNumber ? `${record.projectNumber} · ` : ""}
-            {record.projectName || record.projectId}
-          </Button>
+          canViewProjects ? (
+            <Button
+              type="link"
+              style={{ padding: 0, height: "auto", whiteSpace: "normal", textAlign: "left" }}
+              onClick={() => navigate(`/project/dashboard?projectUuid=${record.projectId}`)}
+            >
+              {record.projectNumber ? `${record.projectNumber} · ` : ""}
+              {record.projectName || record.projectId}
+            </Button>
+          ) : (
+            <Text>
+              {record.projectNumber ? `${record.projectNumber} · ` : ""}
+              {record.projectName || record.projectId}
+            </Text>
+          )
         ) : (
           "-"
         ),
@@ -186,6 +200,7 @@ export default function ApprovalWorkbench() {
       width: 190,
       render: (_, record) => {
         const key = `${record.module}:${record.id}`;
+        const selfEntryBlocked = isSelfEntryRecord(currentUser, record) && !canMaintainEntryAudit;
         return (
           <Space>
             <Button
@@ -195,26 +210,30 @@ export default function ApprovalWorkbench() {
             >
               查看
             </Button>
-            <Popconfirm
-              title={`确认审核通过“${record.title || record.code}”？`}
-              okText="审核通过"
-              cancelText="取消"
-              onConfirm={() => handleAudit(record)}
-            >
-              <Button
-                size="small"
-                type="primary"
-                icon={<CheckCircleOutlined />}
-                loading={auditingKey === key}
+            <Tooltip title={selfEntryBlocked ? "录入人与审核人不能为同一人" : undefined}>
+              <Popconfirm
+                title={`确认审核通过“${record.title || record.code}”？`}
+                okText="审核通过"
+                cancelText="取消"
+                disabled={selfEntryBlocked}
+                onConfirm={() => handleAudit(record)}
               >
-                审核通过
-              </Button>
-            </Popconfirm>
+                <Button
+                  size="small"
+                  type="primary"
+                  icon={<CheckCircleOutlined />}
+                  loading={auditingKey === key}
+                  disabled={selfEntryBlocked}
+                >
+                  审核通过
+                </Button>
+              </Popconfirm>
+            </Tooltip>
           </Space>
         );
       },
     },
-  ], [auditingKey, handleAudit, navigate]);
+  ], [auditingKey, canMaintainEntryAudit, canViewProjects, currentUser, handleAudit, navigate]);
 
   const filteredProjectLists = useMemo(
     () => summary.projectLists.filter((item) => matchesKeyword(item, keyword)),

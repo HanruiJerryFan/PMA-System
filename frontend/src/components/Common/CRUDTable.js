@@ -68,6 +68,8 @@ export default function CRUDTable({
   onModalSuccess = null,
   onFilteredDataChange = null,
   serverPagination = null,
+  isRowEditable = null,
+  isRowDeletable = null,
 }) {
   const location = useLocation();
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -136,7 +138,7 @@ export default function CRUDTable({
   };
 
   const handleEdit = (record) => {
-    if (!canUpdate) {
+    if (!canUpdate || (typeof isRowEditable === "function" && !isRowEditable(record))) {
       return;
     }
     const nextInitialFormValues = mapRecordToFormValues(record);
@@ -154,7 +156,7 @@ export default function CRUDTable({
   };
 
   const handleDelete = async (record) => {
-    if (!canDelete) {
+    if (!canDelete || (typeof isRowDeletable === "function" && !isRowDeletable(record))) {
       return;
     }
     try {
@@ -279,6 +281,9 @@ export default function CRUDTable({
                 ? [customRowActions]
                 : [];
 
+            const rowEditable = typeof isRowEditable === "function" ? Boolean(isRowEditable(record)) : true;
+            const rowDeletable = typeof isRowDeletable === "function" ? Boolean(isRowDeletable(record)) : true;
+
             return (
               <Space size="small" wrap>
                 {enableView && (
@@ -287,7 +292,13 @@ export default function CRUDTable({
                   </Button>
                 )}
                 {canUpdate && (
-                  <Button type="link" icon={<EditOutlined />} onClick={() => handleEdit(record)} size="small">
+                  <Button
+                    type="link"
+                    icon={<EditOutlined />}
+                    disabled={!rowEditable}
+                    onClick={() => handleEdit(record)}
+                    size="small"
+                  >
                     编辑
                   </Button>
                 )}
@@ -295,11 +306,12 @@ export default function CRUDTable({
                 {canDelete && (
                   <Popconfirm
                     title="确定要删除这条记录吗？"
+                    disabled={!rowDeletable}
                     onConfirm={() => handleDelete(record)}
                     okText="确定"
                     cancelText="取消"
                   >
-                    <Button type="link" danger icon={<DeleteOutlined />} size="small">
+                    <Button type="link" danger disabled={!rowDeletable} icon={<DeleteOutlined />} size="small">
                       删除
                     </Button>
                   </Popconfirm>

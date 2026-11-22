@@ -39,7 +39,7 @@ import BusinessAttachmentUpload from "../../components/Common/BusinessAttachment
 import { exportAPI, permissionAPI, productAPI, projectAPI } from "../../api/modules";
 import { hasAnyAuthority } from "../../utils/authorities";
 import { resolvePagePermissions } from "../../utils/pagePermissions";
-import { canMaintainEntryAuditUsers } from "../../utils/entryAudit";
+import { canMaintainEntryAuditUsers, isSelfEntryRecord } from "../../utils/entryAudit";
 import { uploadBusinessAttachments } from "../../utils/attachments";
 import { downloadApiFile, downloadExcel, resolveBlobErrorMessage } from "../../utils/exporters";
 import { sortSelectItems } from "../../utils/selectSorting";
@@ -128,7 +128,7 @@ export default function ProjectLists() {
   const canAudit = hasAnyAuthority(currentUser, ["project.list.audit", ...pagePermissions.manageAuthorities]);
   const canMaintainEntryAudit = canMaintainEntryAuditUsers(currentUser);
   const canExport = hasAnyAuthority(currentUser, pagePermissions.exportAuthorities);
-  const canAccessAttachments = hasAnyAuthority(currentUser, ["attachment.access"]);
+  const canAccessAttachments = hasAnyAuthority(currentUser, ["attachment.access", "attachment.manage"]);
   const canManageAttachments = hasAnyAuthority(currentUser, ["attachment.manage"]);
   const importDisabledReason = !canManage ? "当前账号没有项目管理权限" : !selectedListUuid ? "请先选择一个项目清单" : "";
 
@@ -255,6 +255,7 @@ export default function ProjectLists() {
 
   const openListModal = (record = null) => {
     if (!canManage) return message.error("没有维护项目清单的权限");
+    if (record?.auditorUser && !canMaintainEntryAudit) return message.error("已审核清单不可修改");
     setEditingList(record);
     setPendingListAttachmentFiles([]);
     if (listAttachmentInputRef.current) {
@@ -372,6 +373,7 @@ export default function ProjectLists() {
 
   const openItemModal = (record = null) => {
     if (!canManage) return message.error("没有维护项目清单明细的权限");
+    if (record?.auditorUser && !canMaintainEntryAudit) return message.error("已审核明细不可修改");
     if (!selectedListUuid) return message.warning("请先选择一个项目清单");
     setEditingItem(record);
     itemForm.resetFields();
@@ -582,7 +584,7 @@ export default function ProjectLists() {
           <Button
             type="link"
             icon={<EditOutlined />}
-            disabled={!canManage}
+            disabled={!canManage || (Boolean(record.auditorUser) && !canMaintainEntryAudit)}
             onClick={(event) => {
               event.stopPropagation();
               openListModal(record);
@@ -593,7 +595,11 @@ export default function ProjectLists() {
           <Button
             type="link"
             icon={<CheckCircleOutlined />}
-            disabled={!canAudit || Boolean(record.auditorUser)}
+            disabled={
+              !canAudit ||
+              Boolean(record.auditorUser) ||
+              (isSelfEntryRecord(currentUser, record) && !canMaintainEntryAudit)
+            }
             onClick={(event) => {
               event.stopPropagation();
               auditList(record.uuid);
@@ -601,11 +607,17 @@ export default function ProjectLists() {
           >
             审核
           </Button>
-          <Popconfirm title="确定删除这个项目清单吗？" onConfirm={() => deleteList(record.uuid)} okText="确定" cancelText="取消">
+          <Popconfirm
+            title="确定删除这个项目清单吗？"
+            disabled={!canManage || (Boolean(record.auditorUser) && !canMaintainEntryAudit)}
+            onConfirm={() => deleteList(record.uuid)}
+            okText="确定"
+            cancelText="取消"
+          >
             <Button
               type="link"
               danger
-              disabled={!canManage}
+              disabled={!canManage || (Boolean(record.auditorUser) && !canMaintainEntryAudit)}
               icon={<DeleteOutlined />}
               onClick={(event) => event.stopPropagation()}
             >
@@ -639,14 +651,39 @@ export default function ProjectLists() {
       fixed: "left",
       render: (_, record) => (
         <Space wrap>
-          <Button type="link" icon={<EditOutlined />} disabled={!canManage} onClick={() => openItemModal(record)}>
+          <Button
+            type="link"
+            icon={<EditOutlined />}
+            disabled={!canManage || (Boolean(record.auditorUser) && !canMaintainEntryAudit)}
+            onClick={() => openItemModal(record)}
+          >
             编辑
           </Button>
-          <Button type="link" icon={<CheckCircleOutlined />} disabled={!canAudit || Boolean(record.auditorUser)} onClick={() => auditItem(record.uuid)}>
+          <Button
+            type="link"
+            icon={<CheckCircleOutlined />}
+            disabled={
+              !canAudit ||
+              Boolean(record.auditorUser) ||
+              (isSelfEntryRecord(currentUser, record) && !canMaintainEntryAudit)
+            }
+            onClick={() => auditItem(record.uuid)}
+          >
             审核
           </Button>
-          <Popconfirm title="确定删除这条清单明细吗？" onConfirm={() => deleteItem(record.uuid)} okText="确定" cancelText="取消">
-            <Button type="link" danger disabled={!canManage} icon={<DeleteOutlined />}>
+          <Popconfirm
+            title="确定删除这条清单明细吗？"
+            disabled={!canManage || (Boolean(record.auditorUser) && !canMaintainEntryAudit)}
+            onConfirm={() => deleteItem(record.uuid)}
+            okText="确定"
+            cancelText="取消"
+          >
+            <Button
+              type="link"
+              danger
+              disabled={!canManage || (Boolean(record.auditorUser) && !canMaintainEntryAudit)}
+              icon={<DeleteOutlined />}
+            >
               删除
             </Button>
           </Popconfirm>

@@ -312,7 +312,7 @@ export default function ProjectDashboard() {
 
   const canManageProject = hasAnyAuthority(currentUser, ["project.manage"]);
   const canEnterProjectList = hasAnyAuthority(currentUser, ["project.list.entry", "project.manage"]);
-  const canAccessContract = hasAnyAuthority(currentUser, ["contract.access"]);
+  const canAccessContract = hasAnyAuthority(currentUser, ["contract.access", "contract.manage"]);
   const canManageContract = hasAnyAuthority(currentUser, ["contract.manage"]);
   const canAccessFinance = hasAnyAuthority(currentUser, [
     "finance.access",
@@ -321,7 +321,7 @@ export default function ProjectDashboard() {
     "finance.voucher.audit",
   ]);
   const canManageFinance = hasAnyAuthority(currentUser, ["finance.voucher.entry", "finance.manage"]);
-  const canAccessAttachment = hasAnyAuthority(currentUser, ["attachment.access"]);
+  const canAccessAttachment = hasAnyAuthority(currentUser, ["attachment.access", "attachment.manage"]);
   const canManageAttachment = hasAnyAuthority(currentUser, ["attachment.manage"]);
 
   const customerMap = useMemo(() => Object.fromEntries(customers.map((item) => [item.uuid, item.customerName])), [customers]);
@@ -435,14 +435,14 @@ export default function ProjectDashboard() {
 
     setLoading(true);
     try {
-      const allowContract = hasAnyAuthority(currentUser, ["contract.access"]);
+      const allowContract = hasAnyAuthority(currentUser, ["contract.access", "contract.manage"]);
       const allowFinance = hasAnyAuthority(currentUser, [
         "finance.access",
         "finance.manage",
         "finance.voucher.entry",
         "finance.voucher.audit",
       ]);
-      const allowAttachment = hasAnyAuthority(currentUser, ["attachment.access"]);
+      const allowAttachment = hasAnyAuthority(currentUser, ["attachment.access", "attachment.manage"]);
 
       const [
         projectResponse,

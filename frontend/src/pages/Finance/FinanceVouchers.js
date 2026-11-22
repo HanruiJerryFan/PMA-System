@@ -37,7 +37,7 @@ import BusinessAttachmentUpload from "../../components/Common/BusinessAttachment
 import CRUDTable from "../../components/Common/CRUDTable";
 import { customerAPI, exportAPI, financeAPI, permissionAPI, projectAPI } from "../../api/modules";
 import { hasAnyAuthority } from "../../utils/authorities";
-import { canMaintainEntryAuditUsers, getUserLabel } from "../../utils/entryAudit";
+import { canMaintainEntryAuditUsers, getUserLabel, isSelfEntryRecord } from "../../utils/entryAudit";
 import { uploadBusinessAttachments } from "../../utils/attachments";
 import { downloadApiFile, downloadExcel, resolveBlobErrorMessage } from "../../utils/exporters";
 import { getFinanceSubjectOptions } from "../../utils/financeSubjects";
@@ -352,7 +352,7 @@ export default function FinanceVouchers() {
   const [pendingVoucherAttachmentFiles, setPendingVoucherAttachmentFiles] = useState([]);
   const [filteredVisibleVouchers, setFilteredVisibleVouchers] = useState([]);
   const voucherAttachmentInputRef = useRef(null);
-  const canAccessAttachments = hasAnyAuthority(currentUser, ["attachment.access"]);
+  const canAccessAttachments = hasAnyAuthority(currentUser, ["attachment.access", "attachment.manage"]);
   const canManageAttachments = hasAnyAuthority(currentUser, ["attachment.manage"]);
   const canAuditVouchers = hasAnyAuthority(currentUser, ["finance.voucher.audit", "finance.manage"]);
   const canMaintainEntryAudit = canMaintainEntryAuditUsers(currentUser);
@@ -950,7 +950,11 @@ export default function FinanceVouchers() {
             type="link"
             icon={<CheckCircleOutlined />}
             onClick={() => handleAudit(record.uuid)}
-            disabled={!canAuditVouchers || Boolean(record.auditorUser)}
+            disabled={
+              !canAuditVouchers ||
+              Boolean(record.auditorUser) ||
+              (isSelfEntryRecord(currentUser, record) && !canMaintainEntryAudit)
+            }
             size="small"
           >
             审核
@@ -960,6 +964,8 @@ export default function FinanceVouchers() {
         createAuthorities={["finance.voucher.entry", "finance.manage"]}
         updateAuthorities={["finance.voucher.entry", "finance.manage"]}
         deleteAuthorities={["finance.voucher.entry", "finance.manage"]}
+        isRowEditable={(record) => !record?.auditorUser || canMaintainEntryAudit}
+        isRowDeletable={(record) => !record?.auditorUser || canMaintainEntryAudit}
         extraActions={({ filteredData, canExport }) => (
           <>
             <Button

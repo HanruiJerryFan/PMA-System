@@ -235,7 +235,7 @@ export default function ProjectListDashboard() {
   const [listItems, setListItems] = useState([]);
   const [attachments, setAttachments] = useState([]);
 
-  const canAccessAttachments = hasAnyAuthority(currentUser, ["attachment.access"]);
+  const canAccessAttachments = hasAnyAuthority(currentUser, ["attachment.access", "attachment.manage"]);
   const canManageProject = hasAnyAuthority(currentUser, ["project.manage"]);
 
   const isAggregateView = Boolean(aggregateType);
@@ -328,7 +328,7 @@ export default function ProjectListDashboard() {
 
       setLoading(true);
       try {
-        const allowAttachment = hasAnyAuthority(currentUser, ["attachment.access"]);
+        const allowAttachment = hasAnyAuthority(currentUser, ["attachment.access", "attachment.manage"]);
         const aggregateRequest = aggregateType
           ? isCombinedAggregateView
             ? Promise.all(FINAL_AGGREGATE_TYPES.map((type) => projectAPI.getProjectListAggregate(projectUuid, type)))

@@ -142,38 +142,38 @@ function AppContent() {
               <Route path="/permission/permissions" element={<PrivateRoute requiredAuthorities={["permission.items.manage"]}><PermissionManagement /></PrivateRoute>} />
               <Route path="/permission/user-roles" element={<PrivateRoute requiredAuthorities={["permission.user-roles.manage"]}><UserRoleAssignments /></PrivateRoute>} />
               <Route path="/permission/role-permissions" element={<PrivateRoute requiredAuthorities={["permission.role-permissions.manage"]}><RolePermissionAssignments /></PrivateRoute>} />
-              <Route path="/customer/info" element={<PrivateRoute requiredAuthorities={["customer.access"]}><CustomerInfo /></PrivateRoute>} />
-              <Route path="/customer/contacts" element={<PrivateRoute requiredAuthorities={["customer.access"]}><CustomerContacts /></PrivateRoute>} />
-              <Route path="/customer/regions" element={<PrivateRoute requiredAuthorities={["customer.access"]}><RegionManagement /></PrivateRoute>} />
+              <Route path="/customer/info" element={<PrivateRoute requiredAuthorities={["customer.access", "customer.manage"]}><CustomerInfo /></PrivateRoute>} />
+              <Route path="/customer/contacts" element={<PrivateRoute requiredAuthorities={["customer.access", "customer.manage"]}><CustomerContacts /></PrivateRoute>} />
+              <Route path="/customer/regions" element={<PrivateRoute requiredAuthorities={["customer.access", "customer.manage"]}><RegionManagement /></PrivateRoute>} />
               <Route path="/customer/types" element={<PrivateRoute requiredAuthorities={["customer.manage"]}><CustomerTypes /></PrivateRoute>} />
               <Route path="/customer/industries" element={<PrivateRoute requiredAuthorities={["customer.manage"]}><CustomerIndustries /></PrivateRoute>} />
               <Route path="/customer/activity-rules" element={<PrivateRoute requiredAuthorities={["customer.manage"]}><CustomerActivityRules /></PrivateRoute>} />
-              <Route path="/project/dashboard" element={<PrivateRoute requiredAuthorities={["project.access"]}><ProjectDashboard /></PrivateRoute>} />
-              <Route path="/project/list-dashboard" element={<PrivateRoute requiredAuthorities={["project.access"]}><ProjectListDashboard /></PrivateRoute>} />
-              <Route path="/project/info" element={<PrivateRoute requiredAuthorities={["project.access"]}><ProjectInfo /></PrivateRoute>} />
+              <Route path="/project/dashboard" element={<PrivateRoute requiredAuthorities={["project.access", "project.manage"]}><ProjectDashboard /></PrivateRoute>} />
+              <Route path="/project/list-dashboard" element={<PrivateRoute requiredAuthorities={["project.access", "project.manage"]}><ProjectListDashboard /></PrivateRoute>} />
+              <Route path="/project/info" element={<PrivateRoute requiredAuthorities={["project.access", "project.manage"]}><ProjectInfo /></PrivateRoute>} />
               <Route path="/project/types" element={<PrivateRoute requiredAuthorities={["project.manage"]}><ProjectTypes /></PrivateRoute>} />
               <Route path="/project/stages" element={<PrivateRoute requiredAuthorities={["project.manage"]}><StageManagement /></PrivateRoute>} />
-              <Route path="/project/lists" element={<PrivateRoute requiredAuthorities={["project.access", "project.list.entry", "project.list.audit"]}><ProjectLists /></PrivateRoute>} />
+              <Route path="/project/lists" element={<PrivateRoute requiredAuthorities={["project.access", "project.manage", "project.list.entry", "project.list.audit"]}><ProjectLists /></PrivateRoute>} />
               <Route path="/project/status-history" element={<PrivateRoute requiredAuthorities={["project.manage"]}><ProjectStatusHistory /></PrivateRoute>} />
-              <Route path="/contract/info" element={<PrivateRoute requiredAuthorities={["contract.access"]}><ContractInfo /></PrivateRoute>} />
+              <Route path="/contract/info" element={<PrivateRoute requiredAuthorities={["contract.access", "contract.manage"]}><ContractInfo /></PrivateRoute>} />
               <Route path="/contract/clauses" element={<PrivateRoute requiredAuthorities={["contract.manage"]}><ContractClauses /></PrivateRoute>} />
-              <Route path="/product/info" element={<PrivateRoute requiredAuthorities={["product.manage"]}><ProductInfo /></PrivateRoute>} />
+              <Route path="/product/info" element={<PrivateRoute requiredAuthorities={["product.access", "product.manage"]}><ProductInfo /></PrivateRoute>} />
               <Route path="/product/categories" element={<PrivateRoute requiredAuthorities={["product.manage"]}><ProductCategories /></PrivateRoute>} />
               <Route path="/product/brands" element={<PrivateRoute requiredAuthorities={["product.manage"]}><ProductBrands /></PrivateRoute>} />
               <Route path="/product/subcategories" element={<PrivateRoute requiredAuthorities={["product.manage"]}><ProductSubcategories /></PrivateRoute>} />
               <Route path="/product/bands" element={<PrivateRoute requiredAuthorities={["product.manage"]}><ProductBands /></PrivateRoute>} />
-              <Route path="/product/prices" element={<PrivateRoute requiredAuthorities={["product.manage"]}><ProductPrices /></PrivateRoute>} />
-              <Route path="/inventory/stock" element={<PrivateRoute requiredAuthorities={["inventory.access"]}><InventoryStock /></PrivateRoute>} />
-              <Route path="/inventory/transactions" element={<PrivateRoute requiredAuthorities={["inventory.access"]}><InventoryTransactions /></PrivateRoute>} />
+              <Route path="/product/prices" element={<PrivateRoute requiredAuthorities={["product.access", "product.manage"]}><ProductPrices /></PrivateRoute>} />
+              <Route path="/inventory/stock" element={<PrivateRoute requiredAuthorities={["inventory.access", "inventory.manage"]}><InventoryStock /></PrivateRoute>} />
+              <Route path="/inventory/transactions" element={<PrivateRoute requiredAuthorities={["inventory.access", "inventory.manage"]}><InventoryTransactions /></PrivateRoute>} />
               <Route path="/inventory/warehouses" element={<PrivateRoute requiredAuthorities={["inventory.manage"]}><Warehouses /></PrivateRoute>} />
-              <Route path="/inventory/warehouse" element={<PrivateRoute requiredAuthorities={["inventory.access", "inventory.warehouse-doc.entry", "inventory.warehouse-doc.audit"]}><WarehouseDoc /></PrivateRoute>} />
+              <Route path="/inventory/warehouse" element={<PrivateRoute requiredAuthorities={["inventory.access", "inventory.manage", "inventory.warehouse-doc.entry", "inventory.warehouse-doc.audit"]}><WarehouseDoc /></PrivateRoute>} />
               <Route path="/finance/analytics" element={<PrivateRoute requiredAuthorities={["finance.access", "finance.manage"]}><FinanceAnalytics /></PrivateRoute>} />
-              <Route path="/finance/vouchers" element={<PrivateRoute requiredAuthorities={["finance.access", "finance.voucher.entry", "finance.voucher.audit"]}><FinanceVouchers /></PrivateRoute>} />
+              <Route path="/finance/vouchers" element={<PrivateRoute requiredAuthorities={["finance.access", "finance.manage", "finance.voucher.entry", "finance.voucher.audit"]}><FinanceVouchers /></PrivateRoute>} />
               <Route path="/finance/tax-rates" element={<PrivateRoute requiredAuthorities={["finance.manage"]}><TaxRateManagement /></PrivateRoute>} />
               <Route path="/finance/subjects" element={<PrivateRoute requiredAuthorities={["finance.manage"]}><FinanceSubjectManagement /></PrivateRoute>} />
-              <Route path="/attachment/center" element={<PrivateRoute requiredAuthorities={["attachment.access"]}><AttachmentCenter /></PrivateRoute>} />
-              <Route path="/logs/login" element={<PrivateRoute requiredAuthorities={["logs.view"]}><LoginLogs /></PrivateRoute>} />
-              <Route path="/logs/audit" element={<PrivateRoute requiredAuthorities={["logs.view"]}><AuditTrails /></PrivateRoute>} />
+              <Route path="/attachment/center" element={<PrivateRoute requiredAuthorities={["attachment.access", "attachment.manage"]}><AttachmentCenter /></PrivateRoute>} />
+              <Route path="/logs/login" element={<PrivateRoute requiredAuthorities={["logs.view", "logs.manage"]}><LoginLogs /></PrivateRoute>} />
+              <Route path="/logs/audit" element={<PrivateRoute requiredAuthorities={["logs.view", "logs.manage"]}><AuditTrails /></PrivateRoute>} />
               <Route path="/" element={<Navigate to="/home" replace />} />
               <Route path="*" element={<Navigate to="/home" replace />} />
             </Routes>

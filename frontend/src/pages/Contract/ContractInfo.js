@@ -40,7 +40,7 @@ export default function ContractInfo() {
   const { currentUser } = useAuth();
   const [pendingContractAttachmentFiles, setPendingContractAttachmentFiles] = useState([]);
   const contractAttachmentInputRef = useRef(null);
-  const canAccessAttachments = hasAnyAuthority(currentUser, ["attachment.access"]);
+  const canAccessAttachments = hasAnyAuthority(currentUser, ["attachment.access", "attachment.manage"]);
   const canManageAttachments = hasAnyAuthority(currentUser, ["attachment.manage"]);
 
   const customerMap = useMemo(

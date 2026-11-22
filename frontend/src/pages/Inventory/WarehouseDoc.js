@@ -27,7 +27,7 @@ import { sortSelectItems } from "../../utils/selectSorting";
 import { queryWarehouseDocuments } from "./warehouseDocumentQuery";
 import { hasAnyAuthority } from "../../utils/authorities";
 import { resolvePagePermissions } from "../../utils/pagePermissions";
-import { canMaintainEntryAuditUsers, getUserLabel } from "../../utils/entryAudit";
+import { canMaintainEntryAuditUsers, getUserLabel, isSelfEntryRecord } from "../../utils/entryAudit";
 import WarehouseDocumentModal from "./WarehouseDocumentModal";
 import {
   DOC_TYPES,
@@ -161,6 +161,10 @@ export default function WarehouseDoc() {
   const openModal = (record = null) => {
     if (!canManage) {
       message.error("没有维护出入库单的权限");
+      return;
+    }
+    if (record?.auditorUser && !canMaintainEntryAudit) {
+      message.error("已审核出入库单不可修改");
       return;
     }
     setEditingDoc(record);
@@ -298,7 +302,11 @@ export default function WarehouseDoc() {
           <Button
             type="link"
             icon={<EditOutlined />}
-            disabled={!canManage || isGeneratedInbound(record)}
+            disabled={
+              !canManage ||
+              isGeneratedInbound(record) ||
+              (Boolean(record.auditorUser) && !canMaintainEntryAudit)
+            }
             onClick={() => openModal(record)}
           >
             编辑
@@ -306,18 +314,37 @@ export default function WarehouseDoc() {
           <Button
             type="link"
             icon={<CheckCircleOutlined />}
-            disabled={!canAudit || Boolean(record.auditorUser) || isGeneratedInbound(record)}
+            disabled={
+              !canAudit ||
+              Boolean(record.auditorUser) ||
+              isGeneratedInbound(record) ||
+              (isSelfEntryRecord(currentUser, record) && !canMaintainEntryAudit)
+            }
             onClick={() => auditDocument(record.docNumber)}
           >
             审核
           </Button>
           <Popconfirm
             title="确定删除这张出入库单吗？"
+            disabled={
+              !canManage ||
+              isGeneratedInbound(record) ||
+              (Boolean(record.auditorUser) && !canMaintainEntryAudit)
+            }
             onConfirm={() => deleteDocument(record.docNumber)}
             okText="确定"
             cancelText="取消"
           >
-            <Button type="link" danger icon={<DeleteOutlined />} disabled={!canManage || isGeneratedInbound(record)}>
+            <Button
+              type="link"
+              danger
+              icon={<DeleteOutlined />}
+              disabled={
+                !canManage ||
+                isGeneratedInbound(record) ||
+                (Boolean(record.auditorUser) && !canMaintainEntryAudit)
+              }
+            >
               删除
             </Button>
           </Popconfirm>

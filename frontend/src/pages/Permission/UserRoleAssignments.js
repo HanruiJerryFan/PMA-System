@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Button, Card, Select, Space, Table, Tag, Typography, message } from "antd";
 import { permissionAPI } from "../../api/modules";
+import { useAuth } from "../../context/AuthContext";
 
 const { Option } = Select;
 const { Title, Text } = Typography;
 
 export default function UserRoleAssignments() {
+  const { refreshCurrentUser } = useAuth();
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
   const [selectedUserId, setSelectedUserId] = useState(null);
@@ -25,7 +27,7 @@ export default function UserRoleAssignments() {
       try {
         const [userResponse, roleResponse] = await Promise.all([
           permissionAPI.getUserOptions(),
-          permissionAPI.getRoles(),
+          permissionAPI.getRoleOptions(),
         ]);
         const userData = userResponse || [];
         setUsers(userData);
@@ -84,7 +86,8 @@ export default function UserRoleAssignments() {
       await Promise.all(toAdd.map((roleId) => permissionAPI.assignUserRole({ userId: selectedUserId, roleId })));
       await Promise.all(toRemove.map((roleId) => permissionAPI.removeUserRole(selectedUserId, roleId)));
       setAssignedRoleIds(draftRoleIds);
-      message.success("用户角色已更新");
+      await refreshCurrentUser?.();
+      message.success("用户角色已更新，最新权限将实时生效");
     } catch (error) {
       message.error(error?.message || "更新用户角色失败");
     } finally {
@@ -99,7 +102,7 @@ export default function UserRoleAssignments() {
           <Title level={4} style={{ margin: 0 }}>
             用户角色分配
           </Title>
-          <Text type="secondary">选择一个用户，调整角色后保存。新的角色权限会在下次登录时生效。</Text>
+          <Text type="secondary">选择一个用户，调整角色后保存。新的角色权限会实时生效。</Text>
           <Space wrap>
             <Select
               style={{ width: 320 }}

@@ -60,15 +60,15 @@ export default function HomePage() {
   const permissions = useMemo(
     () => ({
       canViewUsers: hasAnyAuthority(currentUser, ["permission.users.manage"]),
-      canViewCustomers: hasAnyAuthority(currentUser, ["customer.access"]),
-      canViewProjects: hasAnyAuthority(currentUser, ["project.access"]),
+      canViewCustomers: hasAnyAuthority(currentUser, ["customer.access", "customer.manage"]),
+      canViewProjects: hasAnyAuthority(currentUser, ["project.access", "project.manage"]),
       canManageProjects: hasAnyAuthority(currentUser, ["project.manage"]),
-      canViewContracts: hasAnyAuthority(currentUser, ["contract.access"]),
-      canViewProducts: hasAnyAuthority(currentUser, ["product.access"]),
+      canViewContracts: hasAnyAuthority(currentUser, ["contract.access", "contract.manage"]),
+      canViewProducts: hasAnyAuthority(currentUser, ["product.access", "product.manage"]),
       canManageProducts: hasAnyAuthority(currentUser, ["product.manage"]),
-      canViewInventory: hasAnyAuthority(currentUser, ["inventory.access"]),
+      canViewInventory: hasAnyAuthority(currentUser, ["inventory.access", "inventory.manage"]),
       canManageInventory: hasAnyAuthority(currentUser, ["inventory.manage"]),
-      canViewLogs: hasAnyAuthority(currentUser, ["logs.view"]),
+      canViewLogs: hasAnyAuthority(currentUser, ["logs.view", "logs.manage"]),
     }),
     [currentUser]
   );
@@ -82,25 +82,25 @@ export default function HomePage() {
       if (hasAnyAuthority(user, ["permission.users.manage"])) {
         loaders.push({ key: "users", label: "用户", request: permissionAPI.getUsers });
       }
-      if (hasAnyAuthority(user, ["customer.access"])) {
+      if (hasAnyAuthority(user, ["customer.access", "customer.manage"])) {
         loaders.push({ key: "customers", label: "客户", request: customerAPI.getCustomers });
         loaders.push({ key: "provinces", label: "地区", request: regionAPI.getProvinces });
       }
-      if (hasAnyAuthority(user, ["project.access"])) {
+      if (hasAnyAuthority(user, ["project.access", "project.manage"])) {
         loaders.push({ key: "projects", label: "项目", request: projectAPI.getProjects });
         loaders.push({ key: "projectLists", label: "项目清单", request: projectAPI.getProjectLists });
       }
-      if (hasAnyAuthority(user, ["contract.access"])) {
+      if (hasAnyAuthority(user, ["contract.access", "contract.manage"])) {
         loaders.push({ key: "contracts", label: "合同", request: contractAPI.getContracts });
       }
-      if (hasAnyAuthority(user, ["product.access"])) {
+      if (hasAnyAuthority(user, ["product.access", "product.manage"])) {
         loaders.push({ key: "materials", label: "物料", request: productAPI.getProducts });
       }
-      if (hasAnyAuthority(user, ["inventory.access"])) {
+      if (hasAnyAuthority(user, ["inventory.access", "inventory.manage"])) {
         loaders.push({ key: "warehouses", label: "仓库", request: inventoryAPI.getWarehouses });
         loaders.push({ key: "inventoryRows", label: "库存", request: inventoryAPI.getInventory });
       }
-      if (hasAnyAuthority(user, ["logs.view"])) {
+      if (hasAnyAuthority(user, ["logs.view", "logs.manage"])) {
         loaders.push({ key: "loginLogs", label: "日志", request: logAPI.getLoginRecords });
       }
 
@@ -158,7 +158,7 @@ export default function HomePage() {
     if (permissions.canViewContracts) {
       items.push({ title: "合同", value: dashboard.contracts.length, icon: <FileTextOutlined />, route: "/contract/info" });
     }
-    if (permissions.canManageProducts) {
+    if (permissions.canViewProducts) {
       items.push({ title: "物料", value: dashboard.materials.length, icon: <ShoppingOutlined />, route: "/product/info" });
     }
     if (permissions.canViewInventory) {
@@ -204,7 +204,7 @@ export default function HomePage() {
     ) {
       items.push({ label: "待审核工作台", route: "/approvals/pending" });
     }
-    if (permissions.canManageProducts) {
+    if (permissions.canViewProducts) {
       items.push({ label: "物料主数据", route: "/product/info" });
     }
     if (permissions.canViewInventory) {

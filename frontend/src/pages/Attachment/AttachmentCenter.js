@@ -62,6 +62,41 @@ function getBusinessTypeLabel(value) {
   return BUSINESS_TYPE_OPTIONS.find((item) => item.value === value)?.label || value || "-";
 }
 
+function canAccessBusinessType(user, businessType) {
+  if (String(user?.username || "").trim().toLowerCase() === "system") {
+    return true;
+  }
+  if (!businessType || businessType === "other") {
+    return true;
+  }
+  switch (businessType) {
+    case "projects":
+      return hasAnyAuthority(user, ["project.access", "project.manage"]);
+    case "project-lists":
+      return hasAnyAuthority(user, ["project.access", "project.manage", "project.list.entry", "project.list.audit"]);
+    case "contracts":
+      return hasAnyAuthority(user, ["contract.access", "contract.manage"]);
+    case "customers":
+      return hasAnyAuthority(user, ["customer.access", "customer.manage"]);
+    case "warehouse-documents":
+      return hasAnyAuthority(user, [
+        "inventory.access",
+        "inventory.manage",
+        "inventory.warehouse-doc.entry",
+        "inventory.warehouse-doc.audit",
+      ]);
+    case "finance-vouchers":
+      return hasAnyAuthority(user, [
+        "finance.access",
+        "finance.manage",
+        "finance.voucher.entry",
+        "finance.voucher.audit",
+      ]);
+    default:
+      return hasAnyAuthority(user, ["attachment.manage"]);
+  }
+}
+
 function normalizeResponseData(response) {
   return response?.data ?? response ?? [];
 }
@@ -144,6 +179,10 @@ export default function AttachmentCenter() {
   const pagePermissions = useMemo(() => resolvePagePermissions("/attachment/center"), []);
   const canManage = hasAnyAuthority(currentUser, pagePermissions.manageAuthorities);
   const canAccess = hasAnyAuthority(currentUser, pagePermissions.exportAuthorities);
+  const accessibleBusinessTypeOptions = useMemo(
+    () => BUSINESS_TYPE_OPTIONS.filter((item) => canAccessBusinessType(currentUser, item.value)),
+    [currentUser]
+  );
 
   const businessTypeFilter = searchParams.get("businessType") || "";
   const businessUuidFilter = searchParams.get("businessUuid") || "";
@@ -214,13 +253,18 @@ export default function AttachmentCenter() {
     const requiredTypes = new Set(
       attachments
         .map((item) => item.businessType)
-        .filter((type) => type && type !== "other" && BUSINESS_OPTION_LOADERS[type])
+        .filter((type) => type && type !== "other" && BUSINESS_OPTION_LOADERS[type] && canAccessBusinessType(currentUser, type))
     );
 
-    if (businessTypeFilter && businessTypeFilter !== "other" && BUSINESS_OPTION_LOADERS[businessTypeFilter]) {
+    if (
+      businessTypeFilter &&
+      businessTypeFilter !== "other" &&
+      BUSINESS_OPTION_LOADERS[businessTypeFilter] &&
+      canAccessBusinessType(currentUser, businessTypeFilter)
+    ) {
       requiredTypes.add(businessTypeFilter);
     }
-    if (requiredTypes.has("project-lists")) {
+    if (requiredTypes.has("project-lists") && canAccessBusinessType(currentUser, "projects")) {
       requiredTypes.add("projects");
     }
 
@@ -275,10 +319,15 @@ export default function AttachmentCenter() {
     return () => {
       cancelled = true;
     };
-  }, [attachments, businessTypeFilter]);
+  }, [attachments, businessTypeFilter, currentUser]);
 
   useEffect(() => {
-    if (!uploadVisible || !selectedUploadBusinessType || selectedUploadBusinessType === "other") {
+    if (
+      !uploadVisible ||
+      !selectedUploadBusinessType ||
+      selectedUploadBusinessType === "other" ||
+      !canAccessBusinessType(currentUser, selectedUploadBusinessType)
+    ) {
       setBusinessOptions([]);
       setBusinessOptionsLoading(false);
       return;
@@ -301,7 +350,7 @@ export default function AttachmentCenter() {
     }
 
     fetchBusinessOptions();
-  }, [selectedUploadBusinessType, uploadVisible]);
+  }, [currentUser, selectedUploadBusinessType, uploadVisible]);
 
   const handleUpdate = async (uuid, values) => {
     if (!canManage) {
@@ -566,7 +615,7 @@ export default function AttachmentCenter() {
                   setBusinessOptions([]);
                 }}
               >
-                {BUSINESS_TYPE_OPTIONS.map((item) => (
+                {accessibleBusinessTypeOptions.map((item) => (
                   <Option key={item.value} value={item.value}>
                     {item.label}
                   </Option>
