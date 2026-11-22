@@ -1,8 +1,8 @@
 package com.jerry.salesmanagement.service.impl;
 
+import com.jerry.salesmanagement.mapper.SysUserMapper;
 import com.jerry.salesmanagement.pojo.SysUser;
 import com.jerry.salesmanagement.service.CurrentUserService;
-import com.jerry.salesmanagement.service.SysUserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -21,7 +21,7 @@ public class CurrentUserServiceImpl implements CurrentUserService {
     private static final String ENTRY_AUDIT_MANAGE_AUTHORITY = "document.entry-audit.manage";
 
     @Autowired
-    private SysUserService sysUserService;
+    private SysUserMapper sysUserMapper;
 
     @Override
     public SysUser getCurrentUser() {
@@ -35,7 +35,7 @@ public class CurrentUserServiceImpl implements CurrentUserService {
             return null;
         }
 
-        return sysUserService.getByUsername(username);
+        return sysUserMapper.selectByUsername(username);
     }
 
     @Override

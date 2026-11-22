@@ -189,14 +189,14 @@ class RbacHardeningTests {
 
     @Test
     void currentUserServiceDoesNotBypassByHardcodedRoleName() {
-        SysUserService sysUserService = mock(SysUserService.class);
+        SysUserMapper sysUserMapper = mock(SysUserMapper.class);
         SysUser adminRoleUser = new SysUser();
         adminRoleUser.setId(2L);
         adminRoleUser.setUsername("normal_admin");
-        when(sysUserService.getByUsername("normal_admin")).thenReturn(adminRoleUser);
+        when(sysUserMapper.selectByUsername("normal_admin")).thenReturn(adminRoleUser);
 
         CurrentUserServiceImpl service = new CurrentUserServiceImpl();
-        ReflectionTestUtils.setField(service, "sysUserService", sysUserService);
+        ReflectionTestUtils.setField(service, "sysUserMapper", sysUserMapper);
 
         SecurityContextHolder.getContext().setAuthentication(
                 UsernamePasswordAuthenticationToken.authenticated(
@@ -220,7 +220,7 @@ class RbacHardeningTests {
         SysUser systemUser = new SysUser();
         systemUser.setId(1L);
         systemUser.setUsername("System");
-        when(sysUserService.getByUsername("System")).thenReturn(systemUser);
+        when(sysUserMapper.selectByUsername("System")).thenReturn(systemUser);
         SecurityContextHolder.getContext().setAuthentication(
                 UsernamePasswordAuthenticationToken.authenticated("System", "n/a", List.of())
         );

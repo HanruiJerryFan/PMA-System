@@ -1,9 +1,9 @@
 package com.jerry.salesmanagement.service.impl;
 
 import com.jerry.salesmanagement.mapper.AttachmentMapper;
+import com.jerry.salesmanagement.mapper.CustomerMapper;
 import com.jerry.salesmanagement.pojo.Attachment;
 import com.jerry.salesmanagement.service.AttachmentService;
-import com.jerry.salesmanagement.service.CustomerService;
 import com.jerry.salesmanagement.service.SystemConfigService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,7 +42,7 @@ public class AttachmentServiceImpl implements AttachmentService {
     private AttachmentMapper mapper;
 
     @Autowired
-    private CustomerService customerService;
+    private CustomerMapper customerMapper;
 
     @Autowired(required = false)
     private SystemConfigService systemConfigService;
@@ -233,7 +233,10 @@ public class AttachmentServiceImpl implements AttachmentService {
 
     private void touchCustomerAttachment(Attachment attachment) {
         if ("customers".equals(attachment.getBusinessType()) && StringUtils.hasText(attachment.getBusinessUuid())) {
-            customerService.touchActivity(attachment.getBusinessUuid());
+            int updated = customerMapper.touchActivityByUuid(attachment.getBusinessUuid().trim(), "ACTIVE");
+            if (updated == 0) {
+                throw new IllegalArgumentException("Customer does not exist");
+            }
         }
     }
 }
