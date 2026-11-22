@@ -71,6 +71,9 @@
 - `server.address`
 - `server.port`
 - `app.attachment.storage-root`
+- `app.cors.allowed-origins`（支持多域名与通配端口模式，默认 `http://localhost:3000,http://127.0.0.1:3000`）
+- `app.auth.self-registration-enabled`（默认 `false`）
+- `app.ai.*`（可选可插拔 AI 分析配置，默认 `app.ai.enabled=false`，未配置外部大模型或 Key 时自动运行于离线规则分析模式；支持本地 Ollama `http://127.0.0.1:11434/v1` 或外部 OpenAI 兼容接口，并可在非本地端点自动脱敏客户名称）
 
 ### 启动示例
 

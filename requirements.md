@@ -1,8 +1,8 @@
 # PMA 功能需求书（Codex Compatible Markdown）
 
-* 版本：V1.1.0
-* 日期：2026-03-19
-* 文档目的：将原始中文需求整理为适合 AI 编码代理（如 Codex）直接消费的结构化 Markdown 需求文档。
+* 版本：V1.2.0
+* 日期：2026-11-21
+* 文档目的：将原始中文需求与后续迭代规范整理为适合 AI 编码代理（如 Codex）及工程团队消费的结构化 Markdown 需求文档。
 * 语言：中文
 * 状态：Draft
 
@@ -984,5 +984,56 @@ if 二级科目 == "项目调出":
 7. 库存流水 + 库存汇总
 8. 附件、PDF 导出、打印
 9. 审计与操作日志
+
+\---
+
+# 15\. V1.2 运营看板、统一审批、业务对账与可插拔 AI 分析
+
+## 15.1 项目跟踪看板
+
+1. 系统提供跨项目阶段泳道跟踪看板（`/api/projects/tracking-board` 与 `/project/tracking-board`），按 `stage` 启用阶段分组展示全部项目，支持看板视图与列表视图切换及 Excel 导出。
+2. 每个项目卡片应实时计算并展示：
+   * 当前阶段、进入当前阶段时间及停留天数
+   * 计划状态：是否超期（未执行完毕且当前日期晚于 `plan_end_time`）
+   * 质保状态：`NONE` / `ACTIVE` / `EXPIRING_SOON`（30 天内到期）/ `EXPIRED`
+   * 风险标签：`OVERDUE`、`STALLED`（停留天数 >= 配置阈值 `project.tracking.stalled_days`，默认 `30` 天）、`WARRANTY_EXPIRING`、`WARRANTY_EXPIRED`、`LOW_COLLECTION`、`NEGATIVE_MARGIN`、`PENDING_AUDIT`
+3. **RBAC 隔离**：合同额、已回款/应收/毛利、出入库及待审核数严格按当前登录账号的 `contract.*`、`finance.*`、`inventory.*` 权限查询并展示；无对应模块权限时返回 `null`，不得泄露或发起越权查询。
+4. 具备 `project.manage` 权限的用户可在看板卡片上直接将项目推进至下一阶段。
+
+## 15.2 统一待审核工作台
+
+1. 系统提供跨模块待审核聚合工作台（`/api/approvals/pending` 与 `/approvals/pending`），聚合展示：
+   * 未审核项目清单（`project.list.audit` / `project.manage`）
+   * 未审核出入库单（`inventory.warehouse-doc.audit` / `inventory.manage`）
+   * 未审核财务凭证（`finance.voucher.audit` / `finance.manage`）
+2. 由划拨单（`TRANSFER_JTX` / `TRANSFER_XTJ`）自动生成的关联入库单（`source_ref_type = 'WAREHOUSE_TRANSFER'`）不得作为独立待审项展示；审核原划拨单时按既定规则同步完成关联入库单审核。
+3. 工作台支持按模块分标签页筛选、一键调用对应模块既定审核接口完成审核，并跳转关联单据详情。
+
+## 15.3 项目清单采发对账
+
+1. 系统提供跨项目与单项目维度的“最终清单 vs 实际采发”对账（`/api/projects/material-reconciliation/summary`、`/api/projects/{projectUuid}/material-reconciliation` 与 `/project/reconciliation`）。
+2. 对账口径：
+   * 计划销售量 = `INITIAL_SALES` + `CHANGE` 明细汇总
+   * 计划采购量 = `PROCUREMENT` 明细汇总
+   * 实际净供货量 = 采购入库（`INBOUND_NOTE`，排除 `WAREHOUSE_TRANSFER` 自动关联入库）+ 集采调入项目（`TRANSFER_JTX`）- 项目调回集采（`TRANSFER_XTJ`）+ 独立手工对应流水
+   * 采购缺口 = 计划采购量 - 实际净供货量
+   * 待发货缺口 = 计划销售量 - 实际发货出库量（`OUTBOUND_NOTE` 及独立销售出库流水）
+   * 对账状态至少区分：`MATCHED`（已齐套）、`PROCUREMENT_SHORTAGE`（采购缺口）、`PENDING_SHIPMENT`（待发货）、`OVER_SHIPPED`（超发预警）、`OVER_PROCURED`（超采/富余）、`UNPLANNED`（清单外采发）
+3. 无 `inventory.access` / `inventory.manage` 权限时，仅返回计划清单数据并标记无库存权限，不查询仓储与库存流水。
+
+## 15.4 项目利润表与应收应付账龄分析
+
+1. 系统提供基于 `BigDecimal` 精确汇总的财务经营分析接口与页面（`/api/finance/analytics/overview` 与 `/finance/analytics`，受 `finance.access` / `finance.manage` 保护）。
+2. 项目利润表分别计算每个项目的实收、实付、实际毛利（`实际收入 - 实际支出`）、毛利率、记账净额（保留 `PROJECT_TRANSFER_OUT` 负向记账成本冲减规则）及 `应收 / 应付 / 待开票 / 缺票` 余额，并将 `NON_PROJECT` 或未归属项目的凭证单独汇总为非项目收支。
+3. 账龄分析依据未结清应收与应付凭证的业务发生日期（`occurred_on`）划入 `0-30 天`、`31-60 天`、`61-90 天`、`90 天以上` 四个区间，并按往来单位汇总排行及导出 Excel。
+
+## 15.5 可插拔 AI 经营简报与受控智能问答
+
+1. 系统提供可选的智能经营分析模块（`/api/ai/status`、`/api/ai/briefing`、`/api/ai/ask` 与 `/analytics/ai`），通过 `app.ai.*` 配置开关：
+   * 默认 `app.ai.enabled=false`，在不配置任何外部 API Key 或大模型服务时，系统必须零报错运行，并自动提供确定性规则引擎分析（`mode = RULE_BASED`）。
+   * 开启后支持免 Key 的本地 Ollama（如 `http://127.0.0.1:11434/v1`）及标准 OpenAI 兼容接口（使用 JDK 17 标准 HTTP 客户端，不引入重型外部 SDK）。
+   * 调用外部非本地端点且 `app.ai.mask-sensitive-names=true` 时，应先对客户名称进行占位符脱敏，仅向当前内部授权用户还原展示。
+   * 当大模型调用超时或不可达时，必须优雅降级至 `RULE_BASED` 模式并返回降级提示（`fallbackUsed = true`）。
+2. 所有智能简报与问答输入上下文均直接取自系统确定性后台聚合接口，并严格按登录用户持有的 RBAC 权限过滤模块数据与快捷问题。
 
 \---

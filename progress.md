@@ -232,3 +232,92 @@
   - 更细的规则引擎化配置
   - 更多业务详情页/dashboard
   - 更深层级的审批与审计扩展
+
+---
+
+## V1.1 稳定性加固与架构治理（阶段 F）
+
+对应分支：`fix/hardening-and-consistency`（提交 `42698dc` .. `91dd0a9`）
+
+### 1. 安全加固与鉴权边界修复
+- **关闭默认公开自注册并规范管理员重置密码**（`4ce491d`）：
+  - 新增 `app.auth.self-registration-enabled`（默认 `false`），`GET /api/auth/config` 暴露开关状态，`POST /api/auth/register` 未开启时返回 `403`。
+  - `POST /api/users/{id}/reset-password` 改为由服务端通过 `CurrentUserService` 获取当前管理员 ID，不再信任请求体传入的 `operatorUserId`。
+- **集中式 CORS 策略配置**（`53923e2`）：
+  - 移除控制器上的硬编码 `@CrossOrigin`，新增 `CorsConfig` 统一管理允许来源（支持 `APP_CORS_ALLOWED_ORIGINS`）。
+- **附件路径穿越防护与安全删除顺序**（`358ed88`）：
+  - 附件持久化改为相对路径存储，读写前强制路径归一化与根目录越界校验；删除附件时先删存储文件确认成功再删数据库记录，防止孤儿文件残留。
+
+### 2. 跨机部署、反向代理与运维兼容性
+- **反向代理 / 跨域 / 遗留绝对路径兼容**（`91dd0a9`）：
+  - 启用 `server.forward-headers-strategy=framework` 适配 Nginx HTTPS 转发头。
+  - `CorsConfig` 改用 `allowedOriginPatterns` 并默认支持 `http://localhost:3000` 与 `http://127.0.0.1:3000`，同时支持通过环境变量扩展多域名或内网 IP 模式。
+  - 附件读取兼容 Windows 盘符遗留路径在 Linux 服务器上的映射定位。
+- **Nginx 上传体积对齐**（`7902a90`）：
+  - 将 `deploy/nginx/salesmanagement.conf` 的 `client_max_body_size` 与后端 `100MB` 上传限制对齐。
+- **数据库视图与种子数据清理**（`dd85515`）：
+  - 同步 `database/02_current_views.sql` 与最新表结构，清理种子脚本中的孤立角色权限映射。
+
+### 3. 数据准确性、金额精度与引用完整性
+- **全面迁移货币与库存数量类型至 `BigDecimal`**（`514642a`）：
+  - 消除 `ProjectListItem`、`WarehouseDocument`、`InventoryTransaction`、`ContractBasicInfo`、`FinanceVoucher`、`ProductHistoryPrice` 等核心对象使用 `Double` 导致的浮点舍入误差。
+- **统一财务凭证前端校验与记账公式**（`42698dc`）：
+  - 抽取 `frontend/src/utils/financeVoucherCalculations.js`，消除 `FinanceVouchers` 与 `ProjectDashboard` 间的重复计算和校验偏差。
+- **主数据删除前强制引用完整性校验**（`99fdb89`）：
+  - 新增 `ReferenceCheckMapper`，删除客户、项目、物料、仓库前校验关联业务引用并给出明确中文提示。
+
+### 4. 性能扩展、服务端分页与前端状态收口
+- **消除高并发列表 N+1 查询**（`e47d46f`）：
+  - 重构 `WarehouseDocumentServiceImpl`、`ProjectServiceImpl`、日志和认证权限加载的批量查询链路（如 `selectByDocNumbers`、`selectCurrentStageSortOrdersByProjectIds`）。
+- **向后兼容的服务端分页**（`48bc9c8`）：
+  - 为客户、项目、物料、库存流水、登录日志、审计日志新增 `/page` 接口及前端 `CRUDTable` 按需分页支持，保留全量接口向后兼容。
+- **集中式前端认证上下文 `AuthContext`**（`9b01a9a`）：
+  - 将分散在多个页面与布局中的 `getCurrentUser()` 轮询收敛到 `AuthProvider / useAuth()`，统一处理登录态刷新、401 清理与强制改密流转。
+
+### 5. 阶段 F 验证基线（提交 `91dd0a9`）
+- 后端离线 H2+MyBatis 单元测试：14 个测试类 / 71 项测试全部通过（0 失败，0 跳过）。
+- 前端 Jest 单元测试：6 个测试套件 / 28 项测试全部通过；`npm run build` 零错误零 ESLint 警告。
+
+---
+
+## V1.2 项目跟踪看板、统一审批、采发对账与可插拔 AI 分析（阶段 G）
+
+对应分支：`feat/tracking-board-analytics-ai`（基于 `fix/hardening-and-consistency` 构建，零新增外部 Maven/npm 依赖、零破坏性数据库结构变更）
+
+### 1. 第一阶段：项目跟踪看板 + 统一待审核工作台
+- **后端新增能力**（`5399f2b`）：
+  - 新增 `FinanceVoucherMetrics` 公共精确计算工具（与前端 `应收 / 应付 / 待开票 / 缺票` 逻辑完全对齐）。
+  - 新增 `GET /api/projects/tracking-board`（`ProjectTrackingController` / `ProjectTrackingBoardServiceImpl`）：按阶段泳道聚合全部项目进度、阶段停留天数、计划超期、质保状态（`ACTIVE / EXPIRING_SOON / EXPIRED`）、合同总额、回款率、估算毛利、出库金额与待审单据数，自动计算风险标签（`OVERDUE / STALLED / WARRANTY_EXPIRING / WARRANTY_EXPIRED / LOW_COLLECTION / NEGATIVE_MARGIN / PENDING_AUDIT`）。
+  - 停留阈值支持通过 `system_config` 键 `project.tracking.stalled_days`（默认 `30`）动态调整。
+  - 新增 `GET /api/approvals/pending`（`ApprovalWorkbenchController` / `ApprovalWorkbenchServiceImpl`）：聚合未审核的项目清单、出入库单据与财务凭证；自动过滤划拨单生成的关联入库单（`source_ref_type='WAREHOUSE_TRANSFER'`），避免重复审核；`SecurityConfig` 新增 `/api/approvals/**` 权限控制。
+- **前端新增页面**（`9801c65`）：
+  - 新增「项目跟踪看板」（`/project/tracking-board`，`ProjectTrackingBoard.js`）：支持阶段泳道看板与列表双视图、风险 KPI 快捷筛选、停留/质保预警徽标、快速推进下一阶段、一键导出 Excel。
+  - 新增「统一待审核工作台」（`/approvals/pending`，`ApprovalWorkbench.js`）：按模块分标签页展示待审核事项，支持一键审核通过与详情跳转。
+  - 已在 `App.js`、`Sidebar.js`、`HomePage.js` 和 `pagePermissions.js` 注册入口与权限感知显隐。
+
+### 2. 第二阶段：项目清单采发对账 + 项目利润表与应收应付账龄分析
+- **后端新增能力**（`2f193c1`）：
+  - `ProjectListItemMapper` 新增 `selectByProjectListIds` 批量查询，消除 `ProjectListServiceImpl.getAggregateView` 的 N+1 明细查询。
+  - 新增 `GET /api/projects/material-reconciliation/summary` 与 `GET /api/projects/{projectUuid}/material-reconciliation`（`ProjectReconciliationController` / `ProjectMaterialReconciliationServiceImpl`）：对比最终销售清单（`INITIAL_SALES + CHANGE`）、最终采购清单（`PROCUREMENT`）与实际采购入库、集采调入（`TRANSFER_JTX`）、项目调出（`TRANSFER_XTJ`）、发货出库（`OUTBOUND_NOTE`）及手工库存流水，识别 `PROCUREMENT_SHORTAGE`（采购缺口）、`PENDING_SHIPMENT`（待发货）、`OVER_SHIPPED`（超发预警）、`OVER_PROCURED`（超采）、`UNPLANNED`（清单外采发）与 `MATCHED`（已齐套）。
+  - 严格剔除 `source_ref_type='WAREHOUSE_TRANSFER'` 自动生成入库单，杜绝划拨重复计算；库存数据受 `inventory.access / inventory.manage` 严格保护。
+  - 新增 `GET /api/finance/analytics/overview`（`FinanceAnalyticsController` / `FinanceAnalyticsServiceImpl`，受 `FINANCE_PATHS` 保护）：输出基于 `BigDecimal` 的项目利润表（保留 `PROJECT_TRANSFER_OUT` 负向记账成本冲减）、非项目收支汇总，以及按业务发生日期统计的 `0-30 天 / 31-60 天 / 61-90 天 / 90 天以上` 应收与应付账龄分布。
+- **前端新增页面**（`ad06283`）：
+  - 新增「项目清单与采发对账」（`/project/reconciliation`，`ProjectMaterialReconciliation.js`）：支持跨项目汇总与单项目物料逐行钻取对账及 Excel 导出，并在 `ProjectDashboard.js` 添加「采发对账」直达按钮。
+  - 新增「项目利润与应收应付账龄分析」（`/finance/analytics`，`FinanceAnalytics.js`）：展示整体毛利与毛利率卡片、项目利润明细表、应收/应付账龄进度条与往来方明细及 Excel 导出。
+
+### 3. 第三阶段：可插拔 AI 经营简报与受 RBAC 约束的智能问答（`210c493`）
+- **后端可插拔架构**（零新增第三方 SDK 依赖）：
+  - 新增 `AiAnalysisProperties`（配置前缀 `app.ai.*`，默认 `app.ai.enabled=false`），未配置 Key 或未开启时系统照常运行。
+  - 新增 `OpenAiCompatibleLlmClient`（基于 JDK 17 `java.net.http.HttpClient` + `ObjectMapper`）：支持无 Key 的本地 Ollama（如 `http://127.0.0.1:11434/v1`）及任意标准 OpenAI 兼容接口。
+  - 新增 `GET /api/ai/status`、`POST /api/ai/briefing`、`POST /api/ai/ask`（`AiAnalysisController` / `AiBusinessAnalysisServiceImpl`，`SecurityConfig` 按模块访问权限受控）：
+    - 仅采集当前登录账号实际拥有 RBAC 权限的数据域（`PROJECT / CONTRACT / INVENTORY / FINANCE / APPROVAL`）的确定性聚合指标；
+    - 调用外部非本地端点且启用 `app.ai.mask-sensitive-names=true` 时，自动对客户名称脱敏（`客户#1` 等）并在本地还原；
+    - 当未配置大模型或模型请求异常/超时时，自动使用确定性规则引擎生成简报与问答（`mode=RULE_BASED`、`fallbackUsed=true`），不抛出 500 故障。
+- **前端页面与文档配套**：
+  - 新增「智能分析」（`/analytics/ai`，`AiAnalytics.js`）：展示当前推理引擎模式（AI 大模型模式 vs 规则分析模式）、账号授权数据域标签、单项目/全局经营简报、可点击跳转的重点风险清单、可折叠底层 JSON 数据依据，以及按权限过滤的预设问题与交互问答区。
+  - 同步更新 `requirements.md`（升级至 `V1.2.0` 第 15 章）、`deploy/env/backend.env.example` 与 `salesmanagement/README_BACKEND.md`。
+
+### 4. 阶段 G 验证结果
+- 后端离线 H2+MyBatis 单元测试：**19 个测试类 / 81 项测试全部通过**（0 失败，0 跳过）。
+- 前端 Jest 单元测试：**9 个测试套件 / 32 项测试全部通过**（0 失败）。
+- 前端生产构建：`npm run build` 编译成功，0 错误，0 ESLint 警告。
