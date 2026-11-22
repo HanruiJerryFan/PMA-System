@@ -4,6 +4,7 @@ import {
   Alert,
   Button,
   Card,
+  Checkbox,
   Col,
   DatePicker,
   Empty,
@@ -72,6 +73,8 @@ export default function WarehouseDoc() {
   const [queryFilters, setQueryFilters] = useState({});
   const [documentPage, setDocumentPage] = useState(1);
   const [companyName, setCompanyName] = useState(DEFAULT_COMPANY_NAME);
+  const [hidePriceAndAmount, setHidePriceAndAmount] = useState(false);
+  const includePrice = !hidePriceAndAmount;
 
   const pagePermissions = useMemo(() => resolvePagePermissions("/inventory/warehouse"), []);
   const canManage = hasAnyAuthority(currentUser, ["inventory.warehouse-doc.entry", ...pagePermissions.manageAuthorities]);
@@ -275,7 +278,7 @@ export default function WarehouseDoc() {
       message.error("浏览器拦截了打印窗口，请允许弹窗后重试");
       return;
     }
-    popup.document.write(buildWarehouseDocumentHtml(doc, { autoPrint: true, companyName }));
+    popup.document.write(buildWarehouseDocumentHtml(doc, { autoPrint: true, companyName, includePrice }));
     popup.document.close();
   };
 
@@ -285,7 +288,7 @@ export default function WarehouseDoc() {
     }
     try {
       await downloadApiFile(
-        inventoryAPI.downloadWarehouseDocPdf(doc.docNumber),
+        inventoryAPI.downloadWarehouseDocPdf(doc.docNumber, { includePrice }),
         `${doc.docNumber || docMeta(doc.docType).label}.pdf`,
         "application/pdf"
       );
@@ -300,7 +303,7 @@ export default function WarehouseDoc() {
     }
     try {
       await downloadApiFile(
-        inventoryAPI.downloadWarehouseDocExcel(doc.docNumber),
+        inventoryAPI.downloadWarehouseDocExcel(doc.docNumber, { includePrice }),
         `${doc.docNumber || docMeta(doc.docType).label}.xlsx`,
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       );
@@ -308,6 +311,15 @@ export default function WarehouseDoc() {
       message.error(await resolveBlobErrorMessage(error, "导出 Excel 失败"));
     }
   };
+
+  const renderHidePriceCheckbox = () => (
+    <Checkbox
+      checked={hidePriceAndAmount}
+      onChange={(event) => setHidePriceAndAmount(event.target.checked)}
+    >
+      不打印单价和金额
+    </Checkbox>
+  );
 
   const columns = [
     {
@@ -484,6 +496,7 @@ export default function WarehouseDoc() {
         title="出入库单列表"
         extra={
           <Space>
+            {renderHidePriceCheckbox()}
             <Button icon={<FilePdfOutlined />} disabled={!selectedDoc} onClick={() => printDocument(selectedDoc)}>
               打印当前单据
             </Button>
@@ -528,12 +541,17 @@ export default function WarehouseDoc() {
         />
       </Card>
 
-      <Card title={selectedDoc ? `${selectedDoc.docTypeLabel}预览` : "单据预览"}>
+      <Card
+        title={selectedDoc ? `${selectedDoc.docTypeLabel}预览` : "单据预览"}
+        extra={renderHidePriceCheckbox()}
+      >
         {selectedDoc && previewPrintMeta ? (
           <div style={{ overflowX: "auto" }}>
             {previewPages.map((page) => {
               const displayTotal = page.lastPage ? previewDocTotal : page.pageSubtotal;
               const totalLabel = page.lastPage ? "合计：" : "本页小计：";
+              const totalUppercaseText = includePrice ? toChineseUppercaseRmb(displayTotal) : "";
+              const totalAmountText = includePrice ? `¥${formatPrintAmount(displayTotal)}` : "";
               return (
                 <div key={page.pageNumber} style={previewPaperStyle}>
                   <table style={previewTableStyle}>
@@ -608,7 +626,7 @@ export default function WarehouseDoc() {
                       </tr>
                       {page.rows.map((item, idx) => {
                         const lineNo = page.startLineNo + idx;
-                        const amount = resolvePrintItemAmount(item);
+                        const amount = includePrice ? resolvePrintItemAmount(item) : null;
                         return (
                           <tr key={item.uuid || `blank-${lineNo}`} style={{ height: `${PRINT_ROW_HEIGHTS_PT[6 + idx]}pt` }}>
                             <td style={previewItemIndexCell}>{lineNo}</td>
@@ -621,8 +639,8 @@ export default function WarehouseDoc() {
                             <td style={previewItemBrandCell}>{item.brand || ""}</td>
                             <td style={previewItemCenter10Cell}>{item.unit || ""}</td>
                             <td style={previewItemCenter10Cell}>{formatPrintQuantity(item.quantity)}</td>
-                            <td style={previewItemCenter10Cell}>{formatPrintUnitPrice(item.unitPrice)}</td>
-                            <td style={previewItemAmountCell}>{formatPrintAmount(amount)}</td>
+                            <td style={previewItemCenter10Cell}>{includePrice ? formatPrintUnitPrice(item.unitPrice) : ""}</td>
+                            <td style={previewItemAmountCell}>{includePrice ? formatPrintAmount(amount) : ""}</td>
                             <td style={previewItemRemarkCell}>{item.remark || ""}</td>
                           </tr>
                         );
@@ -630,10 +648,10 @@ export default function WarehouseDoc() {
                       <tr style={{ height: `${PRINT_ROW_HEIGHTS_PT[16]}pt` }}>
                         <td colSpan={2} style={previewTotalLabelCell}>{totalLabel}</td>
                         <td colSpan={7} style={previewTotalUpperCell}>
-                          {toChineseUppercaseRmb(displayTotal)}
+                          {totalUppercaseText}
                         </td>
                         <td colSpan={2} style={previewTotalNumCell}>
-                          ¥{formatPrintAmount(displayTotal)}
+                          {totalAmountText}
                         </td>
                       </tr>
                       <tr style={{ height: `${PRINT_ROW_HEIGHTS_PT[17]}pt` }}>

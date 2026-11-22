@@ -3,5 +3,9 @@ package com.jerry.salesmanagement.service;
 import com.jerry.salesmanagement.pojo.WarehouseDocument;
 
 public interface WarehouseDocumentPdfExportService {
-    byte[] exportPdf(WarehouseDocument warehouseDocument, String projectLabel);
+    default byte[] exportPdf(WarehouseDocument warehouseDocument, String projectName) {
+        return exportPdf(warehouseDocument, projectName, true);
+    }
+
+    byte[] exportPdf(WarehouseDocument warehouseDocument, String projectName, boolean includePrice);
 }

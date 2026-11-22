@@ -38,7 +38,7 @@ public class WarehouseDocumentExcelExportServiceImpl implements WarehouseDocumen
     }
 
     @Override
-    public byte[] exportExcel(WarehouseDocument warehouseDocument, String projectName) {
+    public byte[] exportExcel(WarehouseDocument warehouseDocument, String projectName, boolean includePrice) {
         if (warehouseDocument == null) {
             throw new IllegalArgumentException("Warehouse document is required");
         }
@@ -55,7 +55,7 @@ public class WarehouseDocumentExcelExportServiceImpl implements WarehouseDocumen
             for (int pageIndex = 0; pageIndex < pages.size(); pageIndex++) {
                 DocumentPage page = pages.get(pageIndex);
                 int baseRow = pageIndex * WarehouseDocumentPrintSupport.ROWS_PER_PAGE;
-                writePage(sheet, styles, warehouseDocument, projectName, meta, page, baseRow);
+                writePage(sheet, styles, warehouseDocument, projectName, meta, page, baseRow, includePrice);
                 if (pageIndex < pages.size() - 1) {
                     sheet.setRowBreak(baseRow + WarehouseDocumentPrintSupport.ROWS_PER_PAGE - 1);
                 }
@@ -99,7 +99,8 @@ public class WarehouseDocumentExcelExportServiceImpl implements WarehouseDocumen
             String projectName,
             DocumentPrintMeta meta,
             DocumentPage page,
-            int baseRow
+            int baseRow,
+            boolean includePrice
     ) {
         XSSFRow[] rows = new XSSFRow[WarehouseDocumentPrintSupport.ROWS_PER_PAGE];
         for (int r = 0; r < WarehouseDocumentPrintSupport.ROWS_PER_PAGE; r++) {
@@ -206,13 +207,13 @@ public class WarehouseDocumentExcelExportServiceImpl implements WarehouseDocumen
 
             XSSFCell priceCell = getOrCreateCell(row, 8);
             priceCell.setCellStyle(styles.itemUnitPrice);
-            if (item.getUnitPrice() != null) {
+            if (includePrice && item.getUnitPrice() != null) {
                 priceCell.setCellValue(item.getUnitPrice().doubleValue());
             }
 
             XSSFCell amountCell = getOrCreateCell(row, 9);
             amountCell.setCellStyle(styles.itemAmount);
-            BigDecimal amount = WarehouseDocumentPrintSupport.resolveItemAmount(item);
+            BigDecimal amount = includePrice ? WarehouseDocumentPrintSupport.resolveItemAmount(item) : null;
             if (amount != null) {
                 amountCell.setCellValue(amount.doubleValue());
             }
@@ -231,11 +232,15 @@ public class WarehouseDocumentExcelExportServiceImpl implements WarehouseDocumen
         addMerge(sheet, baseRow, 16, 16, 0, 1);
 
         styleRange(rows, 16, 16, 2, 8, styles.totalUppercase);
-        getOrCreateCell(rows[16], 2).setCellValue(PdfExportSupport.toChineseUppercaseRmbStatic(displayTotal));
+        if (includePrice) {
+            getOrCreateCell(rows[16], 2).setCellValue(PdfExportSupport.toChineseUppercaseRmbStatic(displayTotal));
+        }
         addMerge(sheet, baseRow, 16, 16, 2, 8);
 
         styleRange(rows, 16, 16, 9, 10, styles.totalAmount);
-        getOrCreateCell(rows[16], 9).setCellValue(displayTotal.doubleValue());
+        if (includePrice) {
+            getOrCreateCell(rows[16], 9).setCellValue(displayTotal.doubleValue());
+        }
         addMerge(sheet, baseRow, 16, 16, 9, 10);
 
         // Row 19 (index 18): Footer A19:K19

@@ -9,6 +9,7 @@ import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.PageMargin;
 import org.apache.poi.ss.usermodel.PrintSetup;
 import org.apache.poi.ss.util.CellRangeAddress;
@@ -228,6 +229,59 @@ class WarehouseDocumentExportTests {
             assertEquals(20d, sheet.getRow(34).getCell(0).getNumericCellValue());
             Cell docTotalCell = sheet.getRow(35).getCell(9);
             assertEquals(doc.getTotalAmount().doubleValue(), docTotalCell.getNumericCellValue(), 0.001);
+        }
+    }
+
+    @Test
+    void outboundPdfHidesUnitPriceAndAmountWhenDisabled() throws Exception {
+        WarehouseDocument doc = buildSampleDoc("OUTBOUND_NOTE", "FHD202610101", 2);
+
+        byte[] pdf = pdfService.exportPdf(doc, "隐藏金额项目", false);
+        try (PDDocument pd = PDDocument.load(pdf)) {
+            assertEquals(1, pd.getNumberOfPages());
+            String text = new PDFTextStripper().getText(pd);
+            assertTrue(text.contains("隐藏金额项目"));
+            assertTrue(text.contains("单价"));
+            assertTrue(text.contains("金额"));
+            assertTrue(text.contains("合计："));
+            assertTrue(text.contains("2"));
+            assertTrue(text.contains("9"));
+            assertTrue(text.contains(WarehouseDocumentPrintSupport.DEFAULT_COMPANY_NAME));
+            assertFalse(text.contains("100.00"));
+            assertFalse(text.contains("200.00"));
+            assertFalse(text.contains("900.00"));
+            assertFalse(text.contains("1,100.00"));
+            assertFalse(text.contains("人民币"));
+            assertFalse(text.contains("¥"));
+        }
+    }
+
+    @Test
+    void outboundExcelHidesUnitPriceAndAmountWhenDisabled() throws Exception {
+        WarehouseDocument doc = buildSampleDoc("OUTBOUND_NOTE", "FHD202610102", 2);
+
+        byte[] xlsx = excelService.exportExcel(doc, "隐藏金额项目", false);
+        try (XSSFWorkbook wb = new XSSFWorkbook(new ByteArrayInputStream(xlsx))) {
+            XSSFSheet sheet = wb.getSheetAt(0);
+            for (int c = 0; c < WarehouseDocumentPrintSupport.COLUMN_COUNT; c++) {
+                assertEquals(
+                        WarehouseDocumentPrintSupport.EXCEL_COLUMN_WIDTHS[c],
+                        sheet.getColumnWidth(c)
+                );
+            }
+            for (int r = 0; r < WarehouseDocumentPrintSupport.ROWS_PER_PAGE; r++) {
+                assertEquals(WarehouseDocumentPrintSupport.ROW_HEIGHTS_PT[r], sheet.getRow(r).getHeightInPoints(), 0.01f);
+            }
+            assertEquals(35, sheet.getNumMergedRegions());
+            assertEquals("单价", sheet.getRow(5).getCell(8).getStringCellValue());
+            assertEquals("金额", sheet.getRow(5).getCell(9).getStringCellValue());
+            assertEquals("合计：", sheet.getRow(16).getCell(0).getStringCellValue());
+            assertEquals(2d, sheet.getRow(6).getCell(7).getNumericCellValue(), 0.001);
+
+            assertEquals(CellType.BLANK, sheet.getRow(6).getCell(8).getCellType());
+            assertEquals(CellType.BLANK, sheet.getRow(6).getCell(9).getCellType());
+            assertEquals(CellType.BLANK, sheet.getRow(16).getCell(2).getCellType());
+            assertEquals(CellType.BLANK, sheet.getRow(16).getCell(9).getCellType());
         }
     }
 

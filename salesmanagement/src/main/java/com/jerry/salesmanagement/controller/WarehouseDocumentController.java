@@ -31,6 +31,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -186,7 +187,10 @@ public class WarehouseDocumentController {
     }
 
     @GetMapping(value = "/{docNumber}/export-pdf", produces = MediaType.APPLICATION_PDF_VALUE)
-    public ResponseEntity<byte[]> exportPdf(@PathVariable String docNumber) {
+    public ResponseEntity<byte[]> exportPdf(
+            @PathVariable String docNumber,
+            @RequestParam(name = "includePrice", defaultValue = "true") boolean includePrice
+    ) {
         try {
             WarehouseDocument warehouseDocument = warehouseDocumentService.getByDocNumber(docNumber);
             if (warehouseDocument == null) {
@@ -194,7 +198,8 @@ public class WarehouseDocumentController {
             }
             byte[] pdf = warehouseDocumentPdfExportService.exportPdf(
                     warehouseDocument,
-                    resolveProjectName(warehouseDocument)
+                    resolveProjectName(warehouseDocument),
+                    includePrice
             );
             return DownloadResponseBuilder.build(docNumber + ".pdf", MediaType.APPLICATION_PDF, pdf);
         } catch (Exception e) {
@@ -205,7 +210,10 @@ public class WarehouseDocumentController {
     }
 
     @GetMapping("/{docNumber}/export-excel")
-    public ResponseEntity<byte[]> exportExcel(@PathVariable String docNumber) {
+    public ResponseEntity<byte[]> exportExcel(
+            @PathVariable String docNumber,
+            @RequestParam(name = "includePrice", defaultValue = "true") boolean includePrice
+    ) {
         try {
             WarehouseDocument warehouseDocument = warehouseDocumentService.getByDocNumber(docNumber);
             if (warehouseDocument == null) {
@@ -213,7 +221,8 @@ public class WarehouseDocumentController {
             }
             byte[] workbookBytes = warehouseDocumentExcelExportService.exportExcel(
                     warehouseDocument,
-                    resolveProjectName(warehouseDocument)
+                    resolveProjectName(warehouseDocument),
+                    includePrice
             );
             return DownloadResponseBuilder.build(docNumber + ".xlsx", XLSX_MEDIA_TYPE, workbookBytes);
         } catch (Exception e) {

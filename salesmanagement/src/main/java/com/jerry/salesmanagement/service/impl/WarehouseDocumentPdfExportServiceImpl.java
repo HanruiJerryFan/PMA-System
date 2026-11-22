@@ -27,7 +27,7 @@ public class WarehouseDocumentPdfExportServiceImpl extends PdfExportSupport impl
     }
 
     @Override
-    public byte[] exportPdf(WarehouseDocument warehouseDocument, String projectName) {
+    public byte[] exportPdf(WarehouseDocument warehouseDocument, String projectName, boolean includePrice) {
         if (warehouseDocument == null) {
             throw new IllegalArgumentException("Warehouse document is required");
         }
@@ -36,7 +36,7 @@ public class WarehouseDocumentPdfExportServiceImpl extends PdfExportSupport impl
             PdfRendererBuilder builder = new PdfRendererBuilder();
             builder.useFastMode();
             builder.useFont(resolveSongtiPdfFontFile(), "SalesSongtiFont");
-            builder.withHtmlContent(buildHtml(warehouseDocument, projectName), null);
+            builder.withHtmlContent(buildHtml(warehouseDocument, projectName, includePrice), null);
             builder.toStream(outputStream);
             builder.run();
             return outputStream.toByteArray();
@@ -46,13 +46,17 @@ public class WarehouseDocumentPdfExportServiceImpl extends PdfExportSupport impl
     }
 
     String buildHtml(WarehouseDocument warehouseDocument, String projectName) {
+        return buildHtml(warehouseDocument, projectName, true);
+    }
+
+    String buildHtml(WarehouseDocument warehouseDocument, String projectName, boolean includePrice) {
         String companyName = WarehouseDocumentPrintSupport.resolveCompanyName(getSystemConfigService());
         DocumentPrintMeta meta = WarehouseDocumentPrintSupport.resolveMeta(warehouseDocument, companyName);
         List<DocumentPage> pages = WarehouseDocumentPrintSupport.paginate(warehouseDocument);
 
         StringBuilder pagesHtml = new StringBuilder();
         for (DocumentPage page : pages) {
-            pagesHtml.append(buildPageHtml(warehouseDocument, projectName, meta, page));
+            pagesHtml.append(buildPageHtml(warehouseDocument, projectName, meta, page, includePrice));
         }
 
         return """
@@ -200,7 +204,8 @@ public class WarehouseDocumentPdfExportServiceImpl extends PdfExportSupport impl
             WarehouseDocument doc,
             String projectName,
             DocumentPrintMeta meta,
-            DocumentPage page
+            DocumentPage page,
+            boolean includePrice
     ) {
         StringBuilder colGroup11 = new StringBuilder("<colgroup>");
         for (int i = 0; i < WarehouseDocumentPrintSupport.COLUMN_COUNT - 1; i++) {
@@ -213,13 +218,15 @@ public class WarehouseDocumentPdfExportServiceImpl extends PdfExportSupport impl
         StringBuilder itemRows = new StringBuilder();
         List<WarehouseDocumentItem> rows = page.rows();
         for (int i = 0; i < rows.size(); i++) {
-            itemRows.append(buildItemRow(rows.get(i), page.startLineNo() + i));
+            itemRows.append(buildItemRow(rows.get(i), page.startLineNo() + i, includePrice));
         }
 
         BigDecimal displayTotal = page.lastPage()
                 ? resolveTotalAmount(doc)
                 : page.pageSubtotal();
         String totalLabel = page.lastPage() ? "合计：" : "本页小计：";
+        String totalUppercaseText = includePrice ? toChineseUppercaseRmb(displayTotal) : "";
+        String totalAmountText = includePrice ? "¥" + WarehouseDocumentPrintSupport.formatMoneyGrouped(displayTotal) : "";
         String pageIndicatorHtml = page.totalPages() > 1
                 ? "<td colspan=\"3\" class=\"b-none page-num-cell\">第 %d 页 / 共 %d 页</td>"
                 .formatted(page.pageNumber(), page.totalPages())
@@ -286,7 +293,7 @@ public class WarehouseDocumentPdfExportServiceImpl extends PdfExportSupport impl
                           <tr class="r-17">
                             <td colspan="2" class="b-tbl total-label">%s</td>
                             <td colspan="7" class="b-tbr total-upper">%s</td>
-                            <td colspan="2" class="b-tbr total-num">¥%s</td>
+                            <td colspan="2" class="b-tbr total-num">%s</td>
                           </tr>
                         </table>
                       </td>
@@ -326,18 +333,20 @@ public class WarehouseDocumentPdfExportServiceImpl extends PdfExportSupport impl
                 escapeHtml(formatChineseDate(doc.getDocDate())),
                 itemRows,
                 escapeHtml(totalLabel),
-                escapeHtml(toChineseUppercaseRmb(displayTotal)),
-                escapeHtml(WarehouseDocumentPrintSupport.formatMoneyGrouped(displayTotal)),
+                escapeHtml(totalUppercaseText),
+                escapeHtml(totalAmountText),
                 formatMultilineHtmlPreservingEmpty(meta.copyStubText()),
                 colGroup11,
                 escapeHtml(meta.footerText())
         );
     }
 
-    private String buildItemRow(WarehouseDocumentItem item, int lineIndex) {
+    private String buildItemRow(WarehouseDocumentItem item, int lineIndex, boolean includePrice) {
         String name = WarehouseDocumentPrintSupport.firstNonBlank(item.getDisplayName(), item.getMaterialName());
         String model = WarehouseDocumentPrintSupport.firstNonBlank(item.getDisplayModel(), item.getModel());
-        BigDecimal amount = WarehouseDocumentPrintSupport.resolveItemAmount(item);
+        BigDecimal amount = includePrice ? WarehouseDocumentPrintSupport.resolveItemAmount(item) : null;
+        String unitPriceText = includePrice ? formatUnitPrice(item.getUnitPrice()) : "";
+        String amountText = includePrice ? WarehouseDocumentPrintSupport.formatMoneyGrouped(amount) : "";
         return """
                 <tr class="r-item">
                   <td class="b-all c-idx"><div class="clip-25">%d</div></td>
@@ -357,8 +366,8 @@ public class WarehouseDocumentPdfExportServiceImpl extends PdfExportSupport impl
                 escapeHtml(WarehouseDocumentPrintSupport.safeTrim(item.getBrand())),
                 escapeHtml(WarehouseDocumentPrintSupport.safeTrim(item.getUnit())),
                 escapeHtml(trimTrailingZero(item.getQuantity())),
-                escapeHtml(formatUnitPrice(item.getUnitPrice())),
-                escapeHtml(WarehouseDocumentPrintSupport.formatMoneyGrouped(amount)),
+                escapeHtml(unitPriceText),
+                escapeHtml(amountText),
                 escapeHtml(WarehouseDocumentPrintSupport.safeTrim(item.getRemark()))
         );
     }

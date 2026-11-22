@@ -107,4 +107,17 @@ describe("warehouseDocumentPrint", () => {
     expect(formatPrintAmount(0)).toBe("0.00");
     expect(formatPrintAmount(null)).toBe("");
   });
+
+  it("hides unit prices, line amounts, and total amounts when includePrice is false", () => {
+    const html = buildWarehouseDocumentHtml(buildDoc(), { includePrice: false });
+    expect(html).toContain("单价");
+    expect(html).toContain("金额");
+    expect(html).toContain("合计：");
+    expect(html).toContain("物料1");
+    expect(html).not.toContain("100.00");
+    expect(html).not.toContain("200.00");
+    expect(html).not.toContain("300.00");
+    expect(html).not.toContain("人民币");
+    expect(html).not.toContain("¥");
+  });
 });

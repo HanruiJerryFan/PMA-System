@@ -169,7 +169,10 @@ export function formatCounterpartyLines(doc) {
     .filter(Boolean);
 }
 
-export function buildWarehouseDocumentHtml(doc, { autoPrint = false, companyName = DEFAULT_COMPANY_NAME } = {}) {
+export function buildWarehouseDocumentHtml(
+  doc,
+  { autoPrint = false, companyName = DEFAULT_COMPANY_NAME, includePrice = true } = {},
+) {
   const meta = resolvePrintDocMeta(doc, companyName);
   const pages = paginateWarehouseDocument(doc);
   const colGroupHtml = `<colgroup>${PRINT_COL_WIDTHS_MM
@@ -181,6 +184,8 @@ export function buildWarehouseDocumentHtml(doc, { autoPrint = false, companyName
     .map((page) => {
       const displayTotal = page.lastPage ? docTotal : page.pageSubtotal;
       const totalLabel = page.lastPage ? "合计：" : "本页小计：";
+      const totalUppercaseText = includePrice ? toChineseUppercaseRmb(displayTotal) : "";
+      const totalAmountText = includePrice ? `¥${formatPrintAmount(displayTotal)}` : "";
       const pageClass = page.lastPage ? "doc-page" : "doc-page page-break";
       const pageIndicatorHtml =
         page.totalPages > 1
@@ -189,7 +194,9 @@ export function buildWarehouseDocumentHtml(doc, { autoPrint = false, companyName
       const itemRowsHtml = page.rows
         .map((item, idx) => {
           const lineNo = page.startLineNo + idx;
-          const amount = resolvePrintItemAmount(item);
+          const amount = includePrice ? resolvePrintItemAmount(item) : null;
+          const unitPriceText = includePrice ? formatPrintUnitPrice(item.unitPrice) : "";
+          const amountText = includePrice ? formatPrintAmount(amount) : "";
           return `<tr class="r-item">
             <td class="b-all c-idx"><div class="clip-25">${lineNo}</div></td>
             <td colspan="2" class="b-tbr c-name"><div class="clip-25">${escapeHtml(String(item.displayName || item.materialName || "").trim())}</div></td>
@@ -197,8 +204,8 @@ export function buildWarehouseDocumentHtml(doc, { autoPrint = false, companyName
             <td class="b-tbr c-brand"><div class="clip-25">${escapeHtml(String(item.brand || "").trim())}</div></td>
             <td class="b-tbr c-unit"><div class="clip-25">${escapeHtml(String(item.unit || "").trim())}</div></td>
             <td class="b-tbr c-qty"><div class="clip-25">${escapeHtml(formatPrintQuantity(item.quantity))}</div></td>
-            <td class="b-tbr c-price"><div class="clip-25">${escapeHtml(formatPrintUnitPrice(item.unitPrice))}</div></td>
-            <td class="b-tbr c-amt"><div class="clip-25">${escapeHtml(formatPrintAmount(amount))}</div></td>
+            <td class="b-tbr c-price"><div class="clip-25">${escapeHtml(unitPriceText)}</div></td>
+            <td class="b-tbr c-amt"><div class="clip-25">${escapeHtml(amountText)}</div></td>
             <td class="b-tbr c-remark"><div class="clip-25">${escapeHtml(String(item.remark || "").trim())}</div></td>
           </tr>`;
         })
@@ -244,8 +251,8 @@ export function buildWarehouseDocumentHtml(doc, { autoPrint = false, companyName
           ${itemRowsHtml}
           <tr class="r-17">
             <td colspan="2" class="b-tbl total-label">${escapeHtml(totalLabel)}</td>
-            <td colspan="7" class="b-tbr total-upper">${escapeHtml(toChineseUppercaseRmb(displayTotal))}</td>
-            <td colspan="2" class="b-tbr total-num">¥${escapeHtml(formatPrintAmount(displayTotal))}</td>
+            <td colspan="7" class="b-tbr total-upper">${escapeHtml(totalUppercaseText)}</td>
+            <td colspan="2" class="b-tbr total-num">${escapeHtml(totalAmountText)}</td>
           </tr>
           <tr class="r-18"><td colspan="12" class="b-none"></td></tr>
           <tr class="r-19"><td colspan="11" class="b-none footer-cell">${escapeHtml(meta.footerText)}</td><td class="b-none"></td></tr>
