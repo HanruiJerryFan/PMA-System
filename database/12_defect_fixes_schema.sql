@@ -68,10 +68,10 @@ PREPARE stmt FROM @ddl;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
-INSERT INTO `system_config` (`config_key`, `config_value`, `description`, `create_time`, `update_time`)
+INSERT INTO `system_config` (`config_key`, `config_value`, `description`, `created_at`, `updated_at`)
 SELECT 'inventory.allow_negative_stock', 'false', 'Allow outbound/transfer/delete operations resulting in negative warehouse stock', NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM `system_config` WHERE `config_key` = 'inventory.allow_negative_stock');
 
-INSERT INTO `system_config` (`config_key`, `config_value`, `description`, `create_time`, `update_time`)
+INSERT INTO `system_config` (`config_key`, `config_value`, `description`, `created_at`, `updated_at`)
 SELECT 'project.tracking.low_collection_stage_sort_order', '9', 'Minimum stage sort_order threshold to evaluate LOW_COLLECTION risk tag', NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM `system_config` WHERE `config_key` = 'project.tracking.low_collection_stage_sort_order');

@@ -16,3 +16,7 @@ salesmanagement/build/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local DB backups
+salesmanagement_backup.sql
+*_backup.sql
