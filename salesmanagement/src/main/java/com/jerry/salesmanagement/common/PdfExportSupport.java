@@ -34,6 +34,12 @@ public abstract class PdfExportSupport {
             "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc,0",
             "/usr/share/fonts/truetype/arphic/uming.ttc,0"
     );
+    private static final List<String> DEFAULT_SONGTI_FONT_CANDIDATES = List.of(
+            "C:\\Windows\\Fonts\\simsun.ttc,0",
+            "C:\\Windows\\Fonts\\simsun.ttf",
+            "/usr/share/fonts/truetype/arphic/uming.ttc,0",
+            "/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc,0"
+    );
     private static final BigDecimal MAX_RMB_AMOUNT = new BigDecimal("99999999999999.99");
     private static final DateTimeFormatter CHINESE_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy年M月d日");
     private static final ThreadLocal<DecimalFormat> MONEY_FORMAT = ThreadLocal.withInitial(() -> {
@@ -49,6 +55,10 @@ public abstract class PdfExportSupport {
     protected PdfExportSupport(SystemConfigService systemConfigService, String configuredFontPath) {
         this.systemConfigService = systemConfigService;
         this.configuredFontPath = configuredFontPath;
+    }
+
+    protected SystemConfigService getSystemConfigService() {
+        return systemConfigService;
     }
 
     protected Font font(float size) {
@@ -101,7 +111,7 @@ public abstract class PdfExportSupport {
         return value == null ? "" : MONEY_FORMAT.get().format(value.setScale(2, RoundingMode.HALF_UP));
     }
 
-    protected String formatChineseDate(Date value) {
+    public static String formatChineseDateStatic(Date value) {
         if (value == null) {
             return "";
         }
@@ -114,7 +124,11 @@ public abstract class PdfExportSupport {
                 .format(CHINESE_DATE_FORMATTER);
     }
 
-    protected String toChineseUppercaseRmb(BigDecimal value) {
+    protected String formatChineseDate(Date value) {
+        return formatChineseDateStatic(value);
+    }
+
+    public static String toChineseUppercaseRmbStatic(BigDecimal value) {
         BigDecimal amount = (value == null ? BigDecimal.ZERO : value).setScale(2, RoundingMode.HALF_UP);
         if (amount.compareTo(BigDecimal.ZERO) == 0) {
             return "人民币零元整";
@@ -147,7 +161,11 @@ public abstract class PdfExportSupport {
         return result.toString();
     }
 
-    private String formatIntegerPart(long integerPart) {
+    protected String toChineseUppercaseRmb(BigDecimal value) {
+        return toChineseUppercaseRmbStatic(value);
+    }
+
+    private static String formatIntegerPart(long integerPart) {
         if (integerPart == 0) {
             return "零";
         }
@@ -180,7 +198,7 @@ public abstract class PdfExportSupport {
                 .replaceAll("零$", "");
     }
 
-    private String formatIntegerSection(int section) {
+    private static String formatIntegerSection(int section) {
         StringBuilder sectionBuilder = new StringBuilder();
         boolean zeroInSection = false;
         int unitIndex = 0;
@@ -230,23 +248,40 @@ public abstract class PdfExportSupport {
     }
 
     protected String resolvePdfFontPath() {
-        String systemConfigValue = systemConfigService.getString(PDF_FONT_PATH_CONFIG_KEY, null);
-        if (StringUtils.hasText(systemConfigValue) && fontFileExists(systemConfigValue)) {
-            return systemConfigValue.trim();
+        return resolveFontPath(DEFAULT_FONT_CANDIDATES);
+    }
+
+    protected File resolvePdfFontFile() {
+        return new File(resolvePdfFontPath().replaceFirst(",\\d+$", ""));
+    }
+
+    protected File resolveSongtiPdfFontFile() {
+        String path = resolveSongtiPdfFontPath();
+        return new File(path.replaceFirst(",\\d+$", ""));
+    }
+
+    private String resolveSongtiPdfFontPath() {
+        List<String> combined = new java.util.ArrayList<>(DEFAULT_SONGTI_FONT_CANDIDATES);
+        combined.addAll(DEFAULT_FONT_CANDIDATES);
+        return resolveFontPath(combined);
+    }
+
+    private String resolveFontPath(List<String> candidates) {
+        if (systemConfigService != null) {
+            String systemConfigValue = systemConfigService.getString(PDF_FONT_PATH_CONFIG_KEY, null);
+            if (StringUtils.hasText(systemConfigValue) && fontFileExists(systemConfigValue)) {
+                return systemConfigValue.trim();
+            }
         }
         if (StringUtils.hasText(configuredFontPath) && fontFileExists(configuredFontPath)) {
             return configuredFontPath.trim();
         }
-        return DEFAULT_FONT_CANDIDATES.stream()
+        return candidates.stream()
                 .filter(this::fontFileExists)
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException(
                         "No usable PDF font found. Configure system_config[pdf.font.path] or app.pdf.font-path."
                 ));
-    }
-
-    protected File resolvePdfFontFile() {
-        return new File(resolvePdfFontPath().replaceFirst(",\\d+$", ""));
     }
 
     private boolean fontFileExists(String candidate) {

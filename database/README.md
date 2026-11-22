@@ -63,6 +63,9 @@
   - 为 `warehouse_info.warehouse_code` 添加唯一索引（在无重复数据时），并补充 `inventory.allow_negative_stock` 与 `project.tracking.low_collection_stage_sort_order` 默认配置；
   - 执行完补丁后建议同步重跑 `02_current_views.sql` 以更新 `inventory_balance` 视图。
 
+- `13_warehouse_document_print_config.sql`
+  - 补充出入库单据打印底部单位配置 `warehouse.document.company_name`（默认 `'敦力（南京）科技有限公司'`），可重复执行。
+
 ## 推荐使用顺序
 
 ### 初始化空库
@@ -86,6 +89,7 @@
 6. 执行 `10_finance_subject.sql`
 7. 执行 `11_warehouse_transfers.sql`
 8. 执行 `12_defect_fixes_schema.sql` 并重跑 `02_current_views.sql`
+9. 执行 `13_warehouse_document_print_config.sql`
 
 新版“财务管理 → 科目管理”使用 `finance.manage` 权限。财务凭证查询、筛选、导出，以及项目看板中的快速新增凭证，共用科目字典。科目改名后，历史凭证显示新名称；人员工资、差旅、项目调出的既有记账规则仍按原编码执行。
 

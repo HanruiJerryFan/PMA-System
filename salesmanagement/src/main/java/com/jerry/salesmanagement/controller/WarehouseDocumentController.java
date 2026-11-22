@@ -2,6 +2,7 @@ package com.jerry.salesmanagement.controller;
 
 import com.jerry.salesmanagement.common.ApiResponse;
 import com.jerry.salesmanagement.common.DownloadResponseBuilder;
+import com.jerry.salesmanagement.common.WarehouseDocumentPrintSupport;
 import com.jerry.salesmanagement.mapper.CustomerMapper;
 import com.jerry.salesmanagement.mapper.CustomerTypeMapper;
 import com.jerry.salesmanagement.mapper.MaterialMasterMapper;
@@ -15,6 +16,8 @@ import com.jerry.salesmanagement.pojo.Project;
 import com.jerry.salesmanagement.pojo.WarehouseDocument;
 import com.jerry.salesmanagement.pojo.WarehouseDocumentCustomerOption;
 import com.jerry.salesmanagement.service.AuditTrailService;
+import com.jerry.salesmanagement.service.SystemConfigService;
+import com.jerry.salesmanagement.service.WarehouseDocumentExcelExportService;
 import com.jerry.salesmanagement.service.WarehouseDocumentPdfExportService;
 import com.jerry.salesmanagement.service.WarehouseDocumentService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,11 +45,21 @@ public class WarehouseDocumentController {
     private static final Set<String> SUPPLIER_TYPE_CODES = Set.of("3", "4");
     private static final Set<String> RECEIVER_TYPE_CODES = Set.of("2", "3", "4", "5");
 
+    private static final MediaType XLSX_MEDIA_TYPE = MediaType.parseMediaType(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+
     @Autowired
     private WarehouseDocumentService warehouseDocumentService;
 
     @Autowired
     private WarehouseDocumentPdfExportService warehouseDocumentPdfExportService;
+
+    @Autowired
+    private WarehouseDocumentExcelExportService warehouseDocumentExcelExportService;
+
+    @Autowired
+    private SystemConfigService systemConfigService;
 
     @Autowired(required = false)
     private AuditTrailService auditTrailService;
@@ -149,6 +162,17 @@ public class WarehouseDocumentController {
         }
     }
 
+    @GetMapping("/print-config")
+    public ApiResponse<Map<String, String>> getPrintConfig() {
+        try {
+            return ApiResponse.success(Map.of(
+                    "companyName", WarehouseDocumentPrintSupport.resolveCompanyName(systemConfigService)
+            ));
+        } catch (Exception e) {
+            return ApiResponse.error("Failed to query warehouse document print config: " + e.getMessage());
+        }
+    }
+
     @GetMapping("/{docNumber}")
     public ApiResponse<WarehouseDocument> getByDocNumber(@PathVariable String docNumber) {
         try {
@@ -168,20 +192,44 @@ public class WarehouseDocumentController {
             if (warehouseDocument == null) {
                 return ResponseEntity.notFound().build();
             }
-            Project project = warehouseDocument.getProjectId() != null
-                    ? projectMapper.selectByUuid(warehouseDocument.getProjectId())
-                    : null;
-            String projectLabel = project == null
-                    ? ""
-                    : ((project.getProjectNumber() == null ? "" : project.getProjectNumber() + " ")
-                    + (project.getProjectName() == null ? "" : project.getProjectName())).trim();
-            byte[] pdf = warehouseDocumentPdfExportService.exportPdf(warehouseDocument, projectLabel);
+            byte[] pdf = warehouseDocumentPdfExportService.exportPdf(
+                    warehouseDocument,
+                    resolveProjectName(warehouseDocument)
+            );
             return DownloadResponseBuilder.build(docNumber + ".pdf", MediaType.APPLICATION_PDF, pdf);
         } catch (Exception e) {
             return ResponseEntity.internalServerError()
                     .contentType(MediaType.TEXT_PLAIN)
                     .body(("Failed to export warehouse document PDF: " + e.getMessage()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
         }
+    }
+
+    @GetMapping("/{docNumber}/export-excel")
+    public ResponseEntity<byte[]> exportExcel(@PathVariable String docNumber) {
+        try {
+            WarehouseDocument warehouseDocument = warehouseDocumentService.getByDocNumber(docNumber);
+            if (warehouseDocument == null) {
+                return ResponseEntity.notFound().build();
+            }
+            byte[] workbookBytes = warehouseDocumentExcelExportService.exportExcel(
+                    warehouseDocument,
+                    resolveProjectName(warehouseDocument)
+            );
+            return DownloadResponseBuilder.build(docNumber + ".xlsx", XLSX_MEDIA_TYPE, workbookBytes);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                    .contentType(MediaType.TEXT_PLAIN)
+                    .body(("Failed to export warehouse document Excel: " + e.getMessage()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+    }
+
+    private String resolveProjectName(WarehouseDocument warehouseDocument) {
+        Project project = warehouseDocument.getProjectId() != null
+                ? projectMapper.selectByUuid(warehouseDocument.getProjectId())
+                : null;
+        return project != null && project.getProjectName() != null
+                ? project.getProjectName().trim()
+                : "";
     }
 
     @PostMapping

@@ -201,8 +201,13 @@ export const inventoryAPI = {
   updateWarehouseDoc: (docNumber, data) => api.put(`/warehouse-documents/${docNumber}`, data),
   auditWarehouseDoc: (docNumber) => api.post(`/warehouse-documents/${docNumber}/audit`),
   deleteWarehouseDoc: (docNumber) => api.delete(`/warehouse-documents/${docNumber}`),
+  getWarehouseDocPrintConfig: () => api.get("/warehouse-documents/print-config"),
   downloadWarehouseDocPdf: (docNumber) =>
     api.get(`/warehouse-documents/${docNumber}/export-pdf`, {
+      responseType: "blob",
+    }),
+  downloadWarehouseDocExcel: (docNumber) =>
+    api.get(`/warehouse-documents/${docNumber}/export-excel`, {
       responseType: "blob",
     }),
 };

@@ -21,7 +21,7 @@ import {
 import { CheckCircleOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, FilePdfOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
 import { useAuth } from "../../context/AuthContext";
 import { inventoryAPI, permissionAPI } from "../../api/modules";
-import { downloadApiFile, downloadExcel, downloadHtmlExcel, escapeHtmlCell, resolveBlobErrorMessage } from "../../utils/exporters";
+import { downloadApiFile, downloadExcel, resolveBlobErrorMessage } from "../../utils/exporters";
 import { formatProjectOptionLabel } from "../../utils/projectLabels";
 import { sortSelectItems } from "../../utils/selectSorting";
 import { queryWarehouseDocuments } from "./warehouseDocumentQuery";
@@ -36,10 +36,24 @@ import {
   categoryLabel,
   docMeta,
   formatAmount,
-  formatUnitPrice,
   normalize,
   toChineseUppercaseRmb,
 } from "./warehouseDocumentUtils";
+import {
+  DEFAULT_COMPANY_NAME,
+  PRINT_COL_WIDTHS_PX,
+  PRINT_ROW_HEIGHTS_PT,
+  buildWarehouseDocumentHtml,
+  formatCounterpartyLines,
+  formatPrintAmount,
+  formatPrintDate,
+  formatPrintQuantity,
+  formatPrintUnitPrice,
+  paginateWarehouseDocument,
+  resolvePrintDocMeta,
+  resolvePrintDocTotalAmount,
+  resolvePrintItemAmount,
+} from "./warehouseDocumentPrint";
 
 export default function WarehouseDoc() {
   const { currentUser } = useAuth();
@@ -57,6 +71,7 @@ export default function WarehouseDoc() {
   const [queryForm] = Form.useForm();
   const [queryFilters, setQueryFilters] = useState({});
   const [documentPage, setDocumentPage] = useState(1);
+  const [companyName, setCompanyName] = useState(DEFAULT_COMPANY_NAME);
 
   const pagePermissions = useMemo(() => resolvePagePermissions("/inventory/warehouse"), []);
   const canManage = hasAnyAuthority(currentUser, ["inventory.warehouse-doc.entry", ...pagePermissions.manageAuthorities]);
@@ -67,6 +82,13 @@ export default function WarehouseDoc() {
     () =>
       Object.fromEntries(
         projects.map((item) => [item.uuid, formatProjectOptionLabel(item)]),
+      ),
+    [projects],
+  );
+  const projectNameMap = useMemo(
+    () =>
+      Object.fromEntries(
+        projects.map((item) => [item.uuid, String(item.projectName || "").trim()]),
       ),
     [projects],
   );
@@ -85,6 +107,7 @@ export default function WarehouseDoc() {
         docTypeLabel: docMeta(item.docType).label,
         businessCategoryLabel: categoryLabel(item.businessCategory),
         projectLabel: item.projectId ? projectMap[item.projectId] || item.projectId : "-",
+        projectName: item.projectId ? projectNameMap[item.projectId] ?? "" : "",
         warehouseLabel:
           item.warehouseId != null ? warehouseMap[String(item.warehouseId)] || item.warehouseId : "-",
         entryUserName: item.entryUserName || userMap[item.entryUser] || "",
@@ -92,7 +115,7 @@ export default function WarehouseDoc() {
         itemCount: item.items?.length || 0,
         relatedDocNumber: isGeneratedInbound(item) ? item.sourceRefId : documents.find((doc) => isGeneratedInbound(doc) && doc.sourceRefId === item.docNumber)?.docNumber,
       })),
-    [documents, projectMap, userMap, warehouseMap],
+    [documents, projectMap, projectNameMap, userMap, warehouseMap],
   );
   const queryResult = useMemo(() => queryWarehouseDocuments(decoratedDocs, queryFilters), [decoratedDocs, queryFilters]);
   const filteredDocs = queryResult.documents;
@@ -132,15 +155,23 @@ export default function WarehouseDoc() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [docResponse, projectResponse, warehouseResponse, materialResponse, customerResponse, userResponse] =
-        await Promise.all([
-          inventoryAPI.getWarehouseDocs(),
-          inventoryAPI.getWarehouseDocProjectOptions(),
-          inventoryAPI.getWarehouses(),
-          inventoryAPI.getWarehouseDocMaterialOptions(),
-          inventoryAPI.getWarehouseDocCustomerOptions(),
-          permissionAPI.getUserOptions().catch(() => []),
-        ]);
+      const [
+        docResponse,
+        projectResponse,
+        warehouseResponse,
+        materialResponse,
+        customerResponse,
+        userResponse,
+        printConfigResponse,
+      ] = await Promise.all([
+        inventoryAPI.getWarehouseDocs(),
+        inventoryAPI.getWarehouseDocProjectOptions(),
+        inventoryAPI.getWarehouses(),
+        inventoryAPI.getWarehouseDocMaterialOptions(),
+        inventoryAPI.getWarehouseDocCustomerOptions(),
+        permissionAPI.getUserOptions().catch(() => []),
+        inventoryAPI.getWarehouseDocPrintConfig().catch(() => null),
+      ]);
       const docData = normalize(docResponse);
       setDocuments(docData);
       setProjects(normalize(projectResponse));
@@ -148,6 +179,10 @@ export default function WarehouseDoc() {
       setMaterials(normalize(materialResponse));
       setCustomerOptions(normalize(customerResponse));
       setUsers(Array.isArray(userResponse) ? userResponse : normalize(userResponse));
+      const printConfig = normalize(printConfigResponse);
+      if (printConfig?.companyName) {
+        setCompanyName(printConfig.companyName);
+      }
       setSelectedDocNumber((current) =>
         current && docData.some((item) => item.docNumber === current)
           ? current
@@ -240,7 +275,7 @@ export default function WarehouseDoc() {
       message.error("浏览器拦截了打印窗口，请允许弹窗后重试");
       return;
     }
-    popup.document.write(buildWarehouseDocumentHtml(doc, { autoPrint: true }));
+    popup.document.write(buildWarehouseDocumentHtml(doc, { autoPrint: true, companyName }));
     popup.document.close();
   };
 
@@ -259,14 +294,19 @@ export default function WarehouseDoc() {
     }
   };
 
-  const exportDocumentExcel = (doc = selectedDoc) => {
+  const exportDocumentExcel = async (doc = selectedDoc) => {
     if (!doc) {
       return;
     }
-    downloadHtmlExcel(
-      `${doc.docNumber || docMeta(doc.docType).label}.xls`,
-      buildWarehouseDocumentHtml(doc, { sanitizeForExcel: true }),
-    );
+    try {
+      await downloadApiFile(
+        inventoryAPI.downloadWarehouseDocExcel(doc.docNumber),
+        `${doc.docNumber || docMeta(doc.docType).label}.xlsx`,
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      );
+    } catch (error) {
+      message.error(await resolveBlobErrorMessage(error, "导出 Excel 失败"));
+    }
   };
 
   const columns = [
@@ -370,8 +410,9 @@ export default function WarehouseDoc() {
     },
   ];
 
-  const previewMeta = docMeta(selectedDoc?.docType, selectedDoc?.sourceRefType);
-  const previewRows = selectedDoc ? buildWarehouseDocumentRows(selectedDoc) : [];
+  const previewPrintMeta = selectedDoc ? resolvePrintDocMeta(selectedDoc, companyName) : null;
+  const previewPages = selectedDoc ? paginateWarehouseDocument(selectedDoc) : [];
+  const previewDocTotal = selectedDoc ? resolvePrintDocTotalAmount(selectedDoc) : 0;
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
@@ -488,87 +529,127 @@ export default function WarehouseDoc() {
       </Card>
 
       <Card title={selectedDoc ? `${selectedDoc.docTypeLabel}预览` : "单据预览"}>
-        {selectedDoc ? (
+        {selectedDoc && previewPrintMeta ? (
           <div style={{ overflowX: "auto" }}>
-            <div style={{ minWidth: 1120, border: "2px solid #222", background: "#fff" }}>
-              <div
-                style={{
-                  textAlign: "center",
-                  fontSize: 34,
-                  letterSpacing: 12,
-                  padding: "12px 0 8px",
-                  fontFamily: '"SimSun", "Microsoft YaHei", serif',
-                }}
-              >
-                {selectedDoc.docTypeLabel}
-              </div>
-              <table style={metaTableStyle}>
-                <colgroup>
-                  {documentMetaColumnWidths.map((width, index) => (
-                    <col key={`${width}-${index}`} style={{ width }} />
-                  ))}
-                </colgroup>
-                <tbody>
-                  <tr>
-                    <td style={cellLabel}>项目名称</td>
-                    <td style={compactProjectCell}>
-                      {selectedDoc.projectLabel || "-"}
-                    </td>
-                    <td style={wideLabelCell}>{previewMeta.partyBlock}</td>
-                    <td style={cellValue} colSpan={2}>
-                      {selectedDoc.counterpartyName || "-"}
-                      <br />
-                      {selectedDoc.counterpartyAddress || ""}
-                      <br />
-                      {selectedDoc.counterpartyContact || ""}
-                    </td>
-                    <td style={cellLabel}>{previewMeta.numberLabel}</td>
-                    <td style={nowrapValueCell}>{selectedDoc.docNumber}</td>
-                    <td style={cellLabel}>{previewMeta.dateLabel}</td>
-                    <td style={nowrapValueCell}>{selectedDoc.docDate ? dayjs(selectedDoc.docDate).format("YYYY年M月D日") : "-"}</td>
-                  </tr>
-                </tbody>
-              </table>
-              <table style={detailTableStyle}>
-                <colgroup>
-                  {documentColumnWidths.map((width, index) => (
-                    <col key={`${width}-${index}`} style={{ width }} />
-                  ))}
-                </colgroup>
-                <tbody>
-                  <tr>
-                    {["序号", "材料名称", "型号及规格", "品牌", "单位", "数量", "单价", "金额", "备注"].map(
-                      (label) => (
-                        <th key={label} style={headCell}>
-                          {label}
-                        </th>
-                      ),
-                    )}
-                  </tr>
-                  {previewRows.map((item, index) => (
-                    <tr key={item.uuid || `blank-${index}`}>
-                      <td style={centerCell}>{index + 1}</td>
-                      <td style={bodyCell}>{item.displayName || item.materialName || ""}</td>
-                      <td style={bodyCell}>{item.displayModel || item.model || ""}</td>
-                      <td style={centerCell}>{item.brand || ""}</td>
-                      <td style={centerCell}>{item.unit || ""}</td>
-                      <td style={rightCell}>{item.quantity ?? ""}</td>
-                      <td style={rightCell}>{item.unitPrice != null ? formatUnitPrice(item.unitPrice) : ""}</td>
-                      <td style={rightCell}>{item.amount != null ? formatAmount(item.amount) : ""}</td>
-                      <td style={bodyCell}>{item.remark || ""}</td>
-                    </tr>
-                  ))}
-                  <tr>
-                    <td style={{ ...bodyCell, fontWeight: 700 }} colSpan={7}>
-                      合计：{toChineseUppercaseRmb(selectedDoc.totalAmount || 0)}
-                    </td>
-                    <td style={{ ...bodyCell, textAlign: "right", fontWeight: 700 }} colSpan={2}>
-                      ￥{formatAmount(selectedDoc.totalAmount || 0)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            {previewPages.map((page) => {
+              const displayTotal = page.lastPage ? previewDocTotal : page.pageSubtotal;
+              const totalLabel = page.lastPage ? "合计：" : "本页小计：";
+              return (
+                <div key={page.pageNumber} style={previewPaperStyle}>
+                  <table style={previewTableStyle}>
+                    <colgroup>
+                      {PRINT_COL_WIDTHS_PX.map((width, index) => (
+                        <col key={`${width}-${index}`} style={{ width }} />
+                      ))}
+                    </colgroup>
+                    <tbody>
+                      <tr style={{ height: `${PRINT_ROW_HEIGHTS_PT[0]}pt` }}>
+                        <td colSpan={4} style={previewNoBorderCell} />
+                        <td colSpan={4} style={previewTitleCell}>
+                          {previewPrintMeta.spacedTitle}
+                        </td>
+                        {page.totalPages > 1 ? (
+                          <>
+                            <td colSpan={3} style={previewPageNumCell}>
+                              {`第 ${page.pageNumber} 页 / 共 ${page.totalPages} 页`}
+                            </td>
+                            <td style={previewNoBorderCell} />
+                          </>
+                        ) : (
+                          <td colSpan={4} style={previewNoBorderCell} />
+                        )}
+                      </tr>
+                      <tr style={{ height: `${PRINT_ROW_HEIGHTS_PT[1]}pt` }}>
+                        <td colSpan={12} style={previewNoBorderCell} />
+                      </tr>
+                      <tr style={{ height: `${PRINT_ROW_HEIGHTS_PT[2]}pt` }}>
+                        <td rowSpan={3} style={previewMetaLabelBoldCell}>
+                          {renderMultilineText("项目\n名称")}
+                        </td>
+                        <td rowSpan={3} colSpan={2} style={previewMetaProjectCell}>
+                          {selectedDoc.projectName || ""}
+                        </td>
+                        <td rowSpan={3} style={previewMetaLabelBoldCell}>
+                          {renderMultilineText(previewPrintMeta.partyBlockLabel)}
+                        </td>
+                        <td rowSpan={3} colSpan={4} style={previewMetaPartyCell}>
+                          {renderLineArray(formatCounterpartyLines(selectedDoc))}
+                        </td>
+                        <td style={previewMetaSmallCenterCell}>{previewPrintMeta.numberLabel}</td>
+                        <td colSpan={2} style={previewMetaSmallCenterCell}>
+                          {selectedDoc.docNumber || ""}
+                        </td>
+                        <td rowSpan={15} style={previewCopyStubCell}>
+                          {renderMultilineText(previewPrintMeta.copyStubText)}
+                        </td>
+                      </tr>
+                      <tr style={{ height: `${PRINT_ROW_HEIGHTS_PT[3]}pt` }}>
+                        <td style={previewMetaSmallCenterCell}>合同编号：</td>
+                        <td colSpan={2} style={previewMetaSmallCenterCell}>
+                          {selectedDoc.contractNumber || ""}
+                        </td>
+                      </tr>
+                      <tr style={{ height: `${PRINT_ROW_HEIGHTS_PT[4]}pt` }}>
+                        <td style={previewMetaSmallCenterCell}>{previewPrintMeta.dateLabel}</td>
+                        <td colSpan={2} style={previewMetaSmallCenterCell}>
+                          {formatPrintDate(selectedDoc.docDate)}
+                        </td>
+                      </tr>
+                      <tr style={{ height: `${PRINT_ROW_HEIGHTS_PT[5]}pt` }}>
+                        <th style={previewHeadCell}>序号</th>
+                        <th colSpan={2} style={previewHeadCell}>材料名称</th>
+                        <th colSpan={2} style={previewHeadCell}>型号及规格</th>
+                        <th style={previewHeadCell}>品牌</th>
+                        <th style={previewHeadCell}>单位</th>
+                        <th style={previewHeadCell}>数量</th>
+                        <th style={previewHeadCell}>单价</th>
+                        <th style={previewHeadCell}>金额</th>
+                        <th style={previewHeadCell}>备注</th>
+                      </tr>
+                      {page.rows.map((item, idx) => {
+                        const lineNo = page.startLineNo + idx;
+                        const amount = resolvePrintItemAmount(item);
+                        return (
+                          <tr key={item.uuid || `blank-${lineNo}`} style={{ height: `${PRINT_ROW_HEIGHTS_PT[6 + idx]}pt` }}>
+                            <td style={previewItemIndexCell}>{lineNo}</td>
+                            <td colSpan={2} style={previewItemTextCell}>
+                              {item.displayName || item.materialName || ""}
+                            </td>
+                            <td colSpan={2} style={previewItemTextCell}>
+                              {item.displayModel || item.model || ""}
+                            </td>
+                            <td style={previewItemBrandCell}>{item.brand || ""}</td>
+                            <td style={previewItemCenter10Cell}>{item.unit || ""}</td>
+                            <td style={previewItemCenter10Cell}>{formatPrintQuantity(item.quantity)}</td>
+                            <td style={previewItemCenter10Cell}>{formatPrintUnitPrice(item.unitPrice)}</td>
+                            <td style={previewItemAmountCell}>{formatPrintAmount(amount)}</td>
+                            <td style={previewItemRemarkCell}>{item.remark || ""}</td>
+                          </tr>
+                        );
+                      })}
+                      <tr style={{ height: `${PRINT_ROW_HEIGHTS_PT[16]}pt` }}>
+                        <td colSpan={2} style={previewTotalLabelCell}>{totalLabel}</td>
+                        <td colSpan={7} style={previewTotalUpperCell}>
+                          {toChineseUppercaseRmb(displayTotal)}
+                        </td>
+                        <td colSpan={2} style={previewTotalNumCell}>
+                          ¥{formatPrintAmount(displayTotal)}
+                        </td>
+                      </tr>
+                      <tr style={{ height: `${PRINT_ROW_HEIGHTS_PT[17]}pt` }}>
+                        <td colSpan={12} style={previewNoBorderCell} />
+                      </tr>
+                      <tr style={{ height: `${PRINT_ROW_HEIGHTS_PT[18]}pt` }}>
+                        <td colSpan={11} style={previewFooterCell}>
+                          {previewPrintMeta.footerText}
+                        </td>
+                        <td style={previewNoBorderCell} />
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })}
           </div>
         ) : (
           <Empty description="请选择一张出入库单查看预览" />
@@ -594,119 +675,107 @@ export default function WarehouseDoc() {
   );
 }
 
-const tableStyle = { width: "100%", borderCollapse: "collapse", tableLayout: "fixed" };
-const metaTableStyle = { ...tableStyle, marginBottom: -1 };
-const detailTableStyle = tableStyle;
-const keepWordStyle = { wordBreak: "keep-all", overflowWrap: "break-word" };
-const noWrapStyle = { whiteSpace: "nowrap", wordBreak: "keep-all", overflowWrap: "normal" };
-const cellLabel = { border: "1px solid #222", padding: 8, textAlign: "center", fontWeight: 700, ...noWrapStyle };
-const wideLabelCell = { ...cellLabel, padding: "8px 4px", fontSize: 13 };
-const cellValue = { border: "1px solid #222", padding: 8, lineHeight: 1.6, ...keepWordStyle };
-const compactProjectCell = { ...cellValue, fontSize: 13 };
-const nowrapValueCell = { ...cellValue, textAlign: "center", ...noWrapStyle };
-const headCell = { border: "1px solid #222", padding: 8, textAlign: "center", background: "#fafafa", ...noWrapStyle };
-const bodyCell = { border: "1px solid #222", padding: 8, minHeight: 36, ...keepWordStyle };
-const centerCell = { ...bodyCell, textAlign: "center", ...noWrapStyle };
-const rightCell = { ...bodyCell, textAlign: "right", ...noWrapStyle };
-const documentColumnWidths = ["6%", "25%", "12%", "12%", "7%", "9%", "10%", "10%", "9%"];
-const documentMetaColumnWidths = documentColumnWidths;
-const documentMetaColumnGroupHtml = `<colgroup>${documentMetaColumnWidths
-  .map((width) => `<col style="width:${width}" />`)
-  .join("")}</colgroup>`;
-const documentColumnGroupHtml = `<colgroup>${documentColumnWidths
-  .map((width) => `<col style="width:${width}" />`)
-  .join("")}</colgroup>`;
+const previewPaperStyle = {
+  width: 820,
+  padding: 12,
+  margin: "0 auto 16px",
+  background: "#fff",
+  border: "1px solid #d9d9d9",
+  boxShadow: "0 1px 4px rgba(0, 0, 0, 0.06)",
+};
+const previewTableStyle = {
+  width: 796,
+  borderCollapse: "collapse",
+  tableLayout: "fixed",
+  fontFamily: '"SimSun", "NSimSun", serif',
+  color: "#000",
+};
+const previewNoBorderCell = { border: "none", padding: 0 };
+const previewThinCell = {
+  border: "1px solid #000",
+  padding: "0 3px",
+  verticalAlign: "middle",
+  lineHeight: 1.15,
+  wordBreak: "break-all",
+  overflowWrap: "break-word",
+};
+const previewTitleCell = {
+  border: "none",
+  borderBottom: "3px double #000",
+  textAlign: "center",
+  verticalAlign: "middle",
+  fontSize: "18pt",
+  fontWeight: 700,
+  whiteSpace: "pre",
+};
+const previewPageNumCell = {
+  border: "none",
+  textAlign: "right",
+  verticalAlign: "bottom",
+  fontSize: "9pt",
+  padding: "0 3px 2px 0",
+};
+const previewMetaLabelBoldCell = { ...previewThinCell, textAlign: "center", fontSize: "9pt", fontWeight: 700 };
+const previewMetaProjectCell = { ...previewThinCell, textAlign: "left", fontSize: "10pt" };
+const previewMetaPartyCell = { ...previewThinCell, textAlign: "left", fontSize: "8.5pt", lineHeight: 1.2 };
+const previewMetaSmallCenterCell = { ...previewThinCell, textAlign: "center", fontSize: "9pt" };
+const previewCopyStubCell = {
+  border: "none",
+  textAlign: "center",
+  verticalAlign: "middle",
+  fontSize: "9pt",
+  lineHeight: 1.18,
+  padding: 0,
+};
+const previewHeadCell = { ...previewThinCell, textAlign: "center", fontSize: "9pt", fontWeight: 400 };
+const previewItemIndexCell = { ...previewThinCell, textAlign: "center", fontSize: "9pt" };
+const previewItemTextCell = { ...previewThinCell, textAlign: "left", fontSize: "10pt" };
+const previewItemBrandCell = { ...previewThinCell, textAlign: "center", fontSize: "9pt" };
+const previewItemCenter10Cell = { ...previewThinCell, textAlign: "center", fontSize: "10pt" };
+const previewItemAmountCell = { ...previewThinCell, textAlign: "right", fontSize: "10pt" };
+const previewItemRemarkCell = { ...previewThinCell, textAlign: "left", fontSize: "8pt" };
+const previewTotalLabelCell = {
+  borderTop: "1px solid #000",
+  borderBottom: "1px solid #000",
+  borderLeft: "1px solid #000",
+  borderRight: "none",
+  padding: "0 3px",
+  verticalAlign: "middle",
+  textAlign: "right",
+  fontSize: "11pt",
+  fontWeight: 700,
+};
+const previewTotalUpperCell = {
+  borderTop: "1px solid #000",
+  borderBottom: "1px solid #000",
+  borderRight: "1px solid #000",
+  borderLeft: "none",
+  padding: "0 3px",
+  verticalAlign: "middle",
+  textAlign: "left",
+  fontSize: "11pt",
+  fontWeight: 700,
+};
+const previewTotalNumCell = { ...previewThinCell, textAlign: "center", fontSize: "9pt" };
+const previewFooterCell = {
+  border: "none",
+  padding: 0,
+  verticalAlign: "middle",
+  textAlign: "left",
+  fontSize: "11pt",
+  fontWeight: 700,
+  whiteSpace: "pre",
+};
 
-function buildWarehouseDocumentHtml(doc, { autoPrint = false, sanitizeForExcel = false } = {}) {
-  const esc = sanitizeForExcel ? escapeHtmlCell : escapeHtml;
-  const previewMeta = docMeta(doc.docType, doc.sourceRefType);
-  const rows = buildWarehouseDocumentRows(doc);
-  return `<!DOCTYPE html><html><head><meta charset="utf-8" /><title>${esc(previewMeta.label)}</title><style>
-    @page{margin:6mm}
-    body{font-family:"SimSun","Microsoft YaHei",serif;margin:0;padding:12px;color:#111}
-    .doc-sheet{width:100%;box-sizing:border-box}
-    .doc-title{text-align:center;font-size:34px;letter-spacing:12px;margin:8px 0 14px}
-    table{width:100%;border-collapse:collapse;table-layout:fixed}
-    .meta-table{margin-bottom:-2px}
-    td,th{border:2px solid #222;padding:6px;font-size:14px;vertical-align:middle;word-break:keep-all;overflow-wrap:normal}
-    th{background:#fafafa;font-weight:700;white-space:nowrap}
-    .label,.nowrap{white-space:nowrap}
-    .wide-label{font-size:13px}
-    .project-cell{font-size:13px}
-    .text-cell,.party-cell{white-space:normal;word-break:keep-all;overflow-wrap:break-word}
-    .party-cell{line-height:1.45}
-    .center{text-align:center}.right{text-align:right}.strong{font-size:18px;font-weight:600}
-    .model-cell{font-size:13px}
-    @media print{
-      body{padding:0}
-      .doc-title{font-size:30px;letter-spacing:8px;margin:0 0 10px}
-      td,th{padding:4px 5px;font-size:12px}
-      .wide-label{font-size:11px}
-      .project-cell{font-size:11px}
-      .model-cell{font-size:11px}
-      .strong{font-size:15px}
-    }
-  </style></head><body><div class="doc-sheet"><div class="doc-title">${esc(previewMeta.label)}</div><table class="meta-table">
-    ${documentMetaColumnGroupHtml}
-    <tr>
-      <td class="label center"><strong>项目名称</strong></td>
-      <td class="text-cell project-cell">${esc(doc.projectLabel || "")}</td>
-      <td class="label center wide-label"><strong>${esc(previewMeta.partyBlock)}</strong></td>
-      <td class="party-cell" colspan="2">${formatCounterpartyHtml(doc, esc)}</td>
-      <td class="label center"><strong>${esc(previewMeta.numberLabel)}</strong></td>
-      <td class="center nowrap">${esc(doc.docNumber || "")}</td>
-      <td class="label center"><strong>${esc(previewMeta.dateLabel)}</strong></td>
-      <td class="center nowrap">${esc(formatWarehouseDocDate(doc))}</td>
-    </tr>
-  </table><table class="detail-table">
-    ${documentColumnGroupHtml}
-    <tr class="center"><th>序号</th><th>材料名称</th><th>型号及规格</th><th>品牌</th><th>单位</th><th>数量</th><th>单价</th><th>金额</th><th>备注</th></tr>
-    ${rows.map((item, index) => buildWarehouseDocumentItemRow(item, index, esc)).join("")}
-    <tr><td colspan="7" class="center strong">合计：${esc(toChineseUppercaseRmb(doc.totalAmount || 0))}</td><td colspan="2" class="right strong">￥${esc(formatAmount(doc.totalAmount || 0))}</td></tr>
-  </table></div>${autoPrint ? "<script>window.onload=function(){window.print();}</script>" : ""}</body></html>`;
+function renderLineArray(lines) {
+  return lines.map((line, index) => (
+    <React.Fragment key={`${index}-${line}`}>
+      {index > 0 ? <br /> : null}
+      {line}
+    </React.Fragment>
+  ));
 }
 
-function buildWarehouseDocumentItemRow(item, index, esc = escapeHtml) {
-  return `<tr>
-    <td class="center nowrap">${index + 1}</td>
-    <td class="text-cell">${esc(item.displayName || item.materialName || "")}</td>
-    <td class="text-cell model-cell">${esc(item.displayModel || item.model || "")}</td>
-    <td class="center text-cell">${esc(item.brand || "")}</td>
-    <td class="center nowrap">${esc(item.unit || "")}</td>
-    <td class="right nowrap">${esc(item.quantity ?? "")}</td>
-    <td class="right nowrap">${item.unitPrice != null ? esc(Number(item.unitPrice).toFixed(4)) : ""}</td>
-    <td class="right nowrap">${item.amount != null ? esc(Number(item.amount).toFixed(2)) : ""}</td>
-    <td class="text-cell">${esc(item.remark || "")}</td>
-  </tr>`;
-}
-
-function buildWarehouseDocumentRows(doc) {
-  const rows = [...(doc.items || [])];
-  while (rows.length < 10) {
-    rows.push({});
-  }
-  return rows;
-}
-
-function formatWarehouseDocDate(doc) {
-  return doc.docDate ? dayjs(doc.docDate).format("YYYY年M月D日") : "";
-}
-
-function formatCounterpartyHtml(doc, esc = escapeHtml) {
-  return [doc.counterpartyName, doc.counterpartyAddress, doc.counterpartyContact]
-    .map((item) => esc(item || ""))
-    .filter(Boolean)
-    .join("<br/>");
-}
-
-function escapeHtml(value) {
-  if (value == null) {
-    return "";
-  }
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+function renderMultilineText(value) {
+  return renderLineArray(String(value ?? "").split(/\r?\n/));
 }
